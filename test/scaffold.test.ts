@@ -27,7 +27,11 @@ const baseConfig: ScaffoldConfig = {
 };
 
 interface GeneratedPackageJson {
+  dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  exports: {
+    ".": Record<string, string>;
+  };
   scripts: {
     format: string;
     lint: string;
@@ -46,27 +50,58 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
     expect(ciWorkflow?.content).toContain("version: 10");
+    expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("pnpm exec publint --pack npm");
     expect(ciWorkflow?.content).toContain("pnpm run lint");
+    expect(ciWorkflow?.content).not.toContain("setup-biome");
+    expect(ciWorkflow?.content).not.toContain("biome ci");
   });
 
   it("emits Lefthook and Oxc tooling instead of Husky and commitlint", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
-    const packageJson = parseGeneratedJson(files, "package.json");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const vitestConfig = findGeneratedFile(files, "vitest.config.ts");
 
     expect(filePaths).toContain("lefthook.yml");
+    expect(filePaths).toContain(".oxfmtrc.json");
+    expect(filePaths).toContain(".oxlintrc.json");
     expect(filePaths).not.toContain(".husky/commit-msg");
     expect(filePaths).not.toContain("commitlint.config.js");
     expect(packageJson.devDependencies).toMatchObject({
+      "@vitest/coverage-v8": expect.any(String),
       lefthook: expect.any(String),
       oxfmt: expect.any(String),
       oxlint: expect.any(String),
     });
+    expect(packageJson.dependencies).toMatchObject({
+      zod: "^4.4.3",
+    });
+    expect(packageJson.devDependencies).not.toHaveProperty("@vitest/coverage-istanbul");
     expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/cli");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
+    expect(vitestConfig.content).toContain(`provider: "v8"`);
+  });
+
+  it("emits ignore patterns for local artifacts and environment files", () => {
+    const gitignore = findGeneratedFile(buildProjectFiles(baseConfig), ".gitignore");
+
+    expect(gitignore.content).toContain("*.tsbuildinfo");
+    expect(gitignore.content).toContain("*.tgz");
+    expect(gitignore.content).toContain(".env");
+    expect(gitignore.content).toContain(".env.*");
+    expect(gitignore.content).toContain("!.env.example");
+  });
+
+  it("emits publint-compatible export condition order", () => {
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles(baseConfig),
+      "package.json",
+    );
+
+    expect(Object.keys(packageJson.exports["."])).toEqual(["types", "default"]);
   });
 
   it.each<PackageManager>(["npm", "pnpm", "yarn"])(
@@ -90,10 +125,12 @@ describe("buildProjectFiles", () => {
         expect(ciWorkflow.content).toContain("pnpm install --frozen-lockfile");
         expect(lefthook.content).toContain("pnpm run lint");
         expect(findGeneratedFile(files, "pnpm-workspace.yaml").content).toContain("lefthook: true");
+        expect(findGeneratedFile(files, "pnpm-workspace.yaml").content).toContain('  - "."');
       }
 
       if (packageManager === "yarn") {
-        expect(ciWorkflow.content).toContain("yarn install --immutable");
+        expect(ciWorkflow.content).toContain("yarn install --frozen-lockfile");
+        expect(ciWorkflow.content).toContain("yarn audit --groups dependencies");
         expect(lefthook.content).toContain("yarn run lint");
         expect(filePaths).not.toContain("pnpm-workspace.yaml");
       }
@@ -131,6 +168,8 @@ describe("buildProjectFiles", () => {
     const files = buildProjectFiles(baseConfig);
 
     expect(() => parseGeneratedJson(files, "package.json")).not.toThrow();
+    expect(() => parseGeneratedJson(files, ".oxfmtrc.json")).not.toThrow();
+    expect(() => parseGeneratedJson(files, ".oxlintrc.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.build.json")).not.toThrow();
     expect(() => parseGeneratedJsonc(files, "biome.jsonc")).not.toThrow();
@@ -200,8 +239,10 @@ const findGeneratedFile = (files: ReturnType<typeof buildProjectFiles>, path: st
   return file;
 };
 
-const parseGeneratedJson = (files: ReturnType<typeof buildProjectFiles>, path: string) =>
-  JSON.parse(findGeneratedFile(files, path).content) as GeneratedPackageJson;
+const parseGeneratedJson = <JsonValue = unknown>(
+  files: ReturnType<typeof buildProjectFiles>,
+  path: string,
+): JsonValue => JSON.parse(findGeneratedFile(files, path).content) as JsonValue;
 
 const parseGeneratedJsonc = (files: ReturnType<typeof buildProjectFiles>, path: string) =>
   parseJsonc(path, findGeneratedFile(files, path).content);

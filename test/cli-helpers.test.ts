@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   deriveDirectoryName,
@@ -6,6 +8,14 @@ import {
   normalizeGitHubUrl,
   parseCliArguments,
 } from "../source/cli-helpers.js";
+
+vi.mock("node:child_process", () => ({
+  execFile: vi.fn(),
+}));
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("parseCliArguments", () => {
   it("parses directory, yes, and dry-run flags", () => {
@@ -62,11 +72,15 @@ describe("detectDefaults", () => {
 
   it("warns and falls back when default git readers fail", async () => {
     const warnings: string[] = [];
+    vi.mocked(execFile).mockImplementation(((_command, _args, callback) => {
+      if (typeof callback === "function") {
+        (callback as (error: Error) => void)(new Error("git failed"));
+      }
+
+      return {} as ReturnType<typeof execFile>;
+    }) as typeof execFile);
+
     const defaults = await detectDefaults(undefined, {
-      gitReaders: {
-        readGitConfigValue: async () => "",
-        readGitRemoteOrigin: async () => "",
-      },
       warn: (message) => warnings.push(message),
     });
 
@@ -75,6 +89,13 @@ describe("detectDefaults", () => {
       githubRepoUrl: "",
       projectName: "my-lib",
     });
-    expect(warnings).toEqual([]);
+    expect(warnings).toHaveLength(3);
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        "Could not read git config user.name; using a blank default.",
+        "Could not read git config user.email; using a blank default.",
+        "Could not read git remote origin; using a blank GitHub repo default.",
+      ]),
+    );
   });
 });
