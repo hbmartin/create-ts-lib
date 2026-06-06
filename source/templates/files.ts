@@ -29,47 +29,17 @@ export interface GeneratedFile {
 }
 
 interface PackageManagerConfig {
-  auditCommand: string;
-  buildCommand: string;
-  cache: string;
-  installCiCommand: string;
-  installCommand: string;
-  packageManagerSetup: string;
-  publintCommand: string;
   runPrefix: string;
 }
 
 const packageManagerConfig = {
   npm: {
-    auditCommand: "npm audit --omit=dev",
-    buildCommand: "npm run build",
-    cache: "npm",
-    installCiCommand: "npm ci",
-    installCommand: "npm install",
-    packageManagerSetup: "      - run: corepack enable",
-    publintCommand: "npx --no -- publint --pack npm",
     runPrefix: "npm run",
   },
   pnpm: {
-    auditCommand: "pnpm audit --prod",
-    buildCommand: "pnpm run build",
-    cache: "pnpm",
-    installCiCommand: "pnpm install --frozen-lockfile",
-    installCommand: "pnpm install",
-    packageManagerSetup: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.5.2`,
-    publintCommand: "pnpm exec publint --pack npm",
     runPrefix: "pnpm run",
   },
   yarn: {
-    auditCommand: "yarn audit --groups dependencies",
-    buildCommand: "yarn run build",
-    cache: "yarn",
-    installCiCommand: "yarn install --frozen-lockfile",
-    installCommand: "yarn install",
-    packageManagerSetup: "      - run: corepack enable",
-    publintCommand: "yarn publint --pack npm",
     runPrefix: "yarn run",
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
@@ -186,7 +156,6 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
 };
 
 const buildCiWorkflow = (config: ScaffoldConfig): string => {
-  const pmConfig = packageManagerConfig[config.packageManager];
   const codecovStep = config.includeCodecov
     ? `
       - name: Upload coverage to Codecov
@@ -197,14 +166,16 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     : "";
 
   return renderTemplate("github/ci.yml.tmpl", {
-    AUDIT_COMMAND: pmConfig.auditCommand,
-    BUILD_COMMAND: pmConfig.buildCommand,
-    CACHE: pmConfig.cache,
+    AUDIT_COMMAND: "pnpm audit --prod",
+    BUILD_COMMAND: "pnpm run build",
+    CACHE: "pnpm",
     CODECOV_STEP: codecovStep,
-    INSTALL_CI_COMMAND: pmConfig.installCiCommand,
-    PACKAGE_MANAGER_SETUP: pmConfig.packageManagerSetup,
-    PUBLINT_COMMAND: pmConfig.publintCommand,
-    RUN_PREFIX: pmConfig.runPrefix,
+    INSTALL_CI_COMMAND: "pnpm install --frozen-lockfile",
+    PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.5.2`,
+    PUBLINT_COMMAND: "pnpm exec publint --pack npm",
+    RUN_PREFIX: "pnpm run",
   });
 };
 
@@ -303,17 +274,11 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     });
   }
 
-  if (config.githubRepoUrl.length > 0) {
-    files.push(
-      {
-        content: buildCiWorkflow(config),
-        path: ".github/workflows/ci.yml",
-      },
-      {
-        content: renderTemplate("github/semantic-pr.yml.tmpl"),
-        path: ".github/workflows/semantic-pr.yml",
-      },
-    );
+  if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {
+    files.push({
+      content: buildCiWorkflow(config),
+      path: ".github/workflows/ci.yml",
+    });
   }
 
   return files;

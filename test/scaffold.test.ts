@@ -45,14 +45,17 @@ interface GeneratedPackageJson {
   } & Record<string, string>;
 }
 
+interface GeneratedOxfmtConfig {
+  ignorePatterns: string[];
+}
+
 describe("buildProjectFiles", () => {
-  it("includes GitHub CI and semantic PR workflows without release-please files", () => {
+  it("includes GitHub CI workflow without release-please files", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const ciWorkflow = files.find((file) => file.path === ".github/workflows/ci.yml");
 
     expect(filePaths).toContain(".github/workflows/ci.yml");
-    expect(filePaths).toContain(".github/workflows/semantic-pr.yml");
     expect(filePaths).not.toContain(".github/workflows/release-please.yml");
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
@@ -67,6 +70,7 @@ describe("buildProjectFiles", () => {
   it("emits Lefthook and Oxc tooling instead of Husky and commitlint", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
+    const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
     const vitestConfig = findGeneratedFile(files, "vitest.config.ts");
 
@@ -89,6 +93,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
+    expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json"]);
     expect(vitestConfig.content).toContain(`provider: "v8"`);
   });
 
@@ -153,7 +158,15 @@ describe("buildProjectFiles", () => {
     }).map((file) => file.path);
 
     expect(filePaths).not.toContain(".github/workflows/ci.yml");
-    expect(filePaths).not.toContain(".github/workflows/semantic-pr.yml");
+  });
+
+  it.each(["npm", "yarn"] as const)("skips GitHub workflows for %s projects", (packageManager) => {
+    const filePaths = buildProjectFiles({
+      ...baseConfig,
+      packageManager,
+    }).map((file) => file.path);
+
+    expect(filePaths).not.toContain(".github/workflows/ci.yml");
   });
 
   it("renders parseable JSON and JSONC config files", () => {
