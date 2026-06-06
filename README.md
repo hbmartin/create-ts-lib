@@ -92,7 +92,7 @@ Generated packages include:
 - `@sindresorhus/tsconfig`
 - strict Biome linting with formatting disabled
 - `oxlint` and `oxfmt`
-- Vitest with Istanbul coverage and 80% thresholds
+- Vitest with v8 coverage and 80% thresholds
 - Lefthook with a lint-only `pre-commit` hook
 - `zod` as a default runtime dependency
 - `meow` only when CLI support is enabled

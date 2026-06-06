@@ -63,10 +63,10 @@ const packageManagerConfig = {
     runPrefix: "pnpm run",
   },
   yarn: {
-    auditCommand: "yarn npm audit --environment production",
+    auditCommand: "yarn audit --groups dependencies",
     buildCommand: "yarn run build",
     cache: "yarn",
-    installCiCommand: "yarn install --immutable",
+    installCiCommand: "yarn install --frozen-lockfile",
     installCommand: "yarn install",
     packageManagerSetup: "      - run: corepack enable",
     publintCommand: "yarn publint --pack npm",
@@ -145,8 +145,8 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     type: "module",
     exports: {
       ".": {
-        default: "./dist/index.js",
         types: "./dist/index.d.ts",
+        default: "./dist/index.js",
       },
     },
     scripts: {
@@ -160,13 +160,13 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     dependencies: {
       ...(config.includeCli ? { meow: "^14.0.0" } : {}),
-      zod: "^4.3.6",
+      zod: "^4.4.3",
     },
     devDependencies: {
       "@biomejs/biome": "^2.4.16",
       "@sindresorhus/tsconfig": "^8.1.0",
       "@types/node": "^22",
-      "@vitest/coverage-istanbul": "^4.1.8",
+      "@vitest/coverage-v8": "^4.1.8",
       lefthook: "^2.1.9",
       oxfmt: "^0.53.0",
       oxlint: "^1.68.0",
@@ -232,6 +232,14 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     {
       content: renderBiomeJsonc(config.includeCli),
       path: "biome.jsonc",
+    },
+    {
+      content: renderTemplate("oxfmtrc.json.tmpl"),
+      path: ".oxfmtrc.json",
+    },
+    {
+      content: renderTemplate("oxlintrc.json.tmpl"),
+      path: ".oxlintrc.json",
     },
     {
       content: renderTemplate("lefthook.yml.tmpl", {

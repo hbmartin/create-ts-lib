@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 {{PACKAGE_MANAGER_SETUP}}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -25,8 +27,6 @@ jobs:
           cache: "{{CACHE}}"
       - run: {{INSTALL_CI_COMMAND}}
       - run: {{AUDIT_COMMAND}}
-      - uses: biomejs/setup-biome@a05c02a1304287da45f13648675a70d5841acdbc # v2
-      - run: biome ci .
       - run: {{RUN_PREFIX}} lint
       - run: {{BUILD_COMMAND}}
       - run: {{PUBLINT_COMMAND}}

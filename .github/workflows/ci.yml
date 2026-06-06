@@ -22,6 +22,8 @@ jobs:
         node-version: ["22", "24"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
@@ -34,7 +36,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod
-      - uses: biomejs/setup-biome@a05c02a1304287da45f13648675a70d5841acdbc # v2
       - run: pnpm run lint
       - run: pnpm build
       - run: pnpm typecheck
@@ -51,9 +52,17 @@ jobs:
           verbose: true
 
   generated-project-smoke:
+    name: Smoke test generated project
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include-cli: [false, true]
+        package-manager: ["npm", "pnpm", "yarn"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
@@ -64,8 +73,57 @@ jobs:
           node-version: "22"
           cache: "pnpm"
 
+      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: node dist/cli.js "$RUNNER_TEMP/e2e-lib" --yes
-      - run: pnpm run lint
-        working-directory: ${{ runner.temp }}/e2e-lib
+      - name: Generate project
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+          SMOKE_INCLUDE_CLI: ${{ matrix.include-cli }}
+          SMOKE_PACKAGE_MANAGER: ${{ matrix.package-manager }}
+        run: |
+          node --input-type=module <<'JS'
+          import { scaffoldProject } from "./dist/scaffold.js";
+
+          const includeCli = process.env.SMOKE_INCLUDE_CLI === "true";
+          await scaffoldProject(
+            {
+              author: "Smoke Test <smoke@example.com>",
+              description: "Generated project smoke test",
+              githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+              includeCli,
+              includeCodecov: false,
+              license: "MIT",
+              packageManager: process.env.SMOKE_PACKAGE_MANAGER,
+              projectName: includeCli ? "e2e-cli-lib" : "e2e-lib",
+            },
+            {
+              postScaffold: false,
+              targetDirectory: process.env.SMOKE_DIR,
+            },
+          );
+          JS
+      - run: git init
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+      - name: Install generated project dependencies
+        run: |
+          case "${{ matrix.package-manager }}" in
+            npm) npm install ;;
+            pnpm) pnpm install ;;
+            yarn) yarn install ;;
+          esac
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+      - run: ${{ matrix.package-manager }} run lint
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+      - run: ${{ matrix.package-manager }} run build
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+      - name: Run generated project publint
+        run: |
+          case "${{ matrix.package-manager }}" in
+            npm) npx --no -- publint --pack npm ;;
+            pnpm) pnpm exec publint --pack npm ;;
+            yarn) yarn publint --pack npm ;;
+          esac
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
+      - run: ${{ matrix.package-manager }} run test
+        working-directory: ${{ runner.temp }}/e2e-${{ matrix.package-manager }}-${{ matrix.include-cli }}
