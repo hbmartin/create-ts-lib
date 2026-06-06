@@ -17,35 +17,55 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 9
+          version: 10
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           cache: "pnpm"
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod
-      # Biome
-      - uses: biomejs/setup-biome@v2
-      - run: biome ci .
-
-      # Build
+      - uses: biomejs/setup-biome@a05c02a1304287da45f13648675a70d5841acdbc # v2
+      - run: pnpm run lint
       - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm publint --pack npm
-      - run: pnpm attw --pack . --profile node16
-      # Tests + coverage
-      - run: pnpm test
+      - run: pnpm attw --pack . --profile esm-only
+      - run: pnpm test:coverage
 
-      # Upload coverage for badge/commenting
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        if: matrix.node-version == '24'
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
+
+  generated-project-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node dist/cli.js "$RUNNER_TEMP/e2e-lib" --yes
+      - run: pnpm run lint
+        working-directory: ${{ runner.temp }}/e2e-lib

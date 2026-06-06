@@ -1,17 +1,28 @@
+import { execFile, spawn } from "node:child_process";
 import { access, chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
 
 const execFileAsync = promisify(execFile);
 
+export interface ScaffoldProgress {
+  fail(message: string): void;
+  info(message: string): void;
+  start(message: string): void;
+  succeed(message: string): void;
+}
+
 export interface ScaffoldOptions {
   postScaffold?: boolean;
+  progress?: ScaffoldProgress;
   targetDirectory: string;
 }
 
+/**
+ * Write a generated TypeScript library to disk and optionally run post-scaffold setup.
+ */
 export const scaffoldProject = async (
   config: ScaffoldConfig,
   options: ScaffoldOptions,
@@ -30,10 +41,38 @@ export const scaffoldProject = async (
   }
 
   if (options.postScaffold !== false) {
-    await initializeGitRepositoryIfNeeded(targetDirectory);
-    await runPackageManagerCommand(config.packageManager, ["install"], targetDirectory);
-    await runPackageManagerCommand(config.packageManager, ["run", "build"], targetDirectory);
-    await runPackageManagerCommand(config.packageManager, ["run", "test"], targetDirectory);
+    await runProgressStep(
+      options.progress,
+      "Preparing git repository",
+      "Git repository ready",
+      async () => {
+        await initializeGitRepositoryIfNeeded(targetDirectory);
+      },
+    );
+    await runProgressStep(
+      options.progress,
+      "Installing dependencies",
+      "Dependencies installed",
+      async () => {
+        await runPackageManagerCommand(config.packageManager, ["install"], targetDirectory);
+      },
+    );
+    await runProgressStep(
+      options.progress,
+      "Building generated project",
+      "Generated project built",
+      async () => {
+        await runPackageManagerCommand(config.packageManager, ["run", "build"], targetDirectory);
+      },
+    );
+    await runProgressStep(
+      options.progress,
+      "Testing generated project",
+      "Generated project tested",
+      async () => {
+        await runPackageManagerCommand(config.packageManager, ["run", "test"], targetDirectory);
+      },
+    );
   }
 };
 
@@ -73,7 +112,25 @@ export const runPackageManagerCommand = async (
         return;
       }
 
-      rejectPromise(new Error(`${packageManager} ${args.join(" ")} exited with code ${code ?? "unknown"}`));
+      rejectPromise(
+        new Error(`${packageManager} ${args.join(" ")} exited with code ${code ?? "unknown"}`),
+      );
     });
   });
+};
+
+const runProgressStep = async (
+  progress: ScaffoldProgress | undefined,
+  startMessage: string,
+  successMessage: string,
+  action: () => Promise<void>,
+): Promise<void> => {
+  progress?.start(startMessage);
+  try {
+    await action();
+    progress?.succeed(successMessage);
+  } catch (error) {
+    progress?.fail(startMessage);
+    throw error;
+  }
 };

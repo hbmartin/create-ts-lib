@@ -1,17 +1,15 @@
-name: semantic-pr-title
-
+name: semantic-pr
 on:
   pull_request_target:
-    types:
-      - opened
-      - edited
-      - reopened
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  statuses: write
 
 jobs:
   main:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
         env:

@@ -2,40 +2,55 @@
   "name": "@hbmartin/create-ts-lib",
   "version": "1.0.0",
   "description": "Opinionated TypeScript library scaffolder.",
-  "type": "module",
+  "keywords": [
+    "create",
+    "library",
+    "scaffold",
+    "typescript"
+  ],
+  "license": "Apache-2.0",
+  "author": "Harold Martin",
   "bin": {
     "create-ts-lib": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "format": "oxfmt . --write",
+    "lint": "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
+    "prepare": "lefthook install",
+    "publint": "publint",
+    "attw": "attw",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "ora": "^9.4.0",
+    "yoctocolors": "^2.1.2"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
+    "@biomejs/biome": "^2.4.16",
+    "@sindresorhus/tsconfig": "^8.1.0",
+    "@types/node": "^25.9.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "lefthook": "^2.1.9",
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0",
+    "publint": "^0.3.21",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=22"
   },
-  "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
-  },
-  "keywords": [
-    "create",
-    "scaffold",
-    "typescript",
-    "library"
-  ],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.32.1",
-  "dependencies": {
-    "@inquirer/prompts": "^7.8.6"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.7",
-    "@types/node": "^25.5.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
-  }
+  "packageManager": "pnpm@10.32.1"
 }

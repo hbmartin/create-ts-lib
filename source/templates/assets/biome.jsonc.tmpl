@@ -1,0 +1,161 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["**", "!dist", "!coverage", "!.cache", "!node_modules"],
+  },
+  "formatter": {
+    "enabled": false,
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noArguments": "error",
+        "noBannedTypes": "error",
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 16,
+          },
+        },
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 120,
+          },
+        },
+        "noForEach": "error",
+        "noUselessCatch": "error",
+        "useArrowFunction": "error",
+        "useOptionalChain": "error",
+        "useRegexLiterals": "error",
+      },
+      "correctness": {
+        "noNodejsModules": "error",
+        "noProcessGlobal": "error",
+        "noSwitchDeclarations": "error",
+        "noUnusedFunctionParameters": "error",
+        "noUnusedImports": {
+          "fix": "safe",
+          "level": "error",
+        },
+        "noUnusedVariables": "error",
+        "useJsonImportAttributes": "error",
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "noShadow": "error",
+        "noUnnecessaryConditions": "error",
+        "useExhaustiveSwitchCases": "error",
+      },
+      "performance": {
+        "noAccumulatingSpread": "error",
+        "noDelete": "error",
+        "noNamespaceImport": "error",
+        "useTopLevelRegex": "error",
+      },
+      "security": {
+        "noGlobalEval": "error",
+        "noSecrets": "error",
+      },
+      "style": {
+        "noDefaultExport": "error",
+        "noNonNullAssertion": "error",
+        "noParameterAssign": "error",
+        "noProcessEnv": "error",
+        "useConsistentArrayType": "error",
+        "useConsistentTypeDefinitions": "error",
+        "useExportType": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "requireAscii": true,
+            "filenameCases": ["kebab-case"],
+          },
+        },
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error",
+        "useTemplate": "error",
+        "useThrowNewError": "error",
+      },
+      "suspicious": {
+        "noConsole": "error",
+        "noExplicitAny": "error",
+        "noSkippedTests": "error",
+      },
+    },
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on",
+      },
+    },
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.{test,spec}.ts", "test/**/*"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off",
+            "noExcessiveLinesPerFunction": "off",
+          },
+          "correctness": {
+            "noNodejsModules": "off",
+            "noProcessGlobal": "off",
+          },
+          "performance": {
+            "noDelete": "off",
+            "noNamespaceImport": "off",
+            "useTopLevelRegex": "off",
+          },
+          "security": {
+            "noSecrets": "off",
+          },
+          "style": {
+            "noProcessEnv": "off",
+          },
+          "suspicious": {
+            "noConsole": "off",
+            "noExplicitAny": "off",
+            "useAwait": "off",
+          },
+        },
+      },
+    },
+    {
+      "includes": ["vitest.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off",
+          },
+        },
+      },
+    },
+    {
+      "includes": ["scripts/**/*.mjs"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "off",
+            "noProcessGlobal": "off",
+          },
+          "style": {
+            "noProcessEnv": "off",
+          },
+        },
+      },
+    },
+{{CLI_OVERRIDE}}  ],
+}
