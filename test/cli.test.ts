@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import packageJson from "../package.json" with { type: "json" };
+
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
 
@@ -32,7 +34,7 @@ describe("cli entrypoint", () => {
     expect(result).toMatchObject({
       exitCode: undefined,
       stderr: "",
-      stdout: "1.0.1\n",
+      stdout: `${packageJson.version}\n`,
     });
   });
 

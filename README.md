@@ -2,7 +2,7 @@
 
 An opinionated initializer for TypeScript libraries.
 
-It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc lint/format tooling, Vitest coverage, Lefthook, publint, optional GitHub Actions CI, semantic PR checks, optional Codecov upload, and an optional CLI entry point.
+It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc lint/format tooling, Vitest coverage, Lefthook, publint, optional GitHub Actions CI, optional Codecov upload, and an optional CLI entry point.
 
 ## Usage
 
@@ -34,16 +34,16 @@ npx @hbmartin/create-ts-lib my-lib --dry-run
 
 The generator asks for:
 
-| Prompt                   | Default                                          | Notes                                         |
-| ------------------------ | ------------------------------------------------ | --------------------------------------------- |
-| Project name             | directory arg or `my-lib`                        | Used as the package name                      |
-| Description              | empty string                                     | Written to `package.json`                     |
-| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available     |
-| License                  | `MIT`                                            | `MIT`, `ISC`, `Apache-2.0`, `UNLICENSED`      |
-| GitHub repo URL          | detected from `git remote origin`                | Normalizes `git@github.com:` remotes to HTTPS |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to generated CI    |
-| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, and `source/cli.ts`       |
-| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`                      |
+| Prompt                   | Default                                          | Notes                                               |
+| ------------------------ | ------------------------------------------------ | --------------------------------------------------- |
+| Project name             | directory arg or `my-lib`                        | Used as the package name                            |
+| Description              | empty string                                     | Written to `package.json`                           |
+| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available           |
+| License                  | `MIT`                                            | `MIT`, `ISC`, `Apache-2.0`, `UNLICENSED`            |
+| GitHub repo URL          | detected from `git remote origin`                | Normalizes `git@github.com:` remotes to HTTPS       |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI     |
+| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, and `source/cli.ts`             |
+| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only |
 
 `--yes` uses those defaults directly. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
@@ -65,8 +65,7 @@ my-lib/
 │       └── formatting.test.ts
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml
-│       └── semantic-pr.yml
+│       └── ci.yml
 ├── .gitignore
 ├── biome.jsonc
 ├── lefthook.yml
@@ -78,7 +77,7 @@ my-lib/
 └── LICENSE
 ```
 
-GitHub workflows are generated only when a GitHub repo URL is provided. The CLI file and `bin` mapping are generated only when CLI support is enabled.
+GitHub workflows are generated only for pnpm projects when a GitHub repo URL is provided. The CLI file and `bin` mapping are generated only when CLI support is enabled.
 Pnpm projects include `pnpm-workspace.yaml` to allow Lefthook's install script explicitly.
 
 ## Generated Defaults
