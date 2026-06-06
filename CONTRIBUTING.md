@@ -2,7 +2,7 @@
 
 ## Setup
 
-Use Node 22 or newer and pnpm 10.
+Use Node 22 or newer and pnpm 11.5.2.
 
 ```bash
 pnpm install

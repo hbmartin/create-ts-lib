@@ -35,9 +35,9 @@ Options:
   --version, -v Show version
 
 Examples:
-  pnpm create ts-lib my-lib
-  npm create ts-lib my-lib
-  npx create-ts-lib my-lib
+  pnpm create @hbmartin/ts-lib my-lib
+  npm create @hbmartin/ts-lib my-lib
+  npx @hbmartin/create-ts-lib my-lib
 `;
 
 const main = async (): Promise<void> => {
