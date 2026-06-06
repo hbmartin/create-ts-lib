@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Keep GitHub Actions pinned and updated deliberately.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track npm dependencies embedded in generated package.json templates.",
+      "managerFilePatterns": ["/^source/templates/files\\.ts$/"],
+      "matchStrings": ["\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\": \"\\^(?<currentValue>[^\"]+)\""],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    }
+  ]
+}

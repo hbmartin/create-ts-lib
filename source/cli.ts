@@ -1,29 +1,38 @@
 #!/usr/bin/env node
 import { basename, resolve } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+
+import ora, { type Ora } from "ora";
+import { cyan, green, red, yellow } from "yoctocolors";
 
 import packageJson from "../package.json" with { type: "json" };
 
-import { scaffoldProject } from "./scaffold.js";
-import type { LicenseName, PackageManager, ScaffoldConfig } from "./templates/files.js";
-
-const execFileAsync = promisify(execFile);
-
-interface PromptModule {
-  confirm(options: { default?: boolean; message: string }): Promise<boolean>;
-  input(options: { default?: string; message: string }): Promise<string>;
-  select<T extends string>(options: {
-    choices: Array<{ name: string; value: T }>;
-    default?: T;
-    message: string;
-  }): Promise<T>;
-}
+import {
+  type CliArguments,
+  type DetectedDefaults,
+  deriveDirectoryName,
+  detectDefaults,
+  parseCliArguments,
+  type WarningSink,
+} from "./cli-helpers.js";
+import { loadPromptModule, type PromptModule } from "./prompts.js";
+import { type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
+import {
+  buildProjectFiles,
+  type LicenseName,
+  type PackageManager,
+  type ScaffoldConfig,
+} from "./templates/files.js";
 
 const helpText = `create-ts-lib
 
 Usage:
-  create-ts-lib [directory]
+  create-ts-lib [directory] [--yes] [--dry-run]
+
+Options:
+  --yes, -y    Use detected/default answers without prompting
+  --dry-run    Print the scaffold plan without writing files
+  --help, -h   Show help
+  --version, -v Show version
 
 Examples:
   pnpm create ts-lib my-lib
@@ -32,21 +41,78 @@ Examples:
 `;
 
 const main = async (): Promise<void> => {
-  const [firstArgument] = process.argv.slice(2);
+  const warn: WarningSink = (message) => {
+    process.stderr.write(`${yellow("warning")} ${message}\n`);
+  };
 
-  if (firstArgument === "--help" || firstArgument === "-h") {
+  let cliArguments: CliArguments;
+  try {
+    cliArguments = parseCliArguments(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write(
+      `${red("error")} ${error instanceof Error ? error.message : "Invalid arguments"}\n\n`,
+    );
+    process.stderr.write(helpText);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (cliArguments.help) {
     process.stdout.write(helpText);
     return;
   }
 
-  if (firstArgument === "--version" || firstArgument === "-v") {
+  if (cliArguments.version) {
     process.stdout.write(`${packageJson.version}\n`);
     return;
   }
 
-  const promptModule = await loadPromptModule();
-  const defaults = await detectDefaults(firstArgument);
+  const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
+  const config = cliArguments.yes
+    ? buildDefaultConfig(defaults)
+    : await promptForConfig(defaults, await loadPromptModule(warn));
+  const targetDirectory = resolve(
+    cliArguments.directoryArgument ?? deriveDirectoryName(config.projectName),
+  );
 
+  printSummary(config, targetDirectory, cliArguments.dryRun);
+
+  if (cliArguments.dryRun) {
+    printDryRunFiles(config);
+    return;
+  }
+
+  await scaffoldProject(config, {
+    progress: createProgressReporter(),
+    targetDirectory,
+  });
+
+  const runPrefix = config.packageManager === "pnpm" ? "pnpm run" : `${config.packageManager} run`;
+  process.stdout.write(`Created ${config.projectName}
+
+Next steps:
+  cd ${basename(targetDirectory)}
+  ${runPrefix} dev
+  ${runPrefix} lint
+  ${runPrefix} test
+`);
+};
+
+const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
+  author: defaults.author,
+  description: "",
+  githubRepoUrl: defaults.githubRepoUrl,
+  includeCli: false,
+  includeCodecov: true,
+  license: "MIT",
+  packageManager: "pnpm",
+  projectName: defaults.projectName,
+});
+
+const promptForConfig = async (
+  defaults: DetectedDefaults,
+  promptModule: PromptModule,
+): Promise<ScaffoldConfig> => {
   const projectName = await promptModule.input({
     default: defaults.projectName,
     message: "Project name",
@@ -73,10 +139,6 @@ const main = async (): Promise<void> => {
     default: defaults.githubRepoUrl,
     message: "GitHub repo URL",
   });
-  const includeReleasePlease = await promptModule.confirm({
-    default: githubRepoUrl.length > 0,
-    message: "Include release-please?",
-  });
   const includeCodecov = await promptModule.confirm({
     default: true,
     message: "Include Codecov?",
@@ -95,155 +157,79 @@ const main = async (): Promise<void> => {
     message: "Package manager",
   });
 
-  const config: ScaffoldConfig = {
+  return {
     author,
     description,
     githubRepoUrl,
     includeCli,
     includeCodecov,
-    includeReleasePlease,
     license,
     packageManager,
     projectName,
   };
-  const targetDirectory = resolve(firstArgument ?? deriveDirectoryName(projectName));
-
-  await scaffoldProject(config, {
-    targetDirectory,
-  });
-
-  const runPrefix = packageManager === "pnpm" ? "pnpm run" : `${packageManager} run`;
-  process.stdout.write(`Created ${projectName}
-
-Next steps:
-  cd ${basename(targetDirectory)}
-  ${runPrefix} dev
-  ${runPrefix} lint
-  ${runPrefix} test
-`);
 };
 
-const deriveDirectoryName = (projectName: string): string =>
-  projectName.replace(/^@[^/]+\//u, "");
+const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {
+  const rows = [
+    ["Project", config.projectName],
+    ["Target", targetDirectory],
+    ["Description", config.description || "(empty)"],
+    ["Author", config.author || "(empty)"],
+    ["License", config.license],
+    ["Package manager", config.packageManager],
+    ["GitHub repo", config.githubRepoUrl || "(none)"],
+    ["Codecov", config.includeCodecov ? "yes" : "no"],
+    ["CLI entry", config.includeCli ? "yes" : "no"],
+  ];
 
-const loadPromptModule = async (): Promise<PromptModule> => {
-  try {
-    const importer = new Function("return import('@inquirer/prompts');") as () => Promise<PromptModule>;
-    return await importer();
-  } catch {
-    return createFallbackPrompts();
+  process.stdout.write(`${dryRun ? cyan("Dry run") : cyan("Scaffold summary")}\n`);
+  for (const [label, value] of rows) {
+    process.stdout.write(`  ${label}: ${value}\n`);
+  }
+  process.stdout.write("\n");
+};
+
+const printDryRunFiles = (config: ScaffoldConfig): void => {
+  process.stdout.write("Files to create:\n");
+  for (const file of buildProjectFiles(config)) {
+    process.stdout.write(`  ${file.path}\n`);
   }
 };
 
-const detectDefaults = async (
-  directoryArgument: string | undefined,
-): Promise<{ author: string; githubRepoUrl: string; projectName: string }> => {
-  const defaultProjectName = directoryArgument ? basename(directoryArgument) : "my-lib";
-  const [userName, userEmail, remoteUrl] = await Promise.all([
-    readGitConfigValue("user.name"),
-    readGitConfigValue("user.email"),
-    readGitRemoteOrigin(),
-  ]);
-
-  const author = [userName, userEmail ? `<${userEmail}>` : ""].filter(Boolean).join(" ").trim();
+const createProgressReporter = (): ScaffoldProgress => {
+  const { CI: continuousIntegration } = process.env;
+  const useSpinner = Boolean(process.stdout.isTTY) && continuousIntegration !== "true";
+  let spinner: Ora | undefined;
 
   return {
-    author,
-    githubRepoUrl: normalizeGitHubUrl(remoteUrl),
-    projectName: defaultProjectName,
-  };
-};
-
-const readGitConfigValue = async (key: string): Promise<string> => {
-  try {
-    const { stdout } = await execFileAsync("git", ["config", key]);
-    return stdout.trim();
-  } catch {
-    return "";
-  }
-};
-
-const readGitRemoteOrigin = async (): Promise<string> => {
-  try {
-    const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"]);
-    return stdout.trim();
-  } catch {
-    return "";
-  }
-};
-
-const normalizeGitHubUrl = (input: string): string => {
-  if (input.length === 0) {
-    return "";
-  }
-
-  if (input.startsWith("git@github.com:")) {
-    return `https://github.com/${input.slice("git@github.com:".length).replace(/\.git$/u, "")}`;
-  }
-
-  if (input.startsWith("https://github.com/")) {
-    return input.replace(/\.git$/u, "");
-  }
-
-  return input;
-};
-
-const createFallbackPrompts = (): PromptModule => {
-  const readline = new Function("return import('node:readline/promises');") as () => Promise<{
-    createInterface(options: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream }): {
-      close(): void;
-      question(message: string): Promise<string>;
-    };
-  }>;
-
-  const ask = async (message: string): Promise<string> => {
-    const { createInterface } = await readline();
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    const answer = await rl.question(message);
-    rl.close();
-    return answer.trim();
-  };
-
-  return {
-    confirm: async ({ default: defaultValue = false, message }) => {
-      const suffix = defaultValue ? "Y/n" : "y/N";
-      const answer = await ask(`${message} (${suffix}) `);
-      if (answer.length === 0) {
-        return defaultValue;
+    fail: (message) => {
+      if (spinner) {
+        spinner.fail(message);
+        spinner = undefined;
+        return;
       }
 
-      return ["y", "yes"].includes(answer.toLowerCase());
+      process.stdout.write(`${red("failed")} ${message}\n`);
     },
-    input: async ({ default: defaultValue = "", message }) => {
-      const answer = await ask(defaultValue.length > 0 ? `${message} (${defaultValue}) ` : `${message} `);
-      return answer.length > 0 ? answer : defaultValue;
+    info: (message) => {
+      process.stdout.write(`${cyan("info")} ${message}\n`);
     },
-    select: async ({ choices, default: defaultValue, message }) => {
-      const choiceSummary = choices
-        .map((choice, index) => `${index + 1}. ${choice.name}${choice.value === defaultValue ? " [default]" : ""}`)
-        .join("\n");
-      const answer = await ask(`${message}\n${choiceSummary}\n> `);
-      if (answer.length === 0) {
-        return defaultValue ?? choices[0].value;
+    start: (message) => {
+      if (useSpinner) {
+        spinner = ora(message).start();
+        return;
       }
 
-      const numericIndex = Number(answer);
-      if (Number.isInteger(numericIndex) && numericIndex >= 1 && numericIndex <= choices.length) {
-        return choices[numericIndex - 1]!.value;
+      process.stdout.write(`${cyan("start")} ${message}\n`);
+    },
+    succeed: (message) => {
+      if (spinner) {
+        spinner.succeed(message);
+        spinner = undefined;
+        return;
       }
 
-      const matchingChoice = choices.find(
-        (choice) => choice.value === answer || choice.name.toLowerCase() === answer.toLowerCase(),
-      );
-
-      if (matchingChoice) {
-        return matchingChoice.value;
-      }
-
-      throw new Error(`Invalid selection: ${answer}`);
+      process.stdout.write(`${green("done")} ${message}\n`);
     },
   };
 };

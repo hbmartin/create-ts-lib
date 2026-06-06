@@ -1,0 +1,14 @@
+#!/usr/bin/env node
+import meow from "meow";
+
+meow(
+  `
+  Usage
+    $ {{BIN_NAME}} <input>
+
+  Options
+    --help     Show help
+    --version  Show version
+  `,
+  { importMeta: import.meta },
+);
