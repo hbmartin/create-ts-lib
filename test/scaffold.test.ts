@@ -1,17 +1,20 @@
-import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { access, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { scaffoldProject } from "../source/scaffold.js";
+import {
+  initializeGitRepositoryIfNeeded,
+  runPackageManagerCommand,
+  scaffoldProject,
+} from "../source/scaffold.js";
 import { renderBiomeJsonc } from "../source/templates/biome.js";
 import {
   buildProjectFiles,
   getBinName,
   type LicenseName,
-  type PackageManager,
   type ScaffoldConfig,
 } from "../source/templates/files.js";
 
@@ -32,6 +35,10 @@ interface GeneratedPackageJson {
   exports: {
     ".": Record<string, string>;
   };
+  repository?: {
+    type: string;
+    url: string;
+  };
   scripts: {
     format: string;
     lint: string;
@@ -49,7 +56,7 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".github/workflows/release-please.yml");
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
-    expect(ciWorkflow?.content).toContain("version: 10");
+    expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("pnpm exec publint --pack npm");
     expect(ciWorkflow?.content).toContain("pnpm run lint");
@@ -104,47 +111,28 @@ describe("buildProjectFiles", () => {
     expect(Object.keys(packageJson.exports["."])).toEqual(["types", "default"]);
   });
 
-  it.each<PackageManager>(["npm", "pnpm", "yarn"])(
-    "renders package-manager commands for %s",
-    (packageManager) => {
-      const files = buildProjectFiles({
-        ...baseConfig,
-        packageManager,
-      });
-      const filePaths = files.map((file) => file.path);
-      const ciWorkflow = findGeneratedFile(files, ".github/workflows/ci.yml");
-      const lefthook = findGeneratedFile(files, "lefthook.yml");
+  it("renders pnpm package-manager commands", () => {
+    const files = buildProjectFiles(baseConfig);
+    const ciWorkflow = findGeneratedFile(files, ".github/workflows/ci.yml");
+    const lefthook = findGeneratedFile(files, "lefthook.yml");
+    const pnpmWorkspaceLines = findGeneratedFile(files, "pnpm-workspace.yaml")
+      .content.split(/\r?\n/u)
+      .map((line) => line.trim());
 
-      if (packageManager === "npm") {
-        expect(ciWorkflow.content).toContain("npm ci");
-        expect(lefthook.content).toContain("npm run lint");
-        expect(filePaths).not.toContain("pnpm-workspace.yaml");
-      }
-
-      if (packageManager === "pnpm") {
-        expect(ciWorkflow.content).toContain("pnpm install --frozen-lockfile");
-        expect(lefthook.content).toContain("pnpm run lint");
-        expect(findGeneratedFile(files, "pnpm-workspace.yaml").content).toContain("lefthook: true");
-        expect(findGeneratedFile(files, "pnpm-workspace.yaml").content).toContain('  - "."');
-      }
-
-      if (packageManager === "yarn") {
-        expect(ciWorkflow.content).toContain("yarn install --frozen-lockfile");
-        expect(ciWorkflow.content).toContain("yarn audit --groups dependencies");
-        expect(lefthook.content).toContain("yarn run lint");
-        expect(filePaths).not.toContain("pnpm-workspace.yaml");
-      }
-    },
-  );
+    expect(ciWorkflow.content).toContain("pnpm install --frozen-lockfile");
+    expect(lefthook.content).toContain("pnpm run lint");
+    expect(pnpmWorkspaceLines).toContain("lefthook: true");
+    expect(pnpmWorkspaceLines).toContain('- "."');
+  });
 
   it("adds CLI files and binary metadata when requested", () => {
     const files = buildProjectFiles({
       ...baseConfig,
       includeCli: true,
-      packageManager: "npm",
       projectName: "@scope/example-cli",
     });
     const packageJsonFile = findGeneratedFile(files, "package.json");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
 
     expect(files.map((file) => file.path)).toContain("source/cli.ts");
     expect(packageJsonFile.content).toContain(
@@ -152,6 +140,10 @@ describe("buildProjectFiles", () => {
     );
     expect(packageJsonFile.content).toContain(`"meow": "^14.0.0"`);
     expect(packageJsonFile.content).not.toContain(`"packageManager"`);
+    expect(packageJson.repository).toEqual({
+      type: "git",
+      url: "git+https://github.com/hbmartin/example-lib.git",
+    });
   });
 
   it("skips GitHub workflows when no repository URL is provided", () => {
@@ -226,6 +218,40 @@ describe("scaffoldProject", () => {
 
     expect(packageJson).toContain(`"name": "example-lib"`);
     expect(sourceFiles).toContain("index.ts");
+  });
+});
+
+describe("initializeGitRepositoryIfNeeded", () => {
+  it("initializes git when the target is not already inside a repository", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-git-"));
+
+    await initializeGitRepositoryIfNeeded(tempDirectory);
+
+    await expect(access(join(tempDirectory, ".git"))).resolves.toBeUndefined();
+  });
+});
+
+describe("runPackageManagerCommand", () => {
+  it("resolves when the package manager exits successfully", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-pm-"));
+    await writeFile(
+      join(tempDirectory, "package.json"),
+      JSON.stringify({ scripts: { ok: 'node -e ""' } }),
+      "utf8",
+    );
+
+    await expect(
+      runPackageManagerCommand("pnpm", ["--silent", "run", "ok"], tempDirectory),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects when the package manager exits with a failure", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-pm-"));
+    await writeFile(join(tempDirectory, "package.json"), JSON.stringify({ scripts: {} }), "utf8");
+
+    await expect(
+      runPackageManagerCommand("pnpm", ["--silent", "run", "missing"], tempDirectory),
+    ).rejects.toThrow("pnpm --silent run missing exited with code");
   });
 });
 

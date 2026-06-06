@@ -1,5 +1,6 @@
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
+import type { Readable, Writable } from "node:stream";
 import type { WarningSink } from "./cli-helpers.js";
 
 export interface PromptModule {
@@ -21,11 +22,14 @@ export const loadPromptModule = async (warn: WarningSink): Promise<PromptModule>
   }
 };
 
-export const createFallbackPrompts = (): PromptModule => {
+export const createFallbackPrompts = (
+  input: Readable = process.stdin,
+  output: Writable = process.stdout,
+): PromptModule => {
   const ask = async (message: string): Promise<string> => {
     const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
+      input,
+      output,
     });
     const answer = await rl.question(message);
     rl.close();

@@ -72,10 +72,13 @@ describe("detectDefaults", () => {
 
   it("warns and falls back when default git readers fail", async () => {
     const warnings: string[] = [];
-    vi.mocked(execFile).mockImplementation(((_command, _args, callback) => {
-      if (typeof callback === "function") {
-        (callback as (error: Error) => void)(new Error("git failed"));
-      }
+    vi.mocked(execFile).mockImplementation(((...args: unknown[]) => {
+      const callback = args.findLast(
+        (argument): argument is (error: Error, stdout: string, stderr: string) => void =>
+          typeof argument === "function",
+      );
+
+      callback?.(new Error("git failed"), "", "");
 
       return {} as ReturnType<typeof execFile>;
     }) as typeof execFile);

@@ -58,7 +58,7 @@ const packageManagerConfig = {
     installCommand: "pnpm install",
     packageManagerSetup: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 10`,
+          version: 11.5.2`,
     publintCommand: "pnpm exec publint --pack npm",
     runPrefix: "pnpm run",
   },
@@ -114,7 +114,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
     homepage: `${normalizedUrl}#readme`,
     repository: {
       type: "git",
-      url: `${normalizedUrl}.git`,
+      url: `git+${normalizedUrl}.git`,
     },
   };
 };

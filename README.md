@@ -7,27 +7,27 @@ It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc l
 ## Usage
 
 ```bash
-pnpm create ts-lib my-lib
-npm create ts-lib my-lib
-npx create-ts-lib my-lib
+pnpm create @hbmartin/ts-lib my-lib
+npm create @hbmartin/ts-lib my-lib
+npx @hbmartin/create-ts-lib my-lib
 ```
 
 Run without `--yes` to answer prompts:
 
 ```bash
-create-ts-lib my-lib
+npx @hbmartin/create-ts-lib my-lib
 ```
 
 Use defaults without prompts:
 
 ```bash
-create-ts-lib my-lib --yes
+npx @hbmartin/create-ts-lib my-lib --yes
 ```
 
 Preview the target options and file list without writing files:
 
 ```bash
-create-ts-lib my-lib --dry-run
+npx @hbmartin/create-ts-lib my-lib --dry-run
 ```
 
 ## Prompt Flow
