@@ -17,17 +17,127 @@ rules:
       - typescript
     pattern-either:
       - patterns:
-          - pattern: import { exec } from "node:child_process";
+          - pattern-inside: |
+              import * as $CHILD_PROCESS from "node:child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import * as $CHILD_PROCESS from "child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import $CHILD_PROCESS from "node:child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import $CHILD_PROCESS from "child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const $CHILD_PROCESS = require("node:child_process");
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const $CHILD_PROCESS = require("child_process");
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec } from "node:child_process";
+              ...
           - pattern: exec(...)
       - patterns:
-          - pattern: import { exec } from "child_process";
+          - pattern-inside: |
+              import { exec } from "child_process";
+              ...
           - pattern: exec(...)
       - patterns:
-          - pattern: import { execSync } from "node:child_process";
+          - pattern-inside: |
+              import { execSync } from "node:child_process";
+              ...
           - pattern: execSync(...)
       - patterns:
-          - pattern: import { execSync } from "child_process";
+          - pattern-inside: |
+              import { execSync } from "child_process";
+              ...
           - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec as $EXEC } from "node:child_process";
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec as $EXEC } from "child_process";
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync as $EXEC_SYNC } from "node:child_process";
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync as $EXEC_SYNC } from "child_process";
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec } = require("node:child_process");
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec } = require("child_process");
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync } = require("node:child_process");
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync } = require("child_process");
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec: $EXEC } = require("node:child_process");
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec: $EXEC } = require("child_process");
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync: $EXEC_SYNC } = require("node:child_process");
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync: $EXEC_SYNC } = require("child_process");
+              ...
+          - pattern: $EXEC_SYNC(...)
 
   - id: no-shell-true-process
     message: Avoid shell:true process execution. Pass explicit argv to the executable instead.

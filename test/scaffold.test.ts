@@ -16,6 +16,7 @@ import {
   getBinName,
   type LicenseName,
   type ScaffoldConfig,
+  tsgoProbeCommand,
 } from "../source/templates/files.js";
 
 const baseConfig: ScaffoldConfig = {
@@ -28,9 +29,6 @@ const baseConfig: ScaffoldConfig = {
   packageManager: "pnpm",
   projectName: "example-lib",
 };
-
-const tsgoProbeCommand =
-  "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
 
 interface GeneratedPackageJson {
   dependencies: Record<string, string>;
@@ -279,10 +277,37 @@ describe("buildProjectFiles", () => {
     expect(readme.content).toContain("pnpm add example-lib");
     expect(readme.content).toContain('import { formatValue } from "example-lib";');
     expect(readme.content).toContain("uvx semgrep@1.165.0");
-    expect(readme.content).toContain("MIT - Harold Martin.");
+    expect(readme.content).toContain(
+      "[![npm version](https://img.shields.io/npm/v/example-lib.svg)](https://www.npmjs.com/package/example-lib)",
+    );
+    expect(readme.content).toContain(
+      "[![CI](https://github.com/hbmartin/example-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/hbmartin/example-lib/actions/workflows/ci.yml)",
+    );
+    expect(readme.content).toContain("See [`AGENTS.md`](AGENTS.md)");
+    expect(readme.content).toContain("[MIT](LICENSE) © Harold Martin.");
     expect(readme.content).not.toContain("## CLI");
     expect(cliReadme.content).toContain("## CLI");
     expect(cliReadme.content).toContain("example-cli --help");
+  });
+
+  it("renders author fallbacks in generated README license text", () => {
+    const emailOnlyReadme = findGeneratedFile(
+      buildProjectFiles({
+        ...baseConfig,
+        author: "<harold@example.com>",
+      }),
+      "README.md",
+    );
+    const anonymousReadme = findGeneratedFile(
+      buildProjectFiles({
+        ...baseConfig,
+        author: "",
+      }),
+      "README.md",
+    );
+
+    expect(emailOnlyReadme.content).toContain("[MIT](LICENSE) © <harold@example.com>.");
+    expect(anonymousReadme.content).toContain("[MIT](LICENSE) © Unknown Author.");
   });
 
   it("adds CLI files and binary metadata when requested", () => {
@@ -308,13 +333,17 @@ describe("buildProjectFiles", () => {
   });
 
   it("skips GitHub workflows when no repository URL is provided", () => {
-    const filePaths = buildProjectFiles({
+    const files = buildProjectFiles({
       ...baseConfig,
       githubRepoUrl: "",
-    }).map((file) => file.path);
+    });
+    const filePaths = files.map((file) => file.path);
 
     expect(filePaths).not.toContain(".github/workflows/ci.yml");
     expect(filePaths).not.toContain(".github/workflows/release.yml");
+    expect(findGeneratedFile(files, "README.md").content).not.toContain(
+      "actions/workflows/ci.yml/badge.svg",
+    );
   });
 
   it.each(["npm", "yarn"] as const)("skips GitHub workflows for %s projects", (packageManager) => {
