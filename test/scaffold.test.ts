@@ -318,6 +318,9 @@ describe("buildProjectFiles", () => {
   it.each([
     ["SSH", "git@github.com:hbmartin/example-lib.git"],
     ["git+https", "git+https://github.com/hbmartin/example-lib.git"],
+    ["git+ssh", "git+ssh://git@github.com/hbmartin/example-lib.git"],
+    ["ssh", "ssh://git@github.com/hbmartin/example-lib.git"],
+    ["git", "git://github.com/hbmartin/example-lib.git"],
   ])(
     "normalizes %s GitHub URLs in generated metadata and README badges",
     (_label, githubRepoUrl) => {
