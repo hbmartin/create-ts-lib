@@ -16,7 +16,7 @@ import {
 } from "./cli-helpers.js";
 import {
   checkNpmPackageNameAvailability,
-  type NpmPackageNameAvailability,
+  type NpmPackageNameAvailabilityUnknown,
 } from "./npm-registry.js";
 import { assertValidPackageName, validatePackageName } from "./package-name.js";
 import { loadPromptModule, type PromptModule } from "./prompts.js";
@@ -300,15 +300,15 @@ const warnForNpmPackageNameAvailability = async (
 const formatNpmPackageNameExistsWarning = (packageName: string): string =>
   `Package name "${packageName}" already exists on npm.`;
 
-const formatNpmAvailabilityUnknownWarning = (availability: NpmPackageNameAvailability): string => {
+const formatNpmAvailabilityUnknownWarning = (
+  availability: NpmPackageNameAvailabilityUnknown,
+): string => {
   const detail =
     availability.statusCode === undefined
       ? availability.error
       : `npm registry returned HTTP ${availability.statusCode}`;
 
-  return detail
-    ? `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`
-    : `Could not check npm availability for "${availability.packageName}"; continuing.`;
+  return `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`;
 };
 
 const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {

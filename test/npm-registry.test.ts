@@ -69,15 +69,10 @@ describe("checkNpmPackageNameAvailability", () => {
     });
   });
 
-  it("reports timed out registry requests as unknown", async () => {
+  it("reports timed out registry requests as unknown when fetch ignores abort", async () => {
     vi.useFakeTimers();
     const fetchPackage = vi.fn(
-      (_url: string, init: RequestInit) =>
-        new Promise<{ status: number }>((_resolve, reject) => {
-          init.signal?.addEventListener("abort", () => {
-            reject(new DOMException("The operation was aborted", "AbortError"));
-          });
-        }),
+      (_url: string, _init: RequestInit) => new Promise<{ status: number }>(() => undefined),
     );
 
     const availability = checkNpmPackageNameAvailability("example-lib", {
@@ -92,6 +87,7 @@ describe("checkNpmPackageNameAvailability", () => {
       packageName: "example-lib",
       status: "unknown",
     });
+    expect(fetchPackage.mock.calls[0]?.[1].signal?.aborted).toBe(true);
   });
 
   it("reports thrown non-error values as unknown registry errors", async () => {
@@ -106,20 +102,41 @@ describe("checkNpmPackageNameAvailability", () => {
     });
   });
 
-  it("normalizes custom registry URLs without trailing slashes", async () => {
-    const fetchPackage = vi.fn(async () => ({ status: 404 }));
+  it("uses custom registry URLs and encodes scoped package names", async () => {
+    const fetchPackage = vi.fn(async () => ({ status: 200 }));
 
-    await checkNpmPackageNameAvailability("example-lib", {
-      fetch: fetchPackage,
-      registryUrl: "https://registry.example.test/npm",
+    await expect(
+      checkNpmPackageNameAvailability("@scope/example-lib", {
+        fetch: fetchPackage,
+        registryUrl: "https://registry.example.test/npm",
+      }),
+    ).resolves.toEqual({
+      packageName: "@scope/example-lib",
+      status: "exists",
     });
 
     expect(fetchPackage).toHaveBeenCalledWith(
-      "https://registry.example.test/npm/example-lib",
+      "https://registry.example.test/npm/%40scope%2Fexample-lib",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("reports malformed registry URLs as unknown without fetching", async () => {
+    const fetchPackage = vi.fn(async () => ({ status: 200 }));
+
+    await expect(
+      checkNpmPackageNameAvailability("example-lib", {
+        fetch: fetchPackage,
+        registryUrl: "://registry.example.test",
+      }),
+    ).resolves.toEqual({
+      error: expect.stringContaining("Invalid URL"),
+      packageName: "example-lib",
+      status: "unknown",
+    });
+    expect(fetchPackage).not.toHaveBeenCalled();
   });
 });

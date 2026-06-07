@@ -126,7 +126,7 @@ The generator asks for:
 | Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                        |
 | License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                         |
 | GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes                             |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI                                  |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                  |
 | Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                            |
 | Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                              |
 

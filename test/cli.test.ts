@@ -353,25 +353,6 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: demo-lib");
   });
 
-  it("formats npm availability warnings without optional details", async () => {
-    const checkNpmPackageNameAvailability = vi.fn(
-      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
-        packageName,
-        status: "unknown",
-      }),
-    );
-
-    const result = await runCli(["demo-lib", "--yes", "--dry-run"], {
-      checkNpmPackageNameAvailability,
-    });
-
-    expect(result.exitCode).toBeUndefined();
-    expect(result.stderr).toContain(
-      'Could not check npm availability for "demo-lib"; continuing.\n',
-    );
-    expect(result.stderr).not.toContain("undefined");
-  });
-
   it("scaffolds the project and prints next steps", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
 
