@@ -25,9 +25,11 @@ jobs:
         with:
           node-version: "22"
           cache: "{{CACHE}}"
+      - run: python3 -m pip install --user semgrep
+      - run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: {{INSTALL_CI_COMMAND}}
       - run: {{AUDIT_COMMAND}}
-      - run: {{RUN_PREFIX}} lint
+      - run: {{RUN_PREFIX}} check
       - run: {{BUILD_COMMAND}}
       - run: {{PUBLINT_COMMAND}}
-      - run: {{RUN_PREFIX}} test{{CODECOV_STEP}}
+{{CODECOV_STEP}}

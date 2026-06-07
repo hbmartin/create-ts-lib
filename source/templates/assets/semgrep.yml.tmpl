@@ -1,0 +1,10 @@
+rules:
+  - id: no-eval-like-execution
+    message: Avoid eval-like dynamic code execution. Parse data or dispatch explicit functions instead.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
