@@ -8,6 +8,7 @@ import {
   normalizeGitHubUrl,
   parseCliArguments,
 } from "../source/cli-helpers.js";
+import { stripGitSuffix, stripPackageScope } from "../source/name-helpers.js";
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -18,10 +19,11 @@ afterEach(() => {
 });
 
 describe("parseCliArguments", () => {
-  it("parses directory, yes, and dry-run flags", () => {
-    expect(parseCliArguments(["my-lib", "--yes", "--dry-run"])).toEqual({
+  it("parses directory, yes, dry-run, and force flags", () => {
+    expect(parseCliArguments(["my-lib", "--yes", "--dry-run", "--force"])).toEqual({
       directoryArgument: "my-lib",
       dryRun: true,
+      force: true,
       help: false,
       version: false,
       yes: true,
@@ -31,6 +33,16 @@ describe("parseCliArguments", () => {
   it("rejects unknown options and extra positional arguments", () => {
     expect(() => parseCliArguments(["--bad"])).toThrow("Unknown option");
     expect(() => parseCliArguments(["one", "two"])).toThrow("Unexpected extra argument");
+  });
+});
+
+describe("shared name helpers", () => {
+  it("removes npm scopes and git suffixes", () => {
+    expect(stripPackageScope("@scope/example-lib")).toBe("example-lib");
+    expect(stripPackageScope("plain-lib")).toBe("plain-lib");
+    expect(stripGitSuffix("https://github.com/hbmartin/example-lib.git")).toBe(
+      "https://github.com/hbmartin/example-lib",
+    );
   });
 });
 

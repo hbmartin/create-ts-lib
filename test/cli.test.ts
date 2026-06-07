@@ -1,6 +1,9 @@
+import { basename } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import packageJson from "../package.json" with { type: "json" };
+import type { DetectedDefaults } from "../source/cli-helpers.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -12,9 +15,14 @@ interface CliResult {
 }
 
 interface RunCliOptions {
+  detectedDefaults?: Partial<DetectedDefaults>;
   promptModule?: {
     confirm(options: { message: string }): Promise<boolean>;
-    input(options: { default?: string; message: string }): Promise<string>;
+    input(options: {
+      default?: string;
+      message: string;
+      validate?: (value: string) => boolean | string;
+    }): Promise<string>;
     select(options: { message: string }): Promise<string>;
   };
   scaffoldProject?: ReturnType<typeof vi.fn>;
@@ -62,8 +70,19 @@ describe("cli entrypoint", () => {
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Dry run");
     expect(result.stdout).toContain("Project: demo-lib");
+    expect(result.stdout).toContain("License: Apache-2.0");
     expect(result.stdout).toContain("Files to create:");
     expect(result.stdout).toContain("package.json");
+  });
+
+  it("rejects invalid project names in --yes mode", async () => {
+    const result = await runCli(["My Lib", "--yes", "--dry-run"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain('Invalid project name "My Lib"');
+    expect(result.stderr).toContain("lowercase");
+    expect(result.stderr).toContain("whitespace");
   });
 
   it("uses prompted values when --yes is omitted", async () => {
@@ -72,8 +91,18 @@ describe("cli entrypoint", () => {
         async ({ message }: { message: string }) => message === "Include CLI entry point?",
       ),
       input: vi.fn(
-        async ({ default: defaultValue, message }: { default?: string; message: string }) => {
+        async ({
+          default: defaultValue,
+          message,
+          validate,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
           if (message === "Project name") {
+            expect(validate?.("My Lib")).toContain("lowercase");
+            expect(validate?.("prompt-lib")).toBe(true);
             return defaultValue ?? "prompt-lib";
           }
 
@@ -120,12 +149,36 @@ describe("cli entrypoint", () => {
       expect.objectContaining({ targetDirectory: expect.stringContaining("demo-lib") }),
     );
   });
+
+  it("passes --force to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    await runCli(["demo-lib", "--yes", "--force"], { scaffoldProject });
+
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ projectName: "demo-lib" }),
+      expect.objectContaining({ force: true }),
+    );
+  });
 });
 
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
+  vi.doUnmock("../source/cli-helpers.js");
   vi.doUnmock("../source/prompts.js");
   vi.doUnmock("../source/scaffold.js");
+
+  vi.doMock("../source/cli-helpers.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../source/cli-helpers.js")>();
+
+    return {
+      ...actual,
+      detectDefaults: vi.fn(async (directoryArgument: string | undefined) => ({
+        ...buildDetectedDefaults(directoryArgument),
+        ...options.detectedDefaults,
+      })),
+    };
+  });
 
   if (options.promptModule) {
     vi.doMock("../source/prompts.js", () => ({
@@ -165,3 +218,9 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
     stderrSpy.mockRestore();
   }
 };
+
+const buildDetectedDefaults = (directoryArgument: string | undefined): DetectedDefaults => ({
+  author: "Test Author <test@example.com>",
+  githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+  projectName: directoryArgument ? basename(directoryArgument) : "my-lib",
+});
