@@ -37,11 +37,26 @@ describe("inspectPersonalGitHubRepository", () => {
         "graphql",
         "-f",
         expect.stringContaining("query PersonalRepositoryLookup"),
-        "-F",
+        "-f",
         "name=example-lib",
       ]),
       { timeoutMilliseconds: 5000 },
     );
+  });
+
+  it("passes numeric-looking repository names as raw GraphQL strings", async () => {
+    const executor = createExecutor([
+      personalRepositoryLookupOutput("hbmartin", "https://github.com/hbmartin/123"),
+    ]);
+
+    await expect(inspectPersonalGitHubRepository("@scope/123", { executor })).resolves.toEqual({
+      owner: "hbmartin",
+      repositoryName: "123",
+      status: "found",
+      url: "https://github.com/hbmartin/123",
+    });
+    expect(getFirstExecutorArgs(executor)).toEqual(expect.arrayContaining(["-f", "name=123"]));
+    expect(getFirstExecutorArgs(executor)).not.toEqual(expect.arrayContaining(["-F", "name=123"]));
   });
 
   it("reports a missing repository when GraphQL returns no personal repository", async () => {
@@ -308,3 +323,13 @@ const commandFailure = (
   message: string,
   properties: { code?: number | string; stderr?: string; stdout?: string } = {},
 ): Error => Object.assign(new Error(message), { stderr: "", stdout: "", ...properties });
+
+const getFirstExecutorArgs = (executor: GitHubCliCommandExecutor): string[] => {
+  const call = vi.mocked(executor).mock.calls[0];
+
+  if (call === undefined) {
+    throw new Error("Expected executor to be called");
+  }
+
+  return call[0];
+};

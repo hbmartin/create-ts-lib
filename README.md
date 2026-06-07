@@ -180,6 +180,7 @@ Generated packages include:
 
 - `version: "0.1.0"`
 - `type: "module"`
+- `packageManager: "pnpm@11.5.2"` for pnpm projects
 - `exports` pointing at `dist/index.js` and `dist/index.d.ts`
 - `engines.node: ">=22"`
 - `@sindresorhus/tsconfig`
@@ -188,6 +189,7 @@ Generated packages include:
 - dependency-cruiser architecture checks
 - Semgrep policy checks
 - Vitest with v8 coverage and 80% thresholds
+- SHA-pinned GitHub Actions CI and release workflows for pnpm projects
 - Lefthook with a lint-only `pre-commit` hook
 - `zod` as a default runtime dependency
 - `meow` and CLI coverage only when CLI support is enabled, including a CLI test
