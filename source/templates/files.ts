@@ -132,7 +132,8 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     scripts: {
       build: "tsc -p tsconfig.build.json",
-      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} test`,
+      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} test`,
+      "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
       dev: "tsc --watch",
       format: "oxfmt . --write",
       lint: "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
@@ -141,6 +142,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
       publint: `publint --pack ${config.packageManager}`,
       "release:check": `${pmConfig.runPrefix} prepublishOnly && ${pmConfig.runPrefix} verify:package`,
+      "security:lint": "semgrep scan --config semgrep.yml --error source test",
       "size:report": "npm pack --dry-run --json",
       test: "vitest run --coverage",
       typecheck: "tsc --noEmit",
@@ -158,6 +160,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       "@sindresorhus/tsconfig": "^8.1.0",
       "@types/node": "^22",
       "@vitest/coverage-v8": "^4.1.8",
+      "dependency-cruiser": "^17.4.3",
       lefthook: "^2.1.9",
       oxfmt: "^0.53.0",
       oxlint: "^1.68.0",
@@ -280,6 +283,14 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       path: "biome.jsonc",
     },
     {
+      content: renderTemplate("agents.md.tmpl"),
+      path: "AGENTS.md",
+    },
+    {
+      content: renderTemplate("dependency-cruiser.cjs.tmpl"),
+      path: ".dependency-cruiser.cjs",
+    },
+    {
       content: renderTemplate("oxfmtrc.json.tmpl"),
       path: ".oxfmtrc.json",
     },
@@ -292,6 +303,10 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
         RUN_PREFIX: pmConfig.runPrefix,
       }),
       path: "lefthook.yml",
+    },
+    {
+      content: renderTemplate("semgrep.yml.tmpl"),
+      path: "semgrep.yml",
     },
     {
       content: buildPackageJson(config),

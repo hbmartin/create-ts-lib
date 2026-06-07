@@ -7,7 +7,7 @@
 
 An opinionated initializer for TypeScript libraries.
 
-It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc lint/format tooling, Vitest coverage, Lefthook, publint, optional GitHub Actions CI, optional Codecov upload, and an optional CLI entry point.
+It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc lint/format tooling, dependency-cruiser, Semgrep policy checks, Vitest coverage, Lefthook, publint, optional GitHub Actions CI, optional Codecov upload, and an optional CLI entry point.
 
 ## Contents
 
@@ -32,6 +32,7 @@ Setting up a publishable TypeScript library means making the same dozen decision
 - **ESM-only, Node 22+** — no dual-format build complexity.
 - **Biome + Oxc** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
+- **dependency-cruiser + Semgrep** for lightweight architecture and security policy checks.
 - **Lefthook** for lightweight pre-commit hooks.
 - **publint + are-the-types-wrong** wired in so your published package is correct before you ship it.
 
@@ -130,12 +131,15 @@ my-lib/
 │   └── workflows/
 │       ├── ci.yml              # pnpm + GitHub repo URL only
 │       └── release.yml         # pnpm + GitHub repo URL only
+├── AGENTS.md
+├── .dependency-cruiser.cjs
 ├── .gitignore
 ├── biome.jsonc
 ├── lefthook.yml
 ├── pnpm-workspace.yaml         # pnpm only
 ├── package.json
 ├── README.md
+├── semgrep.yml
 ├── tsconfig.json
 ├── tsconfig.build.json
 ├── vitest.config.ts
@@ -155,13 +159,17 @@ Generated packages include:
 - `@sindresorhus/tsconfig`
 - strict Biome linting with formatting disabled
 - `oxlint` and `oxfmt`
+- dependency-cruiser architecture checks
+- Semgrep policy checks
 - Vitest with v8 coverage and 80% thresholds
 - Lefthook with a lint-only `pre-commit` hook
 - `zod` as a default runtime dependency
 - `meow` only when CLI support is enabled
 - `@arethetypeswrong/cli` and `publint` release checks
-- `check`, `prepublishOnly`, `publint`, `types:lint`, `verify:artifacts`,
-  `verify:package`, `size:report`, and `release:check` scripts
+- `check`, `deps:lint`, `security:lint`, `prepublishOnly`, `publint`,
+  `types:lint`, `verify:artifacts`, `verify:package`, `size:report`, and
+  `release:check` scripts
+- `AGENTS.md` with opinionated guidance for Codex and other coding agents
 - `Apache-2.0` license by default
 
 Release-please is not generated. Pnpm projects with a GitHub repo URL include a release workflow that publishes to npm when a GitHub release is published.
@@ -184,7 +192,7 @@ Once the generator finishes, your library already builds, lints, and tests. To p
 ```bash
 cd my-lib
 # write your code in source/, then:
-pnpm run check          # lint + typecheck + coverage
+pnpm run check          # lint + dep/security checks + typecheck + coverage
 pnpm run release:check  # package validation + npm publish dry run
 pnpm run size:report    # packed package size report
 pnpm version patch      # or minor / major
@@ -196,6 +204,9 @@ For pnpm projects with a GitHub repo URL, publishing a GitHub release for the pu
 `prepublishOnly`-style validation (`verify:artifacts`, `publint`, are-the-types-wrong,
 and a dry-run publish) is wired into the generated package so packaging problems surface
 before you ship.
+
+`pnpm run security:lint` requires the Semgrep CLI on PATH. Install it with
+`pipx install semgrep` when running checks locally.
 
 ## Programmatic API
 
@@ -247,12 +258,14 @@ Useful commands:
 
 ```bash
 pnpm run lint
+pnpm run deps:lint
+pnpm run security:lint
 pnpm run typecheck
 pnpm run test
 pnpm run test:coverage
 pnpm run build
-pnpm publint --pack pnpm
-pnpm attw --pack . --profile esm-only
+pnpm run publint
+pnpm run types:lint
 ```
 
 Template assets live under `source/templates/assets` and are copied into `dist/templates/assets` during `pnpm build`.

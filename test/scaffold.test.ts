@@ -42,11 +42,13 @@ interface GeneratedPackageJson {
   scripts: {
     attw: string;
     check: string;
+    "deps:lint": string;
     format: string;
     lint: string;
     prepublishOnly: string;
     publint: string;
     "release:check": string;
+    "security:lint": string;
     "size:report": string;
     "types:lint": string;
     "verify:artifacts": string;
@@ -56,6 +58,16 @@ interface GeneratedPackageJson {
 
 interface GeneratedOxfmtConfig {
   ignorePatterns: string[];
+}
+
+interface GeneratedOxlintConfig {
+  ignorePatterns: string[];
+}
+
+interface GeneratedBiomeConfig {
+  files: {
+    includes: string[];
+  };
 }
 
 describe("buildProjectFiles", () => {
@@ -72,8 +84,9 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".release-please-manifest.json");
     expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
+    expect(ciWorkflow?.content).toContain("python3 -m pip install --user semgrep");
     expect(ciWorkflow?.content).toContain("pnpm exec publint --pack pnpm");
-    expect(ciWorkflow?.content).toContain("pnpm run lint");
+    expect(ciWorkflow?.content).toContain("pnpm run check");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
     expect(releaseWorkflow?.content).toContain("types: [published]");
@@ -81,11 +94,9 @@ describe("buildProjectFiles", () => {
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
     expect(releaseWorkflow?.content).toContain("version: 11.4.0");
     expect(releaseWorkflow?.content).toContain("node-version: '22.x'");
-    expect(releaseWorkflow?.content).toContain("pnpm run verify:artifacts");
-    expect(releaseWorkflow?.content).toContain("pnpm run verify:package");
+    expect(releaseWorkflow?.content).toContain("python3 -m pip install --user semgrep");
+    expect(releaseWorkflow?.content).toContain("pnpm run release:check");
     expect(releaseWorkflow?.content).toContain("pnpm run size:report");
-    expect(releaseWorkflow?.content).toContain("pnpm run publint");
-    expect(releaseWorkflow?.content).toContain("pnpm run types:lint");
     expect(releaseWorkflow?.content).toContain('TAG="next"');
     expect(releaseWorkflow?.content).toContain(
       'npm publish --tag "$TAG" --access public --provenance',
@@ -95,16 +106,25 @@ describe("buildProjectFiles", () => {
   it("emits Lefthook and Oxc tooling", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
+    const agents = findGeneratedFile(files, "AGENTS.md");
+    const biomeConfig = parseGeneratedJsonc(files, "biome.jsonc") as GeneratedBiomeConfig;
+    const dependencyCruiser = findGeneratedFile(files, ".dependency-cruiser.cjs");
     const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
+    const oxlintConfig = parseGeneratedJson<GeneratedOxlintConfig>(files, ".oxlintrc.json");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const semgrep = findGeneratedFile(files, "semgrep.yml");
     const vitestConfig = findGeneratedFile(files, "vitest.config.ts");
 
+    expect(filePaths).toContain("AGENTS.md");
+    expect(filePaths).toContain(".dependency-cruiser.cjs");
     expect(filePaths).toContain("lefthook.yml");
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
+    expect(filePaths).toContain("semgrep.yml");
     expect(packageJson.devDependencies).toMatchObject({
       "@arethetypeswrong/cli": expect.any(String),
       "@vitest/coverage-v8": expect.any(String),
+      "dependency-cruiser": expect.any(String),
       lefthook: expect.any(String),
       oxfmt: expect.any(String),
       oxlint: expect.any(String),
@@ -115,13 +135,22 @@ describe("buildProjectFiles", () => {
     });
     expect(packageJson.devDependencies).not.toHaveProperty("@vitest/coverage-istanbul");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
-    expect(packageJson.scripts.check).toBe("pnpm run lint && pnpm run typecheck && pnpm run test");
+    expect(packageJson.devDependencies).not.toHaveProperty("semgrep");
+    expect(packageJson.scripts.check).toBe(
+      "pnpm run lint && pnpm run deps:lint && pnpm run security:lint && pnpm run typecheck && pnpm run test",
+    );
+    expect(packageJson.scripts["deps:lint"]).toBe(
+      "depcruise --config .dependency-cruiser.cjs source test",
+    );
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run check");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run verify:artifacts");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run types:lint");
     expect(packageJson.scripts.publint).toBe("publint --pack pnpm");
     expect(packageJson.scripts.attw).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["release:check"]).toContain("pnpm run verify:package");
+    expect(packageJson.scripts["security:lint"]).toBe(
+      "semgrep scan --config semgrep.yml --error source test",
+    );
     expect(packageJson.scripts["size:report"]).toBe("npm pack --dry-run --json");
     expect(packageJson.scripts["types:lint"]).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["verify:artifacts"]).toContain("node -e");
@@ -130,7 +159,14 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts["verify:package"]).toBe("npm publish --dry-run --ignore-scripts");
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
-    expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json"]);
+    expect(agents.content).toContain("Guidance for Codex and other coding agents");
+    expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
+    expect(dependencyCruiser.content).toContain("source-not-to-test");
+    expect(dependencyCruiser.content).toContain("source-not-to-dev-dependencies");
+    expect(biomeConfig.files.includes).toEqual(expect.arrayContaining(["!*.yml", "!**/*.yml"]));
+    expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json", "*.yml", "**/*.yml"]);
+    expect(oxlintConfig.ignorePatterns).toEqual(["*.yml", "**/*.yml"]);
+    expect(semgrep.content).toContain("no-eval-like-execution");
     expect(vitestConfig.content).toContain(`provider: "v8"`);
   });
 

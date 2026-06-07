@@ -38,8 +38,8 @@ jobs:
       - run: pnpm run lint
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm publint --pack npm
-      - run: pnpm attw --pack . --profile esm-only
+      - run: pnpm exec publint --pack npm
+      - run: pnpm exec attw --pack . --profile esm-only
       - run: pnpm test:coverage
 
       - name: Upload coverage to Codecov

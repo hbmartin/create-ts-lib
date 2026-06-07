@@ -1,0 +1,25 @@
+# AGENTS.md
+
+Guidance for Codex and other coding agents working in this TypeScript library.
+
+## Project Conventions
+
+- Use pnpm for all package management and scripts.
+- Keep implementation code in `source/` and Vitest coverage in `test/`.
+- Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Do not add Prettier. Formatting is handled by oxfmt, and linting is handled by Biome and oxlint.
+- Use Zod for external input validation and anywhere runtime validation is needed.
+
+## Code Changes
+
+- Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
+- Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- Prefer small, direct dependencies when they materially simplify the implementation.
+- Update or add Vitest tests for every behavior change.
+- Update dependency-cruiser and Semgrep checks when architecture or security expectations change.
+
+## Verification
+
+- Before handoff, run `pnpm run release:check`.
+- Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
+- Semgrep must be available on PATH for `pnpm run security:lint`. Install the Semgrep CLI with `pipx install semgrep` if the command is missing.
