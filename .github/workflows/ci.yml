@@ -83,32 +83,9 @@ jobs:
 
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Generate project
+      - name: Smoke test generated project
         env:
           SMOKE_DIR: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
           SMOKE_INCLUDE_CLI: ${{ matrix.include-cli }}
           SMOKE_PACKAGE_MANAGER: pnpm
-        run: node scripts/smoke-test-scaffold.mjs
-      - run: git init
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
-      - name: Install generated project dependencies
-        run: |
-          pnpm install
-          test -f pnpm-lock.yaml
-          ! git check-ignore -q pnpm-lock.yaml
-          rm -rf node_modules
-          pnpm install --frozen-lockfile
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
-      - run: pnpm run check
-        env:
-          SECURITY_LINT_FORCE_UVX: "1"
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
-      - run: pnpm run build
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
-      - name: Run generated project TypeScript 7 compatibility probe
-        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
-      - name: Run generated project publint
-        run: pnpm run publint
-        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
+        run: pnpm run smoke:scaffold

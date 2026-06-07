@@ -23,7 +23,6 @@
       "description": "Track pinned TypeScript native-preview probes in CI workflows.",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/",
-        "/^source/templates/assets/github/ci\\.yml\\.tmpl$/",
         "/^source/templates/files\\.ts$/"
       ],
       "matchStrings": [

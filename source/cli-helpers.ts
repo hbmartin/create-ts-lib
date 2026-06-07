@@ -2,7 +2,9 @@ import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 
-import { stripGitSuffix, stripPackageScope } from "./name-helpers.js";
+import { normalizeGitHubUrl, stripPackageScope } from "./name-helpers.js";
+
+export { normalizeGitHubUrl } from "./name-helpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,22 +73,6 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 };
 
 export const deriveDirectoryName = (projectName: string): string => stripPackageScope(projectName);
-
-export const normalizeGitHubUrl = (input: string): string => {
-  if (input.length === 0) {
-    return "";
-  }
-
-  if (input.startsWith("git@github.com:")) {
-    return `https://github.com/${stripGitSuffix(input.slice("git@github.com:".length))}`;
-  }
-
-  if (input.startsWith("https://github.com/")) {
-    return stripGitSuffix(input);
-  }
-
-  return input;
-};
 
 export const detectDefaults = async (
   directoryArgument: string | undefined,

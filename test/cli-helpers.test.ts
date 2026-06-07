@@ -61,6 +61,9 @@ describe("normalizeGitHubUrl", () => {
     expect(normalizeGitHubUrl("https://github.com/hbmartin/example-lib.git")).toBe(
       "https://github.com/hbmartin/example-lib",
     );
+    expect(normalizeGitHubUrl("git+https://github.com/hbmartin/example-lib.git")).toBe(
+      "https://github.com/hbmartin/example-lib",
+    );
     expect(normalizeGitHubUrl("")).toBe("");
   });
 });

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { stripGitSuffix, stripPackageScope } from "../name-helpers.js";
+import { normalizeGitHubUrl, stripPackageScope } from "../name-helpers.js";
 import { renderBiomeJsonc } from "./biome.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
@@ -81,7 +81,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
     return undefined;
   }
 
-  const normalizedUrl = stripGitSuffix(githubRepoUrl);
+  const normalizedUrl = normalizeGitHubUrl(githubRepoUrl);
   return {
     bugs: {
       url: `${normalizedUrl}/issues`,
@@ -244,7 +244,7 @@ const buildReadmeBadges = (config: ScaffoldConfig): string => {
   ];
 
   if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {
-    const normalizedUrl = stripGitSuffix(config.githubRepoUrl);
+    const normalizedUrl = normalizeGitHubUrl(config.githubRepoUrl);
     badges.push(
       `[![CI](${normalizedUrl}/actions/workflows/ci.yml/badge.svg)](${normalizedUrl}/actions/workflows/ci.yml)`,
     );
@@ -419,13 +419,22 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
 };
 
 const extractAuthorName = (author: string): string => {
-  const emailStartIndex = author.indexOf("<");
+  const trimmedAuthor = author.trim();
+  const emailStartIndex = trimmedAuthor.indexOf("<");
   if (emailStartIndex >= 0) {
-    const authorName = author.slice(0, emailStartIndex).trim();
+    const authorName = trimmedAuthor.slice(0, emailStartIndex).trim();
     if (authorName.length > 0) {
       return authorName;
     }
+
+    const emailEndIndex = trimmedAuthor.indexOf(">", emailStartIndex + 1);
+    const emailAddress = trimmedAuthor
+      .slice(emailStartIndex + 1, emailEndIndex >= 0 ? emailEndIndex : undefined)
+      .trim();
+    if (emailAddress.length > 0) {
+      return emailAddress;
+    }
   }
 
-  return author || "Unknown Author";
+  return trimmedAuthor || "Unknown Author";
 };
