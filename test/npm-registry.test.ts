@@ -20,6 +20,7 @@ describe("checkNpmPackageNameAvailability", () => {
       "https://registry.npmjs.org/react",
       expect.objectContaining({
         headers: { Accept: "application/json" },
+        method: "HEAD",
         signal: expect.any(AbortSignal),
       }),
     );
@@ -38,6 +39,40 @@ describe("checkNpmPackageNameAvailability", () => {
       "https://registry.npmjs.org/%40scope%2Fexample-lib",
       expect.objectContaining({
         headers: { Accept: "application/json" },
+        method: "HEAD",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("falls back to abbreviated metadata when a registry does not support HEAD", async () => {
+    const fetchPackage = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 405 })
+      .mockResolvedValueOnce({ status: 200 });
+
+    await expect(
+      checkNpmPackageNameAvailability("example-lib", { fetch: fetchPackage }),
+    ).resolves.toEqual({
+      packageName: "example-lib",
+      status: "exists",
+    });
+
+    expect(fetchPackage).toHaveBeenNthCalledWith(
+      1,
+      "https://registry.npmjs.org/example-lib",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        method: "HEAD",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchPackage).toHaveBeenNthCalledWith(
+      2,
+      "https://registry.npmjs.org/example-lib",
+      expect.objectContaining({
+        headers: { Accept: "application/vnd.npm.install-v1+json" },
+        method: "GET",
         signal: expect.any(AbortSignal),
       }),
     );
@@ -119,6 +154,7 @@ describe("checkNpmPackageNameAvailability", () => {
       "https://registry.example.test/npm/%40scope%2Fexample-lib",
       expect.objectContaining({
         headers: { Accept: "application/json" },
+        method: "HEAD",
         signal: expect.any(AbortSignal),
       }),
     );

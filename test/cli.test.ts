@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import packageJson from "../package.json" with { type: "json" };
 import type { DetectedDefaults } from "../source/cli-helpers.js";
+import type {
+  CreateGitHubRepositoryRequest,
+  CreateGitHubRepositoryResult,
+  GitHubRepositoryLookupResult,
+} from "../source/github-cli.js";
 import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
 import { PostScaffoldSetupError, type ScaffoldProgress } from "../source/scaffold.js";
 
@@ -18,7 +23,11 @@ interface CliResult {
 
 interface RunCliOptions {
   checkNpmPackageNameAvailability?: (packageName: string) => Promise<NpmPackageNameAvailability>;
+  createGitHubRepository?: (
+    request: CreateGitHubRepositoryRequest,
+  ) => Promise<CreateGitHubRepositoryResult>;
   detectedDefaults?: Partial<DetectedDefaults>;
+  inspectPersonalGitHubRepository?: (projectName: string) => Promise<GitHubRepositoryLookupResult>;
   promptModule?: {
     confirm(options: { message: string }): Promise<boolean>;
     input(options: {
@@ -26,7 +35,11 @@ interface RunCliOptions {
       message: string;
       validate?: (value: string) => boolean | string;
     }): Promise<string>;
-    select(options: { message: string }): Promise<string>;
+    select(options: {
+      choices?: Array<{ name: string; value: string }>;
+      default?: string;
+      message: string;
+    }): Promise<string>;
   };
   ora?: (message: string) => {
     start(): { fail(message: string): void; succeed(message: string): void };
@@ -140,6 +153,327 @@ describe("cli entrypoint", () => {
     expect(promptModule.input).toHaveBeenCalledTimes(4);
     expect(promptModule.confirm).toHaveBeenCalledTimes(2);
     expect(promptModule.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses an existing personal GitHub repository as the URL prompt default", async () => {
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        repositoryName: "prompt-lib",
+        status: "found",
+        url: "https://github.com/hbmartin/prompt-lib",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          default: defaultValue,
+          message,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            return "prompt-lib";
+          }
+
+          if (message === "Description") {
+            return "Prompted description";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          expect(message).toBe("GitHub repo URL");
+          expect(defaultValue).toBe("https://github.com/hbmartin/prompt-lib");
+          return defaultValue ?? "";
+        },
+      ),
+      select: vi.fn(async ({ message }: { message: string }) =>
+        message === "License" ? "Apache-2.0" : "pnpm",
+      ),
+    };
+
+    const result = await runCli(["prompt-lib", "--dry-run"], {
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/prompt-lib");
+    expect(inspectPersonalGitHubRepository).toHaveBeenCalledWith("prompt-lib");
+  });
+
+  it("predicts and reports GitHub repo creation in dry-run without calling gh create", async () => {
+    const createGitHubRepository = vi.fn();
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        predictedUrl: "https://github.com/hbmartin/new-lib",
+        repositoryName: "new-lib",
+        status: "missing",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(async ({ message }: { default?: string; message: string }) => {
+        if (message === "Project name") {
+          return "new-lib";
+        }
+
+        if (message === "Description") {
+          return "New library";
+        }
+
+        if (message === "Author") {
+          return "Prompt Author <prompt@example.com>";
+        }
+
+        throw new Error(`Unexpected input prompt: ${message}`);
+      }),
+      select: vi.fn(
+        async ({ default: defaultValue, message }: { default?: string; message: string }) => {
+          if (message === "No matching GitHub repo was found") {
+            expect(defaultValue).toBe("create");
+            return "create";
+          }
+
+          return message === "License" ? "Apache-2.0" : "pnpm";
+        },
+      ),
+    };
+
+    const result = await runCli(["new-lib", "--dry-run"], {
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/new-lib");
+    expect(result.stdout).toContain("GitHub repo creation skipped by --dry-run");
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+    expect(promptModule.input).toHaveBeenCalledTimes(3);
+  });
+
+  it("lets users manually enter a URL when no matching GitHub repo exists", async () => {
+    const createGitHubRepository = vi.fn();
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        predictedUrl: "https://github.com/hbmartin/manual-lib",
+        repositoryName: "manual-lib",
+        status: "missing",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          default: defaultValue,
+          message,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            return "manual-lib";
+          }
+
+          if (message === "Description") {
+            return "Manual library";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          expect(message).toBe("GitHub repo URL");
+          expect(defaultValue).toBeUndefined();
+          return "https://github.com/hbmartin/manual-lib";
+        },
+      ),
+      select: vi.fn(
+        async ({ default: defaultValue, message }: { default?: string; message: string }) => {
+          if (message === "No matching GitHub repo was found") {
+            expect(defaultValue).toBe("create");
+            return "manual";
+          }
+
+          return message === "License" ? "Apache-2.0" : "pnpm";
+        },
+      ),
+    };
+
+    const result = await runCli(["manual-lib", "--dry-run"], {
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/manual-lib");
+    expect(result.stdout).not.toContain("GitHub repo creation skipped by --dry-run");
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
+  it("creates a missing GitHub repo before scaffolding and continues if creation fails", async () => {
+    const events: string[] = [];
+    const createGitHubRepository = vi.fn(async (): Promise<CreateGitHubRepositoryResult> => {
+      events.push("create");
+      return {
+        owner: "hbmartin",
+        reason: "repository already exists",
+        repositoryName: "new-lib",
+        status: "failed",
+        url: "https://github.com/hbmartin/new-lib",
+      };
+    });
+    const scaffoldProject = vi.fn(async () => {
+      events.push("scaffold");
+    });
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        predictedUrl: "https://github.com/hbmartin/new-lib",
+        repositoryName: "new-lib",
+        status: "missing",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(async ({ message }: { default?: string; message: string }) => {
+        if (message === "Project name") {
+          return "new-lib";
+        }
+
+        if (message === "Description") {
+          return "New library";
+        }
+
+        if (message === "Author") {
+          return "Prompt Author <prompt@example.com>";
+        }
+
+        throw new Error(`Unexpected input prompt: ${message}`);
+      }),
+      select: vi.fn(async ({ message }: { default?: string; message: string }) => {
+        if (message === "No matching GitHub repo was found") {
+          return "create";
+        }
+
+        return message === "License" ? "Apache-2.0" : "pnpm";
+      }),
+    };
+
+    const result = await runCli(["new-lib"], {
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
+      promptModule,
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Could not create GitHub repo "hbmartin/new-lib"');
+    expect(events).toEqual(["create", "scaffold"]);
+    expect(createGitHubRepository).toHaveBeenCalledWith({
+      description: "New library",
+      owner: "hbmartin",
+      repositoryName: "new-lib",
+    });
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubRepoUrl: "https://github.com/hbmartin/new-lib",
+        projectName: "new-lib",
+      }),
+      expect.objectContaining({
+        gitRemoteOriginUrl: "https://github.com/hbmartin/new-lib",
+      }),
+    );
+  });
+
+  it("falls back to a blank manual GitHub URL prompt when gh lookup is unavailable", async () => {
+    const createGitHubRepository = vi.fn();
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        reason: "gh CLI is not authenticated",
+        repositoryName: "manual-lib",
+        status: "unavailable",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          default: defaultValue,
+          message,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            return "manual-lib";
+          }
+
+          if (message === "Description") {
+            return "Manual library";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          expect(message).toBe("GitHub repo URL");
+          expect(defaultValue).toBeUndefined();
+          return "https://github.com/hbmartin/manual-lib";
+        },
+      ),
+      select: vi.fn(async ({ message }: { message: string }) =>
+        message === "License" ? "Apache-2.0" : "pnpm",
+      ),
+    };
+
+    const result = await runCli(["manual-lib", "--dry-run"], {
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain("Could not inspect GitHub repositories with gh");
+    expect(result.stderr).toContain("gh CLI is not authenticated");
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/manual-lib");
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
+  it("keeps --yes mode non-interactive and does not configure a git remote origin", async () => {
+    const inspectPersonalGitHubRepository = vi.fn();
+    const createGitHubRepository = vi.fn();
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(inspectPersonalGitHubRepository).not.toHaveBeenCalled();
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+        projectName: "demo-lib",
+      }),
+      expect.not.objectContaining({
+        gitRemoteOriginUrl: expect.any(String),
+      }),
+    );
   });
 
   it("lets interactive users rename when the npm package name exists", async () => {
@@ -507,6 +841,7 @@ describe("cli entrypoint", () => {
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
   vi.doUnmock("../source/cli-helpers.js");
+  vi.doUnmock("../source/github-cli.js");
   vi.doUnmock("../source/npm-registry.js");
   vi.doUnmock("../source/prompts.js");
   vi.doUnmock("../source/scaffold.js");
@@ -521,6 +856,40 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
         ...buildDetectedDefaults(directoryArgument),
         ...options.detectedDefaults,
       })),
+    };
+  });
+
+  vi.doMock("../source/github-cli.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../source/github-cli.js")>();
+    const inspectPersonalGitHubRepository =
+      options.inspectPersonalGitHubRepository ??
+      vi.fn(async (projectName: string): Promise<GitHubRepositoryLookupResult> => {
+        const repositoryName = projectName.includes("/")
+          ? (projectName.split("/").at(-1) ?? projectName)
+          : projectName;
+
+        return {
+          owner: "hbmartin",
+          repositoryName,
+          status: "found",
+          url: `https://github.com/hbmartin/${repositoryName}`,
+        };
+      });
+    const createGitHubRepository =
+      options.createGitHubRepository ??
+      vi.fn(
+        async (request: CreateGitHubRepositoryRequest): Promise<CreateGitHubRepositoryResult> => ({
+          owner: request.owner,
+          repositoryName: request.repositoryName,
+          status: "created",
+          url: `https://github.com/${request.owner}/${request.repositoryName}`,
+        }),
+      );
+
+    return {
+      ...actual,
+      createGitHubRepository,
+      inspectPersonalGitHubRepository,
     };
   });
 

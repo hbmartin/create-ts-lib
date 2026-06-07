@@ -119,18 +119,20 @@ create-ts-lib [directory] [options]
 
 The generator asks for:
 
-| Prompt                   | Default                                          | Notes                                                                            |
-| ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Project name             | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm |
-| Description              | empty string                                     | Written to `package.json`                                                        |
-| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                        |
-| License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                         |
-| GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes                             |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                  |
-| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                            |
-| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                              |
+| Prompt                   | Default                                          | Notes                                                                                     |
+| ------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Project name             | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm          |
+| Description              | empty string                                     | Written to `package.json`                                                                 |
+| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                                 |
+| License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                                  |
+| GitHub repo URL          | existing personal GitHub repo found by `gh`      | Falls back to a blank manual prompt; normalizes SSH and `git+https://github.com/` remotes |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                           |
+| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                                     |
+| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                       |
 
-If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, warns on an existing npm name, and continues. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
+After the final project name is accepted, interactive mode uses `gh` to inspect the authenticated user's personal GitHub account for a repository matching the unscoped project name. If it exists, that URL is offered as the repo URL default. If it does not exist, the CLI defaults to creating a new public repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. If `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default.
+
+If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
 ## Generated Project Layout
 
@@ -206,11 +208,12 @@ Generated packages include:
 Before writing files, the generator rejects non-empty target directories unless `--force` is provided. After writing files, it performs:
 
 1. `git init` when the target directory is not already inside a Git repository
-2. `<package-manager> install`
-3. `<package-manager> run build`
-4. `<package-manager> run test`
+2. `git remote add origin <repo-url>` when interactive mode collected a non-empty repo URL and the target is its own Git repository
+3. `<package-manager> install`
+4. `<package-manager> run build`
+5. `<package-manager> run test`
 
-The CLI prints a summary before writing and shows progress during post-scaffold setup. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
+Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
 
 ## Next Steps After Scaffolding
 
@@ -257,7 +260,7 @@ The package exports:
 - `ScaffoldOptions`
 - `ScaffoldProgress`
 
-`scaffoldProject` writes the generated project, rejects invalid package names, refuses non-empty target directories unless `force: true` is set, and can optionally receive progress callbacks for post-scaffold steps.
+`scaffoldProject` writes the generated project, rejects invalid package names, refuses non-empty target directories unless `force: true` is set, can optionally receive progress callbacks for post-scaffold steps, and can add a best-effort `origin` remote with `gitRemoteOriginUrl`.
 
 ```ts
 import { scaffoldProject, type ScaffoldConfig } from "@hbmartin/create-ts-lib";
@@ -276,7 +279,8 @@ const config: ScaffoldConfig = {
 await scaffoldProject(config, {
   targetDirectory: "./my-lib",
   force: false,
-  postScaffold: true, // run git init + install + build + test
+  gitRemoteOriginUrl: config.githubRepoUrl,
+  postScaffold: true, // run git init + optional origin setup + install + build + test
   progress: {
     start: (m) => console.log(`▶ ${m}`),
     succeed: (m) => console.log(`✔ ${m}`),

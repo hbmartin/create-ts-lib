@@ -17,6 +17,7 @@ export interface ScaffoldProgress {
 
 export interface ScaffoldOptions {
   force?: boolean;
+  gitRemoteOriginUrl?: string;
   postScaffold?: boolean;
   progress?: ScaffoldProgress;
   targetDirectory: string;
@@ -82,6 +83,13 @@ export const scaffoldProject = async (
       },
       async () => {
         await initializeGitRepositoryIfNeeded(targetDirectory);
+        if (options.gitRemoteOriginUrl && options.gitRemoteOriginUrl.length > 0) {
+          await addGitRemoteOriginIfPossible(
+            targetDirectory,
+            options.gitRemoteOriginUrl,
+            options.progress,
+          );
+        }
       },
     );
     await runPostScaffoldStep(
@@ -147,20 +155,48 @@ const assertTargetDirectoryIsSafe = async (
 };
 
 export const initializeGitRepositoryIfNeeded = async (cwd: string): Promise<void> => {
-  const insideRepository = await isInsideGitRepository(cwd);
+  const repositoryRoot = await readGitRepositoryRoot(cwd);
 
-  if (!insideRepository) {
+  if (repositoryRoot === undefined) {
     await execFileAsync("git", ["init"], { cwd });
   }
 };
 
-const isInsideGitRepository = async (cwd: string): Promise<boolean> => {
+const readGitRepositoryRoot = async (cwd: string): Promise<string | undefined> => {
   try {
     await access(cwd);
-    await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd });
-    return true;
+    const result = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd });
+    return getExecFileStdout(result).trim();
   } catch {
-    return false;
+    return undefined;
+  }
+};
+
+const addGitRemoteOriginIfPossible = async (
+  cwd: string,
+  remoteUrl: string,
+  progress: ScaffoldProgress | undefined,
+): Promise<void> => {
+  const repositoryRoot = await readGitRepositoryRoot(cwd);
+
+  if (repositoryRoot === undefined) {
+    progress?.info("Could not add git remote origin because the target is not a Git repository.");
+    return;
+  }
+
+  if (resolve(repositoryRoot) !== resolve(cwd)) {
+    progress?.info(
+      `Skipping git remote origin because the target is inside an existing Git repository: ${repositoryRoot}`,
+    );
+    return;
+  }
+
+  try {
+    await execFileAsync("git", ["remote", "add", "origin", remoteUrl], { cwd });
+  } catch (error) {
+    progress?.info(
+      `Could not add git remote origin; continuing. ${getErrorMessage(error, "git remote add failed")}`,
+    );
   }
 };
 
@@ -222,3 +258,20 @@ const runPostScaffoldStep = async (
 
 const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
+
+const getExecFileStdout = (result: unknown): string => {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "stdout" in result &&
+    typeof result.stdout === "string"
+  ) {
+    return result.stdout;
+  }
+
+  return "";
+};

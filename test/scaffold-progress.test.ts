@@ -112,6 +112,126 @@ describe("scaffoldProject post-scaffold progress", () => {
       runPackageManagerCommand("pnpm", ["run", "build"], targetDirectory),
     ).rejects.toThrow("pnpm run build exited with code unknown");
   });
+
+  it("adds git remote origin when requested for the generated repository", async () => {
+    const targetDirectory = await createTempTarget("create-ts-lib-remote-");
+    mockExecFileSequence([
+      { error: new Error("not a git repository") },
+      {},
+      { stdout: targetDirectory },
+      {},
+    ]);
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      progress,
+      targetDirectory,
+    });
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["init"],
+      expect.objectContaining({ cwd: targetDirectory }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["remote", "add", "origin", "https://github.com/hbmartin/example-lib"],
+      expect.objectContaining({ cwd: targetDirectory }),
+      expect.any(Function),
+    );
+    expect(progress.info).not.toHaveBeenCalled();
+  });
+
+  it("skips git remote origin when the target is inside a parent repository", async () => {
+    const targetDirectory = await createTempTarget("create-ts-lib-parent-");
+    mockExecFileSequence([
+      { stdout: { stdout: "/parent/repo" } },
+      { stdout: { stdout: "/parent/repo" } },
+    ]);
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      progress,
+      targetDirectory,
+    });
+
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["remote", "add", "origin", "https://github.com/hbmartin/example-lib"],
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(progress.info).toHaveBeenCalledWith(
+      "Skipping git remote origin because the target is inside an existing Git repository: /parent/repo",
+    );
+  });
+
+  it("warns and continues when the target git repository cannot be resolved after init", async () => {
+    const targetDirectory = await createTempTarget("create-ts-lib-unresolved-git-");
+    mockExecFileSequence([
+      { error: new Error("not a git repository") },
+      {},
+      { error: new Error("still not a git repository") },
+    ]);
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      progress,
+      targetDirectory,
+    });
+
+    expect(progress.info).toHaveBeenCalledWith(
+      "Could not add git remote origin because the target is not a Git repository.",
+    );
+    expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
+  });
+
+  it("warns and continues when git remote origin cannot be added", async () => {
+    const targetDirectory = await createTempTarget("create-ts-lib-remote-fail-");
+    mockExecFileSequence([
+      { stdout: targetDirectory },
+      { stdout: targetDirectory },
+      { error: new Error("remote origin already exists") },
+    ]);
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      progress,
+      targetDirectory,
+    });
+
+    expect(progress.info).toHaveBeenCalledWith(
+      "Could not add git remote origin; continuing. remote origin already exists",
+    );
+    expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
+  });
+
+  it("skips git remote origin when post-scaffold setup is disabled", async () => {
+    const targetDirectory = await createTempTarget("create-ts-lib-no-post-");
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      postScaffold: false,
+      targetDirectory,
+    });
+
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
 });
 
 const createTempTarget = async (prefix: string): Promise<string> => {
@@ -134,6 +254,20 @@ const mockGitRepositoryCheckSuccess = (): void => {
         typeof argument === "function",
     );
     callback?.(null, "", "");
+
+    return new EventEmitter();
+  });
+};
+
+const mockExecFileSequence = (responses: Array<{ error?: Error; stdout?: unknown }>): void => {
+  execFileMock.mockImplementation((...args: unknown[]) => {
+    const callback = args.findLast(
+      (argument): argument is (error: Error | null, stdout: string, stderr: string) => void =>
+        typeof argument === "function",
+    );
+    const response = responses.shift() ?? {};
+
+    callback?.(response.error ?? null, (response.stdout ?? "") as string, "");
 
     return new EventEmitter();
   });

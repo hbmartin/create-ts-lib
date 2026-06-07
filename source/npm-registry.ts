@@ -1,4 +1,5 @@
 const npmRegistryUrl = "https://registry.npmjs.org/";
+const abbreviatedMetadataAcceptHeader = "application/vnd.npm.install-v1+json";
 const registryRequestTimeoutMilliseconds = 3000;
 
 type RegistryFetch = (url: string, init: RequestInit) => Promise<{ status: number }>;
@@ -49,15 +50,28 @@ export const checkNpmPackageNameAvailability = async (
 
   try {
     const url = buildPackageMetadataUrl(packageName, options.registryUrl ?? npmRegistryUrl);
-    const response = await Promise.race([
+    const headResponse = await Promise.race([
       fetchPackage(url, {
         headers: {
           Accept: "application/json",
         },
+        method: "HEAD",
         signal: abortController.signal,
       }),
       timeout,
     ]);
+    const response = isHeadUnsupportedStatus(headResponse.status)
+      ? await Promise.race([
+          fetchPackage(url, {
+            headers: {
+              Accept: abbreviatedMetadataAcceptHeader,
+            },
+            method: "GET",
+            signal: abortController.signal,
+          }),
+          timeout,
+        ])
+      : headResponse;
 
     if (response.status === 200) {
       return { packageName, status: "exists" };
@@ -95,3 +109,5 @@ const buildPackageMetadataUrl = (packageName: string, registryUrl: string): stri
 
   return new URL(encodeURIComponent(packageName), baseUrl).toString();
 };
+
+const isHeadUnsupportedStatus = (status: number): boolean => status === 405 || status === 501;
