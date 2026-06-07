@@ -8,7 +8,7 @@ import { tsgoProbeCommand } from "../dist/templates/files.js";
 
 const packageManagers = new Set(["pnpm"]);
 const includeCliValues = new Set(["true", "false", "all"]);
-const [tsgoProbeExecutable, ...tsgoProbeArgs] = tsgoProbeCommand.split(" ");
+const [tsgoProbeExecutable, ...tsgoProbeArgs] = tsgoProbeCommand.trim().split(/\s+/u);
 
 const log = (message) => {
   process.stdout.write(`[smoke] ${message}\n`);

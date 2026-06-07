@@ -1,17 +1,21 @@
 # `@hbmartin/create-ts-lib`
 
+> One command scaffolds a modern, publish-ready TypeScript library.
+
 [![npm version](https://img.shields.io/npm/v/@hbmartin/create-ts-lib.svg)](https://www.npmjs.com/package/@hbmartin/create-ts-lib)
 [![CI](https://github.com/hbmartin/create-ts-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/hbmartin/create-ts-lib/actions/workflows/ci.yml)
 [![npm downloads](https://img.shields.io/npm/dm/@hbmartin/create-ts-lib.svg)](https://www.npmjs.com/package/@hbmartin/create-ts-lib)
+[![node](https://img.shields.io/node/v/@hbmartin/create-ts-lib.svg)](https://nodejs.org)
+[![types included](https://img.shields.io/npm/types/@hbmartin/create-ts-lib.svg)](https://www.npmjs.com/package/@hbmartin/create-ts-lib)
+[![install size](https://img.shields.io/packagephobia/install/@hbmartin/create-ts-lib.svg)](https://packagephobia.com/result?p=@hbmartin/create-ts-lib)
 [![license](https://img.shields.io/npm/l/@hbmartin/create-ts-lib.svg)](LICENSE)
 
-An opinionated initializer for TypeScript libraries.
-
-It scaffolds a Node 22+ ESM library with TypeScript, strict Biome linting, Oxc lint/format tooling, dependency-cruiser, Semgrep policy checks, Vitest coverage, Lefthook, publint, optional GitHub Actions CI, optional Codecov upload, and an optional CLI entry point.
+An opinionated initializer that turns a single command into a building, testing, lint-clean TypeScript library you can publish the same day. See [Why this tool](#why-this-tool) for the full stack and the rationale behind each choice.
 
 ## Contents
 
 - [Why this tool](#why-this-tool)
+- [How it compares](#how-it-compares)
 - [Requirements](#requirements)
 - [Usage](#usage)
 - [CLI Options](#cli-options)
@@ -37,6 +41,23 @@ Setting up a publishable TypeScript library means making the same dozen decision
 - **publint + are-the-types-wrong** wired in so your published package is correct before you ship it.
 
 If you'd rather not maintain this boilerplate by hand — or you want every library you publish to share one consistent setup — this gets you from zero to a building, testing, lint-clean package in one command.
+
+## How it compares
+
+How `create-ts-lib` stacks up against the common ways to start a TypeScript library:
+
+| Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
+| ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
+| Output format                 | ESM-only (Node 22+)                     | CJS + ESM            | You decide           |
+| Lint + format                 | Biome + Oxc                             | ESLint + Prettier    | You wire it up       |
+| Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
+| Architecture + security gates | dependency-cruiser + Semgrep            | —                    | —                    |
+| Publish validation            | publint + are-the-types-wrong + dry-run | —                    | Manual               |
+| Git hooks                     | Lefthook (pre-wired)                    | Husky (manual)       | Manual               |
+| CI + release workflow         | GitHub Actions (pnpm)                   | —                    | Manual               |
+| Project status                | Actively maintained                     | Inactive since ~2021 | n/a                  |
+
+The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** rather than configurable. If you need a dual CJS/ESM build or a different tooling stack, a hand-rolled template gives you more control at the cost of the wiring.
 
 ## Requirements
 
@@ -98,18 +119,18 @@ create-ts-lib [directory] [options]
 
 The generator asks for:
 
-| Prompt                   | Default                                          | Notes                                                 |
-| ------------------------ | ------------------------------------------------ | ----------------------------------------------------- |
-| Project name             | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible |
-| Description              | empty string                                     | Written to `package.json`                             |
-| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available             |
-| License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`              |
-| GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes  |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI       |
-| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, and `source/cli.ts`               |
-| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only   |
+| Prompt                   | Default                                          | Notes                                                                            |
+| ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Project name             | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm |
+| Description              | empty string                                     | Written to `package.json`                                                        |
+| Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                        |
+| License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                         |
+| GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes                             |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI                                  |
+| Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                            |
+| Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                              |
 
-`--yes` uses those defaults directly. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
+If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, warns on an existing npm name, and continues. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
 ## Generated Project Layout
 
@@ -127,6 +148,7 @@ my-lib/
 ├── scripts/
 │   └── security-lint.mjs
 ├── test/
+│   ├── cli.test.ts             # optional
 │   └── utils/
 │       └── formatting.test.ts
 ├── .github/
@@ -166,7 +188,7 @@ Generated packages include:
 - Vitest with v8 coverage and 80% thresholds
 - Lefthook with a lint-only `pre-commit` hook
 - `zod` as a default runtime dependency
-- `meow` only when CLI support is enabled
+- `meow` and CLI coverage only when CLI support is enabled
 - `@arethetypeswrong/cli` and `publint` release checks
 - `check`, `deps:lint`, `security:lint`, `prepublishOnly`, `publint`,
   `types:lint`, `verify:artifacts`, `verify:package`, `size:report`, and
@@ -174,7 +196,9 @@ Generated packages include:
 - `AGENTS.md` with opinionated guidance for Codex and other coding agents
 - `Apache-2.0` license by default
 
-Release-please is not generated. Pnpm projects with a GitHub repo URL include a release workflow that publishes to npm when a GitHub release is published.
+**Versioning:** generated packages start at `0.1.0`, signaling a pre-1.0 library where minor bumps may carry breaking changes until you cut `1.0.0`. You own the version with `pnpm version` — nothing bumps it for you.
+
+**Release automation:** rather than bundling release-please or changesets, pnpm projects with a GitHub repo URL include a lightweight release workflow that publishes to npm when you publish a GitHub release. This keeps versioning fully in your hands while still automating the npm publish.
 
 ## Post-Scaffold Behavior
 
@@ -189,19 +213,31 @@ The CLI prints a summary before writing and shows progress during post-scaffold 
 
 ## Next Steps After Scaffolding
 
-Once the generator finishes, your library already builds, lints, and tests. To publish it:
+Once the generator finishes, your library already builds, lints, and tests. Write your code in `source/`, then follow the path below.
+
+**1. Validate before publishing (required):**
 
 ```bash
 cd my-lib
-# write your code in source/, then:
-pnpm run check          # lint + dep/security checks + typecheck + coverage
-pnpm run release:check  # package validation + npm publish dry run
-pnpm run size:report    # packed package size report
-pnpm version patch      # or minor / major
-git push --follow-tags
+pnpm run release:check  # full check suite + package validation + npm publish dry run
 ```
 
-For pnpm projects with a GitHub repo URL, publishing a GitHub release for the pushed tag runs the generated npm publish workflow. Prereleases publish with the `next` tag; normal releases publish with `latest`.
+`release:check` already runs `pnpm run check` (lint + dep/security checks + typecheck + coverage) for you, so there's no need to run `check` separately first.
+
+**2. Inspect the packed package (optional):**
+
+```bash
+pnpm run size:report    # packed package size report
+```
+
+**3. Cut a release:**
+
+```bash
+pnpm version patch      # or minor / major — bumps package.json and creates a git tag
+git push --follow-tags  # push the commit and the new tag
+```
+
+**What actually triggers the publish:** the tag push alone does _not_ publish. For pnpm projects with a GitHub repo URL, **creating a GitHub release** for the pushed tag runs the generated npm-publish workflow. Prereleases publish under the `next` tag; normal releases publish under `latest`.
 
 `prepublishOnly`-style validation (`verify:artifacts`, `publint`, are-the-types-wrong,
 and a dry-run publish) is wired into the generated package so packaging problems surface

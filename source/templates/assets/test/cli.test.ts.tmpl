@@ -1,0 +1,22 @@
+import { describe, expect, it, vi } from "vitest";
+
+const { meow } = vi.hoisted(() => ({
+  meow: vi.fn(),
+}));
+
+vi.mock("meow", () => ({
+  default: meow,
+}));
+
+describe("cli", () => {
+  it("configures the CLI help text", async () => {
+    await import("../source/cli.js");
+
+    expect(meow).toHaveBeenCalledWith(
+      expect.stringContaining("$ {{BIN_NAME}} <input>"),
+      expect.objectContaining({
+        importMeta: expect.anything(),
+      }),
+    );
+  });
+});

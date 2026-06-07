@@ -14,6 +14,10 @@ import {
   parseCliArguments,
   type WarningSink,
 } from "./cli-helpers.js";
+import {
+  checkNpmPackageNameAvailability,
+  type NpmPackageNameAvailability,
+} from "./npm-registry.js";
 import { assertValidPackageName, validatePackageName } from "./package-name.js";
 import { loadPromptModule, type PromptModule } from "./prompts.js";
 import { type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
@@ -73,8 +77,11 @@ const main = async (): Promise<void> => {
     const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
     const config = cliArguments.yes
       ? buildDefaultConfig(defaults)
-      : await promptForConfig(defaults, await loadPromptModule(warn));
+      : await promptForConfig(defaults, await loadPromptModule(warn), warn);
     assertValidPackageName(config.projectName);
+    if (cliArguments.yes) {
+      await warnForNpmPackageNameAvailability(config.projectName, warn);
+    }
 
     const targetDirectory = resolve(
       cliArguments.directoryArgument ?? deriveDirectoryName(config.projectName),
@@ -125,12 +132,9 @@ const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
 const promptForConfig = async (
   defaults: DetectedDefaults,
   promptModule: PromptModule,
+  warn: WarningSink,
 ): Promise<ScaffoldConfig> => {
-  const projectName = await promptModule.input({
-    default: defaults.projectName,
-    message: "Project name",
-    validate: validateProjectNameForPrompt,
-  });
+  const projectName = await promptForProjectName(defaults, promptModule, warn);
   const description = await promptModule.input({
     default: "",
     message: "Description",
@@ -183,10 +187,84 @@ const promptForConfig = async (
   };
 };
 
+type ExistingPackageNameDecision = "rename" | "use-anyway";
+
+const promptForProjectName = async (
+  defaults: DetectedDefaults,
+  promptModule: PromptModule,
+  warn: WarningSink,
+): Promise<string> => {
+  let defaultProjectName: string | undefined = defaults.projectName;
+
+  for (;;) {
+    const projectName = await promptModule.input({
+      ...(defaultProjectName === undefined ? {} : { default: defaultProjectName }),
+      message: "Project name",
+      validate: validateProjectNameForPrompt,
+    });
+    const availability = await checkNpmPackageNameAvailability(projectName);
+
+    if (availability.status === "available") {
+      return projectName;
+    }
+
+    if (availability.status === "unknown") {
+      warn(formatNpmAvailabilityUnknownWarning(availability));
+      return projectName;
+    }
+
+    warn(formatNpmPackageNameExistsWarning(projectName));
+    const decision = await promptModule.select<ExistingPackageNameDecision>({
+      choices: [
+        { name: "Rename", value: "rename" },
+        { name: "Use anyway", value: "use-anyway" },
+      ],
+      default: "rename",
+      message: "Package name already exists on npm",
+    });
+
+    if (decision === "use-anyway") {
+      return projectName;
+    }
+
+    defaultProjectName = undefined;
+  }
+};
+
 const validateProjectNameForPrompt = (projectName: string): true | string => {
   const validation = validatePackageName(projectName);
 
   return validation.valid ? true : validation.errors.join(" ");
+};
+
+const warnForNpmPackageNameAvailability = async (
+  packageName: string,
+  warn: WarningSink,
+): Promise<void> => {
+  const availability = await checkNpmPackageNameAvailability(packageName);
+
+  if (availability.status === "exists") {
+    warn(formatNpmPackageNameExistsWarning(packageName));
+    return;
+  }
+
+  if (availability.status === "unknown") {
+    warn(formatNpmAvailabilityUnknownWarning(availability));
+  }
+};
+
+const formatNpmPackageNameExistsWarning = (packageName: string): string =>
+  `Package name "${packageName}" already exists on npm.`;
+
+const formatNpmAvailabilityUnknownWarning = (availability: NpmPackageNameAvailability): string => {
+  const detail =
+    availability.statusCode === undefined
+      ? availability.error
+      : `npm registry returned HTTP ${availability.statusCode}`;
+
+  return detail
+    ? `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`
+    : `Could not check npm availability for "${availability.packageName}"; continuing.`;
 };
 
 const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {

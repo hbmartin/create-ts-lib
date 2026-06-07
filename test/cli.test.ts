@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import packageJson from "../package.json" with { type: "json" };
 import type { DetectedDefaults } from "../source/cli-helpers.js";
+import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -15,6 +16,7 @@ interface CliResult {
 }
 
 interface RunCliOptions {
+  checkNpmPackageNameAvailability?: (packageName: string) => Promise<NpmPackageNameAvailability>;
   detectedDefaults?: Partial<DetectedDefaults>;
   promptModule?: {
     confirm(options: { message: string }): Promise<boolean>;
@@ -135,6 +137,165 @@ describe("cli entrypoint", () => {
     expect(promptModule.select).toHaveBeenCalledTimes(2);
   });
 
+  it("lets interactive users rename when the npm package name exists", async () => {
+    const projectNames = ["react", "renamed-lib"];
+    const checkNpmPackageNameAvailability = vi.fn(
+      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        packageName,
+        status: packageName === "react" ? "exists" : "available",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          message,
+          validate,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            const projectName = projectNames.shift() ?? "renamed-lib";
+            expect(validate?.(projectName)).toBe(true);
+            return projectName;
+          }
+
+          if (message === "Description") {
+            return "Prompted description";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          return "https://github.com/hbmartin/renamed-lib";
+        },
+      ),
+      select: vi.fn(async ({ message }: { message: string }) => {
+        if (message === "Package name already exists on npm") {
+          return "rename";
+        }
+
+        return message === "License" ? "Apache-2.0" : "pnpm";
+      }),
+    };
+
+    const result = await runCli(["react", "--dry-run"], {
+      checkNpmPackageNameAvailability,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Package name "react" already exists on npm.');
+    expect(result.stdout).toContain("Project: renamed-lib");
+    expect(result.stdout).toContain(`Target: ${process.cwd()}/react`);
+    expect(checkNpmPackageNameAvailability).toHaveBeenCalledTimes(2);
+    expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
+    expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
+    expect(promptModule.input).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(3);
+  });
+
+  it("lets interactive users keep an existing npm package name", async () => {
+    const checkNpmPackageNameAvailability = vi.fn(
+      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        packageName,
+        status: "exists",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          message,
+          validate,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            expect(validate?.("react")).toBe(true);
+            return "react";
+          }
+
+          if (message === "Description") {
+            return "Prompted description";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          return "https://github.com/hbmartin/react";
+        },
+      ),
+      select: vi.fn(async ({ message }: { message: string }) => {
+        if (message === "Package name already exists on npm") {
+          return "use-anyway";
+        }
+
+        return message === "License" ? "Apache-2.0" : "pnpm";
+      }),
+    };
+
+    const result = await runCli(["react", "--dry-run"], {
+      checkNpmPackageNameAvailability,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Package name "react" already exists on npm.');
+    expect(result.stdout).toContain("Project: react");
+    expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
+    expect(promptModule.input).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(3);
+  });
+
+  it("warns and continues in --yes mode when the npm package name exists", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+    const checkNpmPackageNameAvailability = vi.fn(
+      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        packageName,
+        status: "exists",
+      }),
+    );
+
+    const result = await runCli(["react", "--yes"], {
+      checkNpmPackageNameAvailability,
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Package name "react" already exists on npm.');
+    expect(result.stdout).toContain("Created react");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ projectName: "react" }),
+      expect.any(Object),
+    );
+  });
+
+  it("warns and continues when npm availability cannot be checked", async () => {
+    const checkNpmPackageNameAvailability = vi.fn(
+      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        packageName,
+        status: "unknown",
+        statusCode: 503,
+      }),
+    );
+
+    const result = await runCli(["demo-lib", "--yes", "--dry-run"], {
+      checkNpmPackageNameAvailability,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Could not check npm availability for "demo-lib"; continuing.');
+    expect(result.stderr).toContain("HTTP 503");
+    expect(result.stdout).toContain("Project: demo-lib");
+  });
+
   it("scaffolds the project and prints next steps", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
 
@@ -165,6 +326,7 @@ describe("cli entrypoint", () => {
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
   vi.doUnmock("../source/cli-helpers.js");
+  vi.doUnmock("../source/npm-registry.js");
   vi.doUnmock("../source/prompts.js");
   vi.doUnmock("../source/scaffold.js");
 
@@ -185,6 +347,17 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
       loadPromptModule: async () => options.promptModule,
     }));
   }
+
+  vi.doMock("../source/npm-registry.js", () => ({
+    checkNpmPackageNameAvailability:
+      options.checkNpmPackageNameAvailability ??
+      vi.fn(
+        async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+          packageName,
+          status: "available",
+        }),
+      ),
+  }));
 
   if (options.scaffoldProject) {
     vi.doMock("../source/scaffold.js", () => ({
