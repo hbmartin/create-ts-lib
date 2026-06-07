@@ -13,6 +13,7 @@ import {
 import { renderBiomeJsonc } from "../source/templates/biome.js";
 import {
   buildProjectFiles,
+  type GeneratedFile,
   getBinName,
   type LicenseName,
   type ScaffoldConfig,
@@ -29,6 +30,22 @@ const baseConfig: ScaffoldConfig = {
   packageManager: "pnpm",
   projectName: "example-lib",
 };
+
+const forbiddenReleasePleaseFilePaths = [
+  ".github/workflows/release-please.yml",
+  "release-please-config.json",
+  ".release-please-manifest.json",
+  "commitlint.config.js",
+  "commitlint.config.cjs",
+  "commitlint.config.mjs",
+];
+
+const forbiddenReleasePleaseContent = [
+  "@commitlint/cli",
+  "@commitlint/config-conventional",
+  "commitlint",
+  "release-please",
+];
 
 interface GeneratedPackageJson {
   bugs?: {
@@ -92,6 +109,9 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".release-please-manifest.json");
     expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
+    expect(ciWorkflow?.content).toContain("fail-fast: false");
+    expect(ciWorkflow?.content).toContain('node-version: ["22", "24"]');
+    expect(ciWorkflow?.content).toContain("node-version: $" + "{{ matrix.node-version }}");
     expect(ciWorkflow?.content).toContain(
       "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
     );
@@ -99,6 +119,7 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
     expect(ciWorkflow?.content).toContain("pnpm run publint");
     expect(ciWorkflow?.content).toContain("pnpm run check");
+    expect(ciWorkflow?.content).toContain("if: matrix.node-version == '24'");
     expect(ciWorkflowContent).toContain("name: TypeScript 7 compatibility probe");
     expect(ciWorkflowContent).toContain(tsgoProbeCommand);
     expect(ciWorkflowContent.indexOf("pnpm run check")).toBeLessThan(
@@ -127,6 +148,17 @@ describe("buildProjectFiles", () => {
     expect(releaseWorkflow?.content).toContain(
       'npm publish --tag "$TAG" --access public --provenance',
     );
+  });
+
+  it.each<[string, ScaffoldConfig]>([
+    ["pnpm GitHub project", baseConfig],
+    ["pnpm project without GitHub workflows", { ...baseConfig, githubRepoUrl: "" }],
+    ["pnpm CLI project", { ...baseConfig, includeCli: true }],
+    ["pnpm project without Codecov", { ...baseConfig, includeCodecov: false }],
+    ["npm project", { ...baseConfig, packageManager: "npm" }],
+    ["yarn project", { ...baseConfig, packageManager: "yarn" }],
+  ])("does not emit release-please or commitlint artifacts for %s", (_label, config) => {
+    expectNoReleasePleaseOrCommitlintArtifacts(buildProjectFiles(config));
   });
 
   it("emits Lefthook and Oxc tooling", () => {
@@ -362,6 +394,8 @@ describe("buildProjectFiles", () => {
     expect(files.map((file) => file.path)).toContain("source/cli.ts");
     expect(files.map((file) => file.path)).toContain("test/cli.test.ts");
     expect(cliTest.content).toContain(`expect.stringContaining("$ example-cli <input>")`);
+    expect(cliTest.content).toContain("flags: {}");
+    expect(cliTest.content).toContain("input: []");
     expect(packageJsonFile.content).toContain(
       `"${getBinName("@scope/example-cli")}": "dist/cli.js"`,
     );
@@ -596,4 +630,31 @@ const parseJsonc = (path: string, content: string): unknown => {
   }
 
   return parseResult.config;
+};
+
+const expectNoReleasePleaseOrCommitlintArtifacts = (files: GeneratedFile[]): void => {
+  const filePaths = files.map((file) => file.path);
+  for (const forbiddenPath of forbiddenReleasePleaseFilePaths) {
+    expect(filePaths).not.toContain(forbiddenPath);
+  }
+
+  const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+  expectNoCommitlintPackageDependencies(packageJson);
+  expect(Object.keys(packageJson.scripts).join("\n")).not.toContain("commitlint");
+  expect(Object.values(packageJson.scripts).join("\n")).not.toContain("commitlint");
+
+  const forbiddenMatches = files.flatMap((file) =>
+    forbiddenReleasePleaseContent
+      .filter((forbiddenContent) => file.content.includes(forbiddenContent))
+      .map((forbiddenContent) => `${file.path}: ${forbiddenContent}`),
+  );
+
+  expect(forbiddenMatches).toStrictEqual([]);
+};
+
+const expectNoCommitlintPackageDependencies = (packageJson: GeneratedPackageJson): void => {
+  expect(packageJson.dependencies).not.toHaveProperty("@commitlint/cli");
+  expect(packageJson.dependencies).not.toHaveProperty("@commitlint/config-conventional");
+  expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/cli");
+  expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/config-conventional");
 };

@@ -17,6 +17,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node-version: ["22", "24"]
     steps:
@@ -57,11 +58,12 @@ jobs:
           verbose: true
 
   generated-project-smoke:
-    name: Smoke test generated project
+    name: Smoke test generated project (Node ${{ matrix.node-version }}, CLI ${{ matrix.include-cli }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        node-version: ["22", "24"]
         include-cli: [false, true]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -74,7 +76,7 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node-version }}
           cache: "pnpm"
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -85,7 +87,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Smoke test generated project
         env:
-          SMOKE_DIR: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
+          SMOKE_DIR: ${{ runner.temp }}/e2e-node-${{ matrix.node-version }}-cli-${{ matrix.include-cli }}
           SMOKE_INCLUDE_CLI: ${{ matrix.include-cli }}
           SMOKE_PACKAGE_MANAGER: pnpm
         run: pnpm run smoke:scaffold

@@ -22,6 +22,31 @@ export interface ScaffoldOptions {
   targetDirectory: string;
 }
 
+export type PostScaffoldSetupStep = "git" | "install" | "build" | "test";
+
+interface PostScaffoldSetupErrorOptions {
+  cause: unknown;
+  packageManager: PackageManager;
+  step: PostScaffoldSetupStep;
+  targetDirectory: string;
+}
+
+export class PostScaffoldSetupError extends Error {
+  readonly packageManager: PackageManager;
+  readonly step: PostScaffoldSetupStep;
+  readonly targetDirectory: string;
+
+  constructor(options: PostScaffoldSetupErrorOptions) {
+    super(getErrorMessage(options.cause, "Post-scaffold setup failed"), {
+      cause: options.cause,
+    });
+    this.name = "PostScaffoldSetupError";
+    this.packageManager = options.packageManager;
+    this.step = options.step;
+    this.targetDirectory = options.targetDirectory;
+  }
+}
+
 /**
  * Write a generated TypeScript library to disk and optionally run post-scaffold setup.
  */
@@ -46,34 +71,54 @@ export const scaffoldProject = async (
   }
 
   if (options.postScaffold !== false) {
-    await runProgressStep(
-      options.progress,
-      "Preparing git repository",
-      "Git repository ready",
+    await runPostScaffoldStep(
+      {
+        packageManager: config.packageManager,
+        progress: options.progress,
+        startMessage: "Preparing git repository",
+        step: "git",
+        successMessage: "Git repository ready",
+        targetDirectory,
+      },
       async () => {
         await initializeGitRepositoryIfNeeded(targetDirectory);
       },
     );
-    await runProgressStep(
-      options.progress,
-      "Installing dependencies",
-      "Dependencies installed",
+    await runPostScaffoldStep(
+      {
+        packageManager: config.packageManager,
+        progress: options.progress,
+        startMessage: "Installing dependencies",
+        step: "install",
+        successMessage: "Dependencies installed",
+        targetDirectory,
+      },
       async () => {
         await runPackageManagerCommand(config.packageManager, ["install"], targetDirectory);
       },
     );
-    await runProgressStep(
-      options.progress,
-      "Building generated project",
-      "Generated project built",
+    await runPostScaffoldStep(
+      {
+        packageManager: config.packageManager,
+        progress: options.progress,
+        startMessage: "Building generated project",
+        step: "build",
+        successMessage: "Generated project built",
+        targetDirectory,
+      },
       async () => {
         await runPackageManagerCommand(config.packageManager, ["run", "build"], targetDirectory);
       },
     );
-    await runProgressStep(
-      options.progress,
-      "Testing generated project",
-      "Generated project tested",
+    await runPostScaffoldStep(
+      {
+        packageManager: config.packageManager,
+        progress: options.progress,
+        startMessage: "Testing generated project",
+        step: "test",
+        successMessage: "Generated project tested",
+        targetDirectory,
+      },
       async () => {
         await runPackageManagerCommand(config.packageManager, ["run", "test"], targetDirectory);
       },
@@ -147,18 +192,33 @@ export const runPackageManagerCommand = async (
   });
 };
 
-const runProgressStep = async (
-  progress: ScaffoldProgress | undefined,
-  startMessage: string,
-  successMessage: string,
+interface PostScaffoldStepOptions {
+  packageManager: PackageManager;
+  progress: ScaffoldProgress | undefined;
+  startMessage: string;
+  step: PostScaffoldSetupStep;
+  successMessage: string;
+  targetDirectory: string;
+}
+
+const runPostScaffoldStep = async (
+  options: PostScaffoldStepOptions,
   action: () => Promise<void>,
 ): Promise<void> => {
-  progress?.start(startMessage);
+  options.progress?.start(options.startMessage);
   try {
     await action();
-    progress?.succeed(successMessage);
+    options.progress?.succeed(options.successMessage);
   } catch (error) {
-    progress?.fail(startMessage);
-    throw error;
+    options.progress?.fail(options.startMessage);
+    throw new PostScaffoldSetupError({
+      cause: error,
+      packageManager: options.packageManager,
+      step: options.step,
+      targetDirectory: options.targetDirectory,
+    });
   }
 };
+
+const getErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback;

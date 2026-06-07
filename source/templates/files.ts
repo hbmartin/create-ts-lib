@@ -265,6 +265,7 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
   const codecovStep = config.includeCodecov
     ? `
       - name: Upload coverage to Codecov
+        if: matrix.node-version == '24'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: \${{ secrets.CODECOV_TOKEN }}
