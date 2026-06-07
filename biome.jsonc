@@ -163,8 +163,10 @@
         "source/cli.ts",
         "source/cli-helpers.ts",
         "source/github-cli.ts",
+        "source/path-comparison.ts",
         "source/prompts.ts",
         "source/scaffold.ts",
+        "source/target-directory.ts",
         "source/templates/**/*.ts",
       ],
       "linter": {

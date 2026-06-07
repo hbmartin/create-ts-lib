@@ -21,8 +21,7 @@ describe("getGitHubRepositoryName", () => {
 describe("inspectPersonalGitHubRepository", () => {
   it("reports an existing repository by authenticated user and project name", async () => {
     const executor = createExecutor([
-      jsonOutput({ login: "hbmartin" }),
-      jsonOutput({ html_url: "https://github.com/hbmartin/example-lib" }),
+      personalRepositoryLookupOutput("hbmartin", "https://github.com/hbmartin/example-lib"),
     ]);
 
     await expect(inspectPersonalGitHubRepository("example-lib", { executor })).resolves.toEqual({
@@ -31,38 +30,22 @@ describe("inspectPersonalGitHubRepository", () => {
       status: "found",
       url: "https://github.com/hbmartin/example-lib",
     });
-    expect(executor).toHaveBeenNthCalledWith(1, ["api", "user"], {
-      timeoutMilliseconds: 5000,
-    });
-    expect(executor).toHaveBeenNthCalledWith(2, ["api", "repos/hbmartin/example-lib"], {
-      timeoutMilliseconds: 5000,
-    });
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        "api",
+        "graphql",
+        "-f",
+        expect.stringContaining("query PersonalRepositoryLookup"),
+        "-F",
+        "name=example-lib",
+      ]),
+      { timeoutMilliseconds: 5000 },
+    );
   });
 
-  it("reports a missing repository when GitHub returns HTTP 404", async () => {
-    const executor = createExecutor([
-      jsonOutput({ login: "hbmartin" }),
-      commandFailure("not found", {
-        stderr: "gh: Not Found (HTTP 404)",
-        stdout: '{"message":"Not Found","status":"404"}',
-      }),
-    ]);
-
-    await expect(inspectPersonalGitHubRepository("example-lib", { executor })).resolves.toEqual({
-      owner: "hbmartin",
-      predictedUrl: "https://github.com/hbmartin/example-lib",
-      repositoryName: "example-lib",
-      status: "missing",
-    });
-  });
-
-  it("reports a missing repository when GitHub returns a JSON 404 status", async () => {
-    const executor = createExecutor([
-      jsonOutput({ login: "hbmartin" }),
-      commandFailure("not found", {
-        stdout: '{ "message": "Not Found", "status": "404" }',
-      }),
-    ]);
+  it("reports a missing repository when GraphQL returns no personal repository", async () => {
+    const executor = createExecutor([personalRepositoryLookupOutput("hbmartin", null)]);
 
     await expect(inspectPersonalGitHubRepository("example-lib", { executor })).resolves.toEqual({
       owner: "hbmartin",
@@ -76,17 +59,14 @@ describe("inspectPersonalGitHubRepository", () => {
     const executor = createExecutor([jsonOutput({ id: 123 })]);
 
     await expect(inspectPersonalGitHubRepository("example-lib", { executor })).resolves.toEqual({
-      reason: "gh api user returned an unexpected response",
+      reason: "gh api graphql returned an unexpected response",
       repositoryName: "example-lib",
       status: "unavailable",
     });
   });
 
   it("reports unavailable when repository lookup fails unexpectedly", async () => {
-    const executor = createExecutor([
-      jsonOutput({ login: "hbmartin" }),
-      commandFailure("rate limit exceeded"),
-    ]);
+    const executor = createExecutor([commandFailure("rate limit exceeded")]);
 
     await expect(inspectPersonalGitHubRepository("example-lib", { executor })).resolves.toEqual({
       reason: "rate limit exceeded",
@@ -197,10 +177,53 @@ describe("createGitHubRepository", () => {
     });
   });
 
+  it("creates a private repository when requested", async () => {
+    const executor = createExecutor([{ stderr: "", stdout: "" }]);
+
+    await createGitHubRepository(
+      {
+        description: "",
+        owner: "hbmartin",
+        repositoryName: "demo-lib",
+        visibility: "private",
+      },
+      { executor },
+    );
+
+    expect(executor).toHaveBeenCalledWith(["repo", "create", "hbmartin/demo-lib", "--private"], {
+      timeoutMilliseconds: 5000,
+    });
+  });
+
   it("reports create failures without throwing", async () => {
     const executor = createExecutor([
       commandFailure("failed", {
         stderr: "repository already exists",
+      }),
+    ]);
+
+    await expect(
+      createGitHubRepository(
+        {
+          description: "Demo library",
+          owner: "hbmartin",
+          repositoryName: "demo-lib",
+        },
+        { executor },
+      ),
+    ).resolves.toEqual({
+      owner: "hbmartin",
+      reason: "repository already exists",
+      repositoryName: "demo-lib",
+      status: "failed",
+      url: "https://github.com/hbmartin/demo-lib",
+    });
+  });
+
+  it("sanitizes gh output in create failure reasons", async () => {
+    const executor = createExecutor([
+      commandFailure("failed", {
+        stderr: "\u001B[31mrepository\r\nalready\u0007 exists\u001B[0m",
       }),
     ]);
 
@@ -267,6 +290,19 @@ const jsonOutput = (value: unknown): { stderr: string; stdout: string } => ({
   stderr: "",
   stdout: JSON.stringify(value),
 });
+
+const personalRepositoryLookupOutput = (
+  login: string,
+  repositoryUrl: string | null,
+): { stderr: string; stdout: string } =>
+  jsonOutput({
+    data: {
+      viewer: {
+        login,
+        repository: repositoryUrl === null ? null : { url: repositoryUrl },
+      },
+    },
+  });
 
 const commandFailure = (
   message: string,

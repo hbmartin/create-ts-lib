@@ -8,7 +8,6 @@ import { stripPackageScope } from "./name-helpers.js";
 const execFileAsync = promisify(execFile);
 const defaultTimeoutMilliseconds = 5000;
 const maxBufferBytes = 1024 * 1024;
-const gitHubNotFoundStatusRegex = /"status"\s*:\s*"404"/u;
 
 interface GitHubCliCommandOutput {
   stderr: string;
@@ -31,6 +30,8 @@ export interface GitHubRepositoryTarget {
   url: string;
 }
 
+export type GitHubRepositoryVisibility = "private" | "public";
+
 export type GitHubRepositoryLookupResult =
   | ({ status: "found" } & GitHubRepositoryTarget)
   | ({ predictedUrl: string; status: "missing" } & Omit<GitHubRepositoryTarget, "url">)
@@ -44,23 +45,34 @@ export interface CreateGitHubRepositoryRequest {
   description: string;
   owner: string;
   repositoryName: string;
+  visibility?: GitHubRepositoryVisibility;
 }
 
 export type CreateGitHubRepositoryResult =
   | ({ status: "created" } & GitHubRepositoryTarget)
   | ({ reason: string; status: "failed" } & GitHubRepositoryTarget);
 
-const gitHubUserSchema = z
-  .object({
-    login: z.string().min(1),
-  })
-  .passthrough();
+const gitHubPersonalRepositoryLookupQuery = `query PersonalRepositoryLookup($name: String!) {
+  viewer {
+    login
+    repository(name: $name) {
+      url
+    }
+  }
+}`;
 
-const gitHubRepositorySchema = z
-  .object({
-    html_url: z.string().url(),
-  })
-  .passthrough();
+const gitHubPersonalRepositoryLookupSchema = z.object({
+  data: z.object({
+    viewer: z.object({
+      login: z.string().min(1),
+      repository: z
+        .object({
+          url: z.url(),
+        })
+        .nullable(),
+    }),
+  }),
+});
 
 export const getGitHubRepositoryName = (projectName: string): string =>
   stripPackageScope(projectName);
@@ -72,39 +84,31 @@ export const inspectPersonalGitHubRepository = async (
   const repositoryName = getGitHubRepositoryName(projectName);
 
   try {
-    const user = await runGitHubApiCommand("user", gitHubUserSchema, options);
-    const owner = user.login;
+    const lookup = await runGitHubGraphQlCommand(
+      gitHubPersonalRepositoryLookupQuery,
+      { name: repositoryName },
+      gitHubPersonalRepositoryLookupSchema,
+      options,
+    );
+    const owner = lookup.data.viewer.login;
     const predictedUrl = buildGitHubRepositoryUrl(owner, repositoryName);
+    const repository = lookup.data.viewer.repository;
 
-    try {
-      const repository = await runGitHubApiCommand(
-        `repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}`,
-        gitHubRepositorySchema,
-        options,
-      );
-
+    if (repository === null) {
       return {
         owner,
+        predictedUrl,
         repositoryName,
-        status: "found",
-        url: repository.html_url,
-      };
-    } catch (error) {
-      if (isGitHubNotFoundError(error)) {
-        return {
-          owner,
-          predictedUrl,
-          repositoryName,
-          status: "missing",
-        };
-      }
-
-      return {
-        reason: formatGitHubCliError(error),
-        repositoryName,
-        status: "unavailable",
+        status: "missing",
       };
     }
+
+    return {
+      owner,
+      repositoryName,
+      status: "found",
+      url: repository.url,
+    };
   } catch (error) {
     return {
       reason: formatGitHubCliError(error),
@@ -119,7 +123,8 @@ export const createGitHubRepository = async (
   options: GitHubCliOptions = {},
 ): Promise<CreateGitHubRepositoryResult> => {
   const url = buildGitHubRepositoryUrl(request.owner, request.repositoryName);
-  const args = ["repo", "create", `${request.owner}/${request.repositoryName}`, "--public"];
+  const visibility = request.visibility ?? "public";
+  const args = ["repo", "create", `${request.owner}/${request.repositoryName}`, `--${visibility}`];
   const description = request.description.trim();
 
   if (description.length > 0) {
@@ -146,17 +151,24 @@ export const createGitHubRepository = async (
   }
 };
 
-const runGitHubApiCommand = async <T>(
-  endpoint: string,
+const runGitHubGraphQlCommand = async <T>(
+  query: string,
+  fields: Record<string, string>,
   schema: z.ZodType<T>,
   options: GitHubCliOptions,
 ): Promise<T> => {
-  const output = await runGitHubCliCommand(["api", endpoint], options);
+  const args = ["api", "graphql", "-f", `query=${query}`];
+
+  for (const [name, value] of Object.entries(fields)) {
+    args.push("-F", `${name}=${value}`);
+  }
+
+  const output = await runGitHubCliCommand(args, options);
   const parsedJson = parseJson(output.stdout);
   const parsedValue = schema.safeParse(parsedJson);
 
   if (!parsedValue.success) {
-    throw new Error(`gh api ${endpoint} returned an unexpected response`);
+    throw new Error("gh api graphql returned an unexpected response");
   }
 
   return parsedValue.data;
@@ -207,11 +219,7 @@ const parseJson = (value: string): unknown => {
 const buildGitHubRepositoryUrl = (owner: string, repositoryName: string): string =>
   `https://github.com/${owner}/${repositoryName}`;
 
-const isGitHubNotFoundError = (error: unknown): boolean => {
-  const output = getErrorOutput(error);
-
-  return output.includes("HTTP 404") || gitHubNotFoundStatusRegex.test(output);
-};
+const maxGitHubCliErrorLength = 500;
 
 const formatGitHubCliError = (error: unknown): string => {
   if (isErrorWithCode(error, "ENOENT")) {
@@ -223,9 +231,14 @@ const formatGitHubCliError = (error: unknown): string => {
   }
 
   if (error instanceof Error) {
-    const output = getErrorOutput(error).trim();
+    const output = formatGitHubCliDiagnostic(getErrorOutput(error));
 
-    return output.length > 0 ? output : error.message;
+    if (output.length > 0) {
+      return output;
+    }
+
+    const message = formatGitHubCliDiagnostic(error.message);
+    return message.length > 0 ? message : "gh CLI failed";
   }
 
   return "gh CLI failed";
@@ -238,6 +251,60 @@ const getErrorOutput = (error: unknown): string => {
 
   return [error.stderr, error.stdout].filter((value) => value.length > 0).join("\n");
 };
+
+const formatGitHubCliDiagnostic = (value: string): string => {
+  const cleaned = Array.from(stripAnsiEscapeSequences(value), stripControlCharacter)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length <= maxGitHubCliErrorLength) {
+    return cleaned;
+  }
+
+  return `${cleaned.slice(0, maxGitHubCliErrorLength - 3).trimEnd()}...`;
+};
+
+const escapeCharacterCode = 27;
+
+const stripAnsiEscapeSequences = (value: string): string => {
+  let result = "";
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== escapeCharacterCode) {
+      result += value[index];
+      continue;
+    }
+
+    if (value[index + 1] !== "[") {
+      continue;
+    }
+
+    index += 2;
+    while (index < value.length) {
+      const charCode = value.charCodeAt(index);
+
+      if (charCode >= 0x40 && charCode <= 0x7e) {
+        break;
+      }
+
+      index += 1;
+    }
+  }
+
+  return result;
+};
+
+const stripControlCharacter = (character: string): string => {
+  const charCode = character.charCodeAt(0);
+
+  return charCode === 127 || (charCode < 32 && !isWhitespaceControlCharacter(charCode))
+    ? ""
+    : character;
+};
+
+const isWhitespaceControlCharacter = (charCode: number): boolean =>
+  charCode === 9 || charCode === 10 || charCode === 13;
 
 const isErrorWithCode = (error: unknown, code: number | string): boolean =>
   typeof error === "object" &&

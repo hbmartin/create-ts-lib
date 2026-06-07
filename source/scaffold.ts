@@ -1,9 +1,11 @@
 import { execFile, spawn } from "node:child_process";
-import { access, chmod, mkdir, readdir, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { assertValidPackageName } from "./package-name.js";
+import { equalResolvedPaths } from "./path-comparison.js";
+import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
 
 const execFileAsync = promisify(execFile);
@@ -134,26 +136,6 @@ export const scaffoldProject = async (
   }
 };
 
-const assertTargetDirectoryIsSafe = async (
-  targetDirectory: string,
-  force: boolean,
-): Promise<void> => {
-  try {
-    const existingEntries = await readdir(targetDirectory);
-    if (!force && existingEntries.length > 0) {
-      throw new Error(
-        `Target directory is not empty: ${targetDirectory}. Re-run with --force to overwrite generated files.`,
-      );
-    }
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return;
-    }
-
-    throw error;
-  }
-};
-
 export const initializeGitRepositoryIfNeeded = async (cwd: string): Promise<void> => {
   const repositoryRoot = await readGitRepositoryRoot(cwd);
 
@@ -184,7 +166,7 @@ const addGitRemoteOriginIfPossible = async (
     return;
   }
 
-  if (resolve(repositoryRoot) !== resolve(cwd)) {
+  if (!equalResolvedPaths(repositoryRoot, cwd)) {
     progress?.info(
       `Skipping git remote origin because the target is inside an existing Git repository: ${repositoryRoot}`,
     );
@@ -199,9 +181,6 @@ const addGitRemoteOriginIfPossible = async (
     );
   }
 };
-
-const isNodeError = (error: unknown): error is NodeJS.ErrnoException =>
-  error instanceof Error && "code" in error;
 
 export const runPackageManagerCommand = async (
   packageManager: PackageManager,
@@ -259,19 +238,4 @@ const runPostScaffoldStep = async (
 const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
-const getExecFileStdout = (result: unknown): string => {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "stdout" in result &&
-    typeof result.stdout === "string"
-  ) {
-    return result.stdout;
-  }
-
-  return "";
-};
+const getExecFileStdout = (result: { stdout: string }): string => result.stdout;
