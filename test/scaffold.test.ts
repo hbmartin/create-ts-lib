@@ -84,17 +84,27 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".release-please-manifest.json");
     expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
-    expect(ciWorkflow?.content).toContain("python3 -m pip install --user semgrep");
-    expect(ciWorkflow?.content).toContain("pnpm exec publint --pack pnpm");
+    expect(ciWorkflow?.content).toContain(
+      "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
+    );
+    expect(ciWorkflow?.content).toContain("enable-cache: true");
+    expect(ciWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
+    expect(ciWorkflow?.content).toContain("pnpm run publint");
     expect(ciWorkflow?.content).toContain("pnpm run check");
+    expect(ciWorkflow?.content).not.toContain("python3 -m pip");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
     expect(releaseWorkflow?.content).toContain("types: [published]");
     expect(releaseWorkflow?.content).toContain("id-token: write");
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
-    expect(releaseWorkflow?.content).toContain("version: 11.4.0");
+    expect(releaseWorkflow?.content).toContain("version: 11.5.2");
     expect(releaseWorkflow?.content).toContain("node-version: '22.x'");
-    expect(releaseWorkflow?.content).toContain("python3 -m pip install --user semgrep");
+    expect(releaseWorkflow?.content).toContain(
+      "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
+    );
+    expect(releaseWorkflow?.content).toContain("enable-cache: true");
+    expect(releaseWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
+    expect(releaseWorkflow?.content).not.toContain("python3 -m pip");
     expect(releaseWorkflow?.content).toContain("pnpm run release:check");
     expect(releaseWorkflow?.content).toContain("pnpm run size:report");
     expect(releaseWorkflow?.content).toContain('TAG="next"');
@@ -113,6 +123,7 @@ describe("buildProjectFiles", () => {
     const oxlintConfig = parseGeneratedJson<GeneratedOxlintConfig>(files, ".oxlintrc.json");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
     const semgrep = findGeneratedFile(files, "semgrep.yml");
+    const securityLint = findGeneratedFile(files, "scripts/security-lint.mjs");
     const vitestConfig = findGeneratedFile(files, "vitest.config.ts");
 
     expect(filePaths).toContain("AGENTS.md");
@@ -121,6 +132,7 @@ describe("buildProjectFiles", () => {
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
     expect(filePaths).toContain("semgrep.yml");
+    expect(filePaths).toContain("scripts/security-lint.mjs");
     expect(packageJson.devDependencies).toMatchObject({
       "@arethetypeswrong/cli": expect.any(String),
       "@vitest/coverage-v8": expect.any(String),
@@ -137,7 +149,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.devDependencies).not.toHaveProperty("semgrep");
     expect(packageJson.scripts.check).toBe(
-      "pnpm run lint && pnpm run deps:lint && pnpm run security:lint && pnpm run typecheck && pnpm run test",
+      "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test",
     );
     expect(packageJson.scripts["deps:lint"]).toBe(
       "depcruise --config .dependency-cruiser.cjs source test",
@@ -148,9 +160,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts.publint).toBe("publint --pack pnpm");
     expect(packageJson.scripts.attw).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["release:check"]).toContain("pnpm run verify:package");
-    expect(packageJson.scripts["security:lint"]).toBe(
-      "semgrep scan --config semgrep.yml --error source test",
-    );
+    expect(packageJson.scripts["security:lint"]).toBe("node scripts/security-lint.mjs");
     expect(packageJson.scripts["size:report"]).toBe("npm pack --dry-run --json");
     expect(packageJson.scripts["types:lint"]).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["verify:artifacts"]).toContain("node -e");
@@ -161,12 +171,30 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts.format).toContain("oxfmt");
     expect(agents.content).toContain("Guidance for Codex and other coding agents");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
+    expect(agents.content).toContain("uvx semgrep@1.165.0");
     expect(dependencyCruiser.content).toContain("source-not-to-test");
     expect(dependencyCruiser.content).toContain("source-not-to-dev-dependencies");
-    expect(biomeConfig.files.includes).toEqual(expect.arrayContaining(["!*.yml", "!**/*.yml"]));
-    expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json", "*.yml", "**/*.yml"]);
-    expect(oxlintConfig.ignorePatterns).toEqual(["*.yml", "**/*.yml"]);
+    expect(biomeConfig.files.includes).toEqual(
+      expect.arrayContaining(["!*.jsonc", "!**/*.jsonc", "!*.yml", "!**/*.yml"]),
+    );
+    expect(oxfmtConfig.ignorePatterns).toEqual([
+      "*.json",
+      "**/*.json",
+      "*.jsonc",
+      "**/*.jsonc",
+      "*.yml",
+      "**/*.yml",
+    ]);
+    expect(oxlintConfig.ignorePatterns).toEqual(["*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]);
     expect(semgrep.content).toContain("no-eval-like-execution");
+    expect(semgrep.content).toContain("no-child-process-exec");
+    expect(semgrep.content).toContain("no-shell-true-process");
+    expect(semgrep.content).toContain("no-weak-crypto-hash");
+    expect(semgrep.content).toContain("no-math-random-security-sensitive");
+    expect(securityLint.content).toContain('semgrepVersion = "1.165.0"');
+    expect(securityLint.content).toContain('runCommand("uvx"');
+    expect(securityLint.content).toContain("SECURITY_LINT_FORCE_UVX");
+    expect(securityLint.content).toContain("node:child_process");
     expect(vitestConfig.content).toContain(`provider: "v8"`);
   });
 
@@ -222,6 +250,7 @@ describe("buildProjectFiles", () => {
     expect(readme.content).toContain("A test library");
     expect(readme.content).toContain("pnpm add example-lib");
     expect(readme.content).toContain('import { formatValue } from "example-lib";');
+    expect(readme.content).toContain("uvx semgrep@1.165.0");
     expect(readme.content).toContain("MIT - Harold Martin.");
     expect(readme.content).not.toContain("## CLI");
     expect(cliReadme.content).toContain("## CLI");

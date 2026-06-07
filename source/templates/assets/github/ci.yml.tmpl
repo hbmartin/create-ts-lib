@@ -25,11 +25,14 @@ jobs:
         with:
           node-version: "22"
           cache: "{{CACHE}}"
-      - run: python3 -m pip install --user semgrep
-      - run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
       - run: {{INSTALL_CI_COMMAND}}
       - run: {{AUDIT_COMMAND}}
       - run: {{RUN_PREFIX}} check
+        env:
+          SECURITY_LINT_FORCE_UVX: "1"
       - run: {{BUILD_COMMAND}}
       - run: {{PUBLINT_COMMAND}}
 {{CODECOV_STEP}}

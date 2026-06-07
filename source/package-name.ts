@@ -28,9 +28,7 @@ export const validatePackageName = (packageName: string): PackageNameValidationR
   }
 
   const segments = getPackageNameSegments(packageName);
-  if (!segments) {
-    errors.push("Scoped package names must use the form @scope/name.");
-  } else {
+  if (segments) {
     for (const segment of segments) {
       if (segment.length === 0) {
         errors.push("Package name segments must not be empty.");
@@ -43,6 +41,8 @@ export const validatePackageName = (packageName: string): PackageNameValidationR
         );
       }
     }
+  } else {
+    errors.push("Scoped package names must use the form @scope/name.");
   }
 
   return {
