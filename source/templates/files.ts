@@ -95,6 +95,13 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
 const buildPackageJson = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];
   const repositoryMetadata = repositoryFields(config.githubRepoUrl);
+  const artifactFiles = [
+    "dist/index.js",
+    "dist/index.d.ts",
+    ...(config.includeCli ? ["dist/cli.js", "dist/cli.d.ts"] : []),
+  ];
+  const artifactFilesLiteral = `[${artifactFiles.map((file) => `'${file}'`).join(",")}]`;
+  const verifyArtifactsScript = `node -e "for (const file of ${artifactFilesLiteral}) require('node:fs').statSync(file)"`;
   const packageJson = {
     name: config.projectName,
     version: "0.1.0",
@@ -131,11 +138,15 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       lint: "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
       attw: "attw --pack . --profile esm-only",
       prepare: "lefthook install",
-      prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} attw`,
+      prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
       publint: `publint --pack ${config.packageManager}`,
-      "release:check": `${pmConfig.runPrefix} prepublishOnly && npm publish --dry-run --ignore-scripts`,
+      "release:check": `${pmConfig.runPrefix} prepublishOnly && ${pmConfig.runPrefix} verify:package`,
+      "size:report": "npm pack --dry-run --json",
       test: "vitest run --coverage",
       typecheck: "tsc --noEmit",
+      "types:lint": "attw --pack . --profile esm-only",
+      "verify:artifacts": verifyArtifactsScript,
+      "verify:package": "npm publish --dry-run --ignore-scripts",
     },
     dependencies: {
       ...(config.includeCli ? { meow: "^14.0.0" } : {}),

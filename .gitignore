@@ -8,6 +8,7 @@ coverage
 compiled
 .awcache
 .rpt2_cache
+*.pyc
 
 dist
 
@@ -17,5 +18,5 @@ report/
 reviews_triage/
 triage_decisions.db
 stats.html
-attio_openapi.json
+.env*
 schema.json

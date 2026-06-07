@@ -1,6 +1,6 @@
 {
   "name": "@hbmartin/create-ts-lib",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Opinionated TypeScript library scaffolder.",
   "keywords": [
     "create",
@@ -34,14 +34,18 @@
     "format": "oxfmt . --write",
     "lint": "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run check && pnpm run build && pnpm publint --pack pnpm",
+    "prepublishOnly": "pnpm run check && pnpm run build && pnpm run verify:artifacts && pnpm run publint && pnpm run types:lint",
     "prepare": "lefthook install",
-    "publint": "publint",
-    "release:check": "pnpm run prepublishOnly && pnpm attw --pack . --profile esm-only && npm publish --dry-run --ignore-scripts",
+    "publint": "publint --pack pnpm",
+    "release:check": "pnpm run prepublishOnly && pnpm run verify:package",
+    "size:report": "npm pack --dry-run --json",
     "attw": "attw",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "types:lint": "attw --pack . --profile esm-only",
+    "verify:artifacts": "node -e \"for (const file of ['dist/index.js','dist/index.d.ts','dist/cli.js','dist/cli.d.ts','dist/templates/assets/github/release.yml.tmpl']) require('node:fs').statSync(file)\"",
+    "verify:package": "npm publish --dry-run --ignore-scripts"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
