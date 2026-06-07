@@ -54,17 +54,25 @@ describe("deriveDirectoryName", () => {
 });
 
 describe("normalizeGitHubUrl", () => {
-  it("normalizes common GitHub remote forms", () => {
-    expect(normalizeGitHubUrl("git@github.com:hbmartin/example-lib.git")).toBe(
-      "https://github.com/hbmartin/example-lib",
-    );
-    expect(normalizeGitHubUrl("https://github.com/hbmartin/example-lib.git")).toBe(
-      "https://github.com/hbmartin/example-lib",
-    );
-    expect(normalizeGitHubUrl("git+https://github.com/hbmartin/example-lib.git")).toBe(
-      "https://github.com/hbmartin/example-lib",
-    );
+  it.each([
+    ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
+    ["HTTPS", "https://github.com/hbmartin/example-lib.git"],
+    ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
+    ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],
+    ["SSH URL", "ssh://git@github.com/hbmartin/example-lib.git"],
+    ["git protocol", "git://github.com/hbmartin/example-lib.git"],
+  ])("normalizes %s GitHub remote forms", (_label, githubRepoUrl) => {
+    expect(normalizeGitHubUrl(githubRepoUrl)).toBe("https://github.com/hbmartin/example-lib");
+  });
+
+  it("keeps empty input empty", () => {
     expect(normalizeGitHubUrl("")).toBe("");
+  });
+
+  it("leaves unsupported remote URLs unchanged", () => {
+    expect(normalizeGitHubUrl("https://gitlab.com/hbmartin/example-lib.git")).toBe(
+      "https://gitlab.com/hbmartin/example-lib.git",
+    );
   });
 });
 

@@ -8,6 +8,7 @@ import { tsgoProbeCommand } from "../dist/templates/files.js";
 
 const packageManagers = new Set(["pnpm"]);
 const includeCliValues = new Set(["true", "false", "all"]);
+const [tsgoProbeExecutable, ...tsgoProbeArgs] = tsgoProbeCommand.split(" ");
 
 const log = (message) => {
   process.stdout.write(`[smoke] ${message}\n`);
@@ -58,31 +59,6 @@ const runCommand = async (command, args, options = {}) => {
   });
 };
 
-const runShellCommand = async (command, options = {}) => {
-  log(command);
-  await new Promise((resolve, reject) => {
-    const childProcess = spawn(command, {
-      cwd: options.cwd,
-      env: {
-        ...process.env,
-        ...options.env,
-      },
-      shell: true,
-      stdio: "inherit",
-    });
-
-    childProcess.on("error", reject);
-    childProcess.on("close", (code) => {
-      if (code === 0) {
-        resolve(undefined);
-        return;
-      }
-
-      reject(new Error(`${command} exited with code ${code ?? "unknown"}`));
-    });
-  });
-};
-
 const checkCommand = async (command, args, options = {}) =>
   new Promise((resolve, reject) => {
     const childProcess = spawn(command, args, {
@@ -94,7 +70,7 @@ const checkCommand = async (command, args, options = {}) =>
     childProcess.on("close", resolve);
   });
 
-const assertLockfileIsTracked = async (targetDirectory) => {
+const assertLockfileIsNotIgnored = async (targetDirectory) => {
   await access(join(targetDirectory, "pnpm-lock.yaml"));
 
   const checkIgnoreCode = await checkCommand("git", ["check-ignore", "-q", "pnpm-lock.yaml"], {
@@ -120,44 +96,63 @@ const targetDirectoryForVariant = (rootDirectory, variants, includeCli) => {
 
 const includeCliVariants = parseIncludeCliEnv("SMOKE_INCLUDE_CLI");
 const packageManager = parsePackageManagerEnv("SMOKE_PACKAGE_MANAGER");
+const configuredSmokeDirectory = process.env.SMOKE_DIR;
 const baseDirectory =
-  process.env.SMOKE_DIR || (await mkdtemp(join(tmpdir(), "create-ts-lib-smoke-")));
+  configuredSmokeDirectory || (await mkdtemp(join(tmpdir(), "create-ts-lib-smoke-")));
+let smokeSucceeded = false;
 
-for (const includeCli of includeCliVariants) {
-  const projectName = includeCli ? "e2e-cli-lib" : "e2e-lib";
-  const targetDirectory = targetDirectoryForVariant(baseDirectory, includeCliVariants, includeCli);
-
-  log(`Scaffolding ${projectName} in ${targetDirectory}`);
-  await scaffoldProject(
-    {
-      author: "Smoke Test <smoke@example.com>",
-      description: "Generated project smoke test",
-      githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+try {
+  for (const includeCli of includeCliVariants) {
+    const projectName = includeCli ? "e2e-cli-lib" : "e2e-lib";
+    const targetDirectory = targetDirectoryForVariant(
+      baseDirectory,
+      includeCliVariants,
       includeCli,
-      includeCodecov: false,
-      license: "MIT",
-      packageManager,
-      projectName,
-    },
-    {
-      postScaffold: false,
-      targetDirectory,
-    },
-  );
+    );
 
-  await runCommand("git", ["init"], { cwd: targetDirectory });
-  await runCommand(packageManager, ["install"], { cwd: targetDirectory });
-  await assertLockfileIsTracked(targetDirectory);
-  await rm(join(targetDirectory, "node_modules"), {
-    force: true,
-    recursive: true,
-  });
-  await runCommand(packageManager, ["install", "--frozen-lockfile"], { cwd: targetDirectory });
-  await runCommand(packageManager, ["run", "release:check"], {
-    cwd: targetDirectory,
-    env: {
-      SECURITY_LINT_FORCE_UVX: "1",
-    },
-  });
-  await runShellCommand(tsgoProbeCommand, { cwd: targetDirectory });
+    log(`Scaffolding ${projectName} in ${targetDirectory}`);
+    await scaffoldProject(
+      {
+        author: "Smoke Test <smoke@example.com>",
+        description: "Generated project smoke test",
+        githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+        includeCli,
+        includeCodecov: false,
+        license: "MIT",
+        packageManager,
+        projectName,
+      },
+      {
+        postScaffold: false,
+        targetDirectory,
+      },
+    );
+
+    await runCommand("git", ["init"], { cwd: targetDirectory });
+    await runCommand(packageManager, ["install"], { cwd: targetDirectory });
+    await assertLockfileIsNotIgnored(targetDirectory);
+    await rm(join(targetDirectory, "node_modules"), {
+      force: true,
+      recursive: true,
+    });
+    await runCommand(packageManager, ["install", "--frozen-lockfile"], { cwd: targetDirectory });
+    await runCommand(packageManager, ["run", "release:check"], {
+      cwd: targetDirectory,
+      env: {
+        SECURITY_LINT_FORCE_UVX: "1",
+      },
+    });
+    await runCommand(tsgoProbeExecutable, tsgoProbeArgs, { cwd: targetDirectory });
+  }
+
+  smokeSucceeded = true;
+} finally {
+  if (configuredSmokeDirectory) {
+    log(`Smoke project directory: ${baseDirectory}`);
+  } else if (smokeSucceeded) {
+    await rm(baseDirectory, { force: true, recursive: true });
+    log(`Removed smoke project directory ${baseDirectory}`);
+  } else {
+    log(`Smoke project preserved for inspection at ${baseDirectory}`);
+  }
 }
