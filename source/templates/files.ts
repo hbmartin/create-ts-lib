@@ -46,7 +46,7 @@ const packageManagerConfig = {
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
 
-const tsgoProbeCommand =
+export const tsgoProbeCommand =
   "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
 
 const readTemplate = (relativePath: string): string =>
@@ -198,7 +198,7 @@ ${getBinName(config.projectName)} --help
 
   return `# \`${config.projectName}\`
 
-${buildLicenseBadge(config.license)}
+${buildReadmeBadges(config)}
 
 ${description}
 
@@ -218,17 +218,41 @@ const output = formatValue({ ready: true });
 ${cliSection}
 ## Development
 
+Lint, format, type-check, dependency and security policy checks, and tests are
+wired into a single command:
+
 \`\`\`bash
-${pmConfig.runPrefix} check
-${pmConfig.runPrefix} release:check
+${pmConfig.runPrefix} check         # lint + dep/security checks + typecheck + coverage
+${pmConfig.runPrefix} test          # run tests
+${pmConfig.runPrefix} build         # build to dist/
+${pmConfig.runPrefix} release:check # package validation + publish dry run
 \`\`\`
 
 \`${pmConfig.runPrefix} security:lint\` prefers \`semgrep\` on PATH and otherwise runs the pinned \`uvx semgrep@1.165.0\` scan.
 
+See [\`AGENTS.md\`](AGENTS.md) for the conventions this project follows.
+
 ## License
 
-${config.license} - ${authorName}.
+[${config.license}](LICENSE) © ${authorName}.
 `;
+};
+
+const buildReadmeBadges = (config: ScaffoldConfig): string => {
+  const badges = [
+    `[![npm version](https://img.shields.io/npm/v/${config.projectName}.svg)](https://www.npmjs.com/package/${config.projectName})`,
+  ];
+
+  if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {
+    const normalizedUrl = stripGitSuffix(config.githubRepoUrl);
+    badges.push(
+      `[![CI](${normalizedUrl}/actions/workflows/ci.yml/badge.svg)](${normalizedUrl}/actions/workflows/ci.yml)`,
+    );
+  }
+
+  badges.push(buildLicenseBadge(config.license));
+
+  return badges.join("\n");
 };
 
 const buildLicenseBadge = (license: LicenseName): string => {
