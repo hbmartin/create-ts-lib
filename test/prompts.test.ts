@@ -17,6 +17,21 @@ describe("createFallbackPrompts", () => {
     );
   });
 
+  it("retries text input until validation passes", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const prompts = createFallbackPrompts(input, output);
+    const result = prompts.input({
+      message: "Project name",
+      validate: (value) => (value === "valid-lib" ? true : "Invalid package name."),
+    });
+
+    input.write("My Lib\n");
+    input.end("valid-lib\n");
+
+    await expect(result).resolves.toBe("valid-lib");
+  });
+
   it("parses confirmations with defaults", async () => {
     await expect(
       createPrompts("yes").confirm({ default: false, message: "Continue?" }),

@@ -14,6 +14,7 @@ import {
   parseCliArguments,
   type WarningSink,
 } from "./cli-helpers.js";
+import { assertValidPackageName, validatePackageName } from "./package-name.js";
 import { loadPromptModule, type PromptModule } from "./prompts.js";
 import { type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
 import {
@@ -26,11 +27,12 @@ import {
 const helpText = `create-ts-lib
 
 Usage:
-  create-ts-lib [directory] [--yes] [--dry-run]
+  create-ts-lib [directory] [--yes] [--dry-run] [--force]
 
 Options:
   --yes, -y    Use detected/default answers without prompting
   --dry-run    Print the scaffold plan without writing files
+  --force      Allow writing into a non-empty target directory
   --help, -h   Show help
   --version, -v Show version
 
@@ -67,28 +69,33 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
-  const config = cliArguments.yes
-    ? buildDefaultConfig(defaults)
-    : await promptForConfig(defaults, await loadPromptModule(warn));
-  const targetDirectory = resolve(
-    cliArguments.directoryArgument ?? deriveDirectoryName(config.projectName),
-  );
+  try {
+    const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
+    const config = cliArguments.yes
+      ? buildDefaultConfig(defaults)
+      : await promptForConfig(defaults, await loadPromptModule(warn));
+    assertValidPackageName(config.projectName);
 
-  printSummary(config, targetDirectory, cliArguments.dryRun);
+    const targetDirectory = resolve(
+      cliArguments.directoryArgument ?? deriveDirectoryName(config.projectName),
+    );
 
-  if (cliArguments.dryRun) {
-    printDryRunFiles(config);
-    return;
-  }
+    printSummary(config, targetDirectory, cliArguments.dryRun);
 
-  await scaffoldProject(config, {
-    progress: createProgressReporter(),
-    targetDirectory,
-  });
+    if (cliArguments.dryRun) {
+      printDryRunFiles(config);
+      return;
+    }
 
-  const runPrefix = config.packageManager === "pnpm" ? "pnpm run" : `${config.packageManager} run`;
-  process.stdout.write(`Created ${config.projectName}
+    await scaffoldProject(config, {
+      force: cliArguments.force,
+      progress: createProgressReporter(),
+      targetDirectory,
+    });
+
+    const runPrefix =
+      config.packageManager === "pnpm" ? "pnpm run" : `${config.packageManager} run`;
+    process.stdout.write(`Created ${config.projectName}
 
 Next steps:
   cd ${basename(targetDirectory)}
@@ -96,6 +103,12 @@ Next steps:
   ${runPrefix} lint
   ${runPrefix} test
 `);
+  } catch (error) {
+    process.stderr.write(
+      `${red("error")} ${error instanceof Error ? error.message : "Scaffolding failed"}\n`,
+    );
+    process.exitCode = 1;
+  }
 };
 
 const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
@@ -104,7 +117,7 @@ const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
   githubRepoUrl: defaults.githubRepoUrl,
   includeCli: false,
   includeCodecov: true,
-  license: "MIT",
+  license: "Apache-2.0",
   packageManager: "pnpm",
   projectName: defaults.projectName,
 });
@@ -116,6 +129,7 @@ const promptForConfig = async (
   const projectName = await promptModule.input({
     default: defaults.projectName,
     message: "Project name",
+    validate: validateProjectNameForPrompt,
   });
   const description = await promptModule.input({
     default: "",
@@ -127,12 +141,12 @@ const promptForConfig = async (
   });
   const license = await promptModule.select<LicenseName>({
     choices: [
+      { name: "Apache-2.0", value: "Apache-2.0" },
       { name: "MIT", value: "MIT" },
       { name: "ISC", value: "ISC" },
-      { name: "Apache-2.0", value: "Apache-2.0" },
       { name: "UNLICENSED", value: "UNLICENSED" },
     ],
-    default: "MIT",
+    default: "Apache-2.0",
     message: "License",
   });
   const githubRepoUrl = await promptModule.input({
@@ -167,6 +181,12 @@ const promptForConfig = async (
     packageManager,
     projectName,
   };
+};
+
+const validateProjectNameForPrompt = (projectName: string): true | string => {
+  const validation = validatePackageName(projectName);
+
+  return validation.valid ? true : validation.errors.join(" ");
 };
 
 const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {

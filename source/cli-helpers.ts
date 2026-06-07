@@ -2,13 +2,14 @@ import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 
+import { stripGitSuffix, stripPackageScope } from "./name-helpers.js";
+
 const execFileAsync = promisify(execFile);
-const gitSuffixRegex = /\.git$/u;
-const packageScopeRegex = /^@[^/]+\//u;
 
 export interface CliArguments {
   directoryArgument?: string;
   dryRun: boolean;
+  force: boolean;
   help: boolean;
   version: boolean;
   yes: boolean;
@@ -21,38 +22,37 @@ export interface DetectedDefaults {
 }
 
 export type WarningSink = (message: string) => void;
+type CliBooleanFlag = "dryRun" | "force" | "help" | "version" | "yes";
 
 interface GitReaders {
   readGitConfigValue(key: string): Promise<string>;
   readGitRemoteOrigin(): Promise<string>;
 }
 
+const cliFlagAliases = new Map<string, CliBooleanFlag>([
+  ["--dry-run", "dryRun"],
+  ["--force", "force"],
+  ["--help", "help"],
+  ["--version", "version"],
+  ["--yes", "yes"],
+  ["-h", "help"],
+  ["-v", "version"],
+  ["-y", "yes"],
+]);
+
 export const parseCliArguments = (args: string[]): CliArguments => {
   const parsed: CliArguments = {
     dryRun: false,
+    force: false,
     help: false,
     version: false,
     yes: false,
   };
 
   for (const argument of args) {
-    if (argument === "--help" || argument === "-h") {
-      parsed.help = true;
-      continue;
-    }
-
-    if (argument === "--version" || argument === "-v") {
-      parsed.version = true;
-      continue;
-    }
-
-    if (argument === "--yes" || argument === "-y") {
-      parsed.yes = true;
-      continue;
-    }
-
-    if (argument === "--dry-run") {
-      parsed.dryRun = true;
+    const flag = cliFlagAliases.get(argument);
+    if (flag) {
+      parsed[flag] = true;
       continue;
     }
 
@@ -70,8 +70,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
   return parsed;
 };
 
-export const deriveDirectoryName = (projectName: string): string =>
-  projectName.replace(packageScopeRegex, "");
+export const deriveDirectoryName = (projectName: string): string => stripPackageScope(projectName);
 
 export const normalizeGitHubUrl = (input: string): string => {
   if (input.length === 0) {
@@ -79,11 +78,11 @@ export const normalizeGitHubUrl = (input: string): string => {
   }
 
   if (input.startsWith("git@github.com:")) {
-    return `https://github.com/${input.slice("git@github.com:".length).replace(gitSuffixRegex, "")}`;
+    return `https://github.com/${stripGitSuffix(input.slice("git@github.com:".length))}`;
   }
 
   if (input.startsWith("https://github.com/")) {
-    return input.replace(gitSuffixRegex, "");
+    return stripGitSuffix(input);
   }
 
   return input;

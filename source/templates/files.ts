@@ -1,12 +1,11 @@
 import { readFileSync } from "node:fs";
 
+import { stripGitSuffix, stripPackageScope } from "../name-helpers.js";
 import { renderBiomeJsonc } from "./biome.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 export type LicenseName = "MIT" | "ISC" | "Apache-2.0" | "UNLICENSED";
 const authorNameRegex = /^(.*?)\s*</u;
-const gitSuffixRegex = /\.git$/u;
-const packageScopeRegex = /^@[^/]+\//u;
 
 /**
  * Options that control the files emitted for a generated TypeScript library.
@@ -29,17 +28,21 @@ export interface GeneratedFile {
 }
 
 interface PackageManagerConfig {
+  addCommand: string;
   runPrefix: string;
 }
 
 const packageManagerConfig = {
   npm: {
+    addCommand: "npm install",
     runPrefix: "npm run",
   },
   pnpm: {
+    addCommand: "pnpm add",
     runPrefix: "pnpm run",
   },
   yarn: {
+    addCommand: "yarn add",
     runPrefix: "yarn run",
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
@@ -76,7 +79,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
     return undefined;
   }
 
-  const normalizedUrl = githubRepoUrl.replace(gitSuffixRegex, "");
+  const normalizedUrl = stripGitSuffix(githubRepoUrl);
   return {
     bugs: {
       url: `${normalizedUrl}/issues`,
@@ -90,6 +93,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
 };
 
 const buildPackageJson = (config: ScaffoldConfig): string => {
+  const pmConfig = packageManagerConfig[config.packageManager];
   const repositoryMetadata = repositoryFields(config.githubRepoUrl);
   const packageJson = {
     name: config.projectName,
@@ -121,10 +125,15 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     scripts: {
       build: "tsc -p tsconfig.build.json",
+      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} test`,
       dev: "tsc --watch",
       format: "oxfmt . --write",
       lint: "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
+      attw: "attw --pack . --profile esm-only",
       prepare: "lefthook install",
+      prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} attw`,
+      publint: "publint --pack npm",
+      "release:check": `${pmConfig.runPrefix} prepublishOnly && npm publish --dry-run --ignore-scripts`,
       test: "vitest run --coverage",
       typecheck: "tsc --noEmit",
     },
@@ -133,6 +142,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       zod: "^4.4.3",
     },
     devDependencies: {
+      "@arethetypeswrong/cli": "^0.18.3",
       "@biomejs/biome": "^2.4.16",
       "@sindresorhus/tsconfig": "^8.1.0",
       "@types/node": "^22",
@@ -153,6 +163,59 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
   };
 
   return `${JSON.stringify(packageJson, null, 2)}\n`;
+};
+
+const buildReadme = (config: ScaffoldConfig): string => {
+  const pmConfig = packageManagerConfig[config.packageManager];
+  const description = config.description || "A TypeScript library.";
+  const authorName = extractAuthorName(config.author);
+  const cliSection = config.includeCli
+    ? `
+## CLI
+
+\`\`\`bash
+${getBinName(config.projectName)} --help
+\`\`\`
+`
+    : "";
+
+  return `# \`${config.projectName}\`
+
+${buildLicenseBadge(config.license)}
+
+${description}
+
+## Install
+
+\`\`\`bash
+${pmConfig.addCommand} ${config.projectName}
+\`\`\`
+
+## Usage
+
+\`\`\`ts
+import { formatValue } from "${config.projectName}";
+
+const output = formatValue({ ready: true });
+\`\`\`
+${cliSection}
+## Development
+
+\`\`\`bash
+${pmConfig.runPrefix} check
+${pmConfig.runPrefix} release:check
+\`\`\`
+
+## License
+
+${config.license} - ${authorName}.
+`;
+};
+
+const buildLicenseBadge = (license: LicenseName): string => {
+  const escapedLicense = license.replaceAll("-", "--");
+
+  return `[![License: ${license}](https://img.shields.io/badge/license-${escapedLicense}-blue.svg)](LICENSE)`;
 };
 
 const buildCiWorkflow = (config: ScaffoldConfig): string => {
@@ -179,6 +242,8 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
   });
 };
 
+const buildReleaseWorkflow = (): string => renderTemplate("github/release.yml.tmpl");
+
 const buildLicense = (license: LicenseName, author: string): string => {
   const year = new Date().getUTCFullYear().toString();
   const authorName = extractAuthorName(author);
@@ -190,8 +255,7 @@ const buildLicense = (license: LicenseName, author: string): string => {
   });
 };
 
-export const getBinName = (projectName: string): string =>
-  projectName.replace(packageScopeRegex, "");
+export const getBinName = (projectName: string): string => stripPackageScope(projectName);
 
 export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   const pmConfig = packageManagerConfig[config.packageManager];
@@ -221,6 +285,10 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     {
       content: buildPackageJson(config),
       path: "package.json",
+    },
+    {
+      content: buildReadme(config),
+      path: "README.md",
     },
     ...(config.packageManager === "pnpm"
       ? [
@@ -278,6 +346,10 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     files.push({
       content: buildCiWorkflow(config),
       path: ".github/workflows/ci.yml",
+    });
+    files.push({
+      content: buildReleaseWorkflow(),
+      path: ".github/workflows/release.yml",
     });
   }
 

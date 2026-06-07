@@ -1,8 +1,9 @@
 import { execFile, spawn } from "node:child_process";
-import { access, chmod, mkdir, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { assertValidPackageName } from "./package-name.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
 
 const execFileAsync = promisify(execFile);
@@ -15,6 +16,7 @@ export interface ScaffoldProgress {
 }
 
 export interface ScaffoldOptions {
+  force?: boolean;
   postScaffold?: boolean;
   progress?: ScaffoldProgress;
   targetDirectory: string;
@@ -27,7 +29,10 @@ export const scaffoldProject = async (
   config: ScaffoldConfig,
   options: ScaffoldOptions,
 ): Promise<void> => {
+  assertValidPackageName(config.projectName);
+
   const targetDirectory = resolve(options.targetDirectory);
+  await assertTargetDirectoryIsSafe(targetDirectory, options.force === true);
   await mkdir(targetDirectory, { recursive: true });
 
   for (const file of buildProjectFiles(config)) {
@@ -76,6 +81,26 @@ export const scaffoldProject = async (
   }
 };
 
+const assertTargetDirectoryIsSafe = async (
+  targetDirectory: string,
+  force: boolean,
+): Promise<void> => {
+  try {
+    const existingEntries = await readdir(targetDirectory);
+    if (!force && existingEntries.length > 0) {
+      throw new Error(
+        `Target directory is not empty: ${targetDirectory}. Re-run with --force to overwrite generated files.`,
+      );
+    }
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return;
+    }
+
+    throw error;
+  }
+};
+
 export const initializeGitRepositoryIfNeeded = async (cwd: string): Promise<void> => {
   const insideRepository = await isInsideGitRepository(cwd);
 
@@ -93,6 +118,9 @@ const isInsideGitRepository = async (cwd: string): Promise<boolean> => {
     return false;
   }
 };
+
+const isNodeError = (error: unknown): error is NodeJS.ErrnoException =>
+  error instanceof Error && "code" in error;
 
 export const runPackageManagerCommand = async (
   packageManager: PackageManager,

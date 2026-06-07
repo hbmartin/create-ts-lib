@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -40,8 +40,13 @@ interface GeneratedPackageJson {
     url: string;
   };
   scripts: {
+    attw: string;
+    check: string;
     format: string;
     lint: string;
+    prepublishOnly: string;
+    publint: string;
+    "release:check": string;
   } & Record<string, string>;
 }
 
@@ -50,12 +55,14 @@ interface GeneratedOxfmtConfig {
 }
 
 describe("buildProjectFiles", () => {
-  it("includes GitHub CI workflow without release-please files", () => {
+  it("includes GitHub CI and release workflows without release-please files", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const ciWorkflow = files.find((file) => file.path === ".github/workflows/ci.yml");
+    const releaseWorkflow = files.find((file) => file.path === ".github/workflows/release.yml");
 
     expect(filePaths).toContain(".github/workflows/ci.yml");
+    expect(filePaths).toContain(".github/workflows/release.yml");
     expect(filePaths).not.toContain(".github/workflows/release-please.yml");
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
@@ -65,9 +72,17 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain("pnpm run lint");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
+    expect(releaseWorkflow?.content).toContain("types: [published]");
+    expect(releaseWorkflow?.content).toContain("id-token: write");
+    expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
+    expect(releaseWorkflow?.content).toContain("pnpm run release:check");
+    expect(releaseWorkflow?.content).toContain('TAG="next"');
+    expect(releaseWorkflow?.content).toContain(
+      'npm publish --tag "$TAG" --access public --provenance',
+    );
   });
 
-  it("emits Lefthook and Oxc tooling instead of Husky and commitlint", () => {
+  it("emits Lefthook and Oxc tooling", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
@@ -77,20 +92,26 @@ describe("buildProjectFiles", () => {
     expect(filePaths).toContain("lefthook.yml");
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
-    expect(filePaths).not.toContain(".husky/commit-msg");
-    expect(filePaths).not.toContain("commitlint.config.js");
     expect(packageJson.devDependencies).toMatchObject({
+      "@arethetypeswrong/cli": expect.any(String),
       "@vitest/coverage-v8": expect.any(String),
       lefthook: expect.any(String),
       oxfmt: expect.any(String),
       oxlint: expect.any(String),
+      publint: expect.any(String),
     });
     expect(packageJson.dependencies).toMatchObject({
       zod: "^4.4.3",
     });
     expect(packageJson.devDependencies).not.toHaveProperty("@vitest/coverage-istanbul");
-    expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/cli");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
+    expect(packageJson.scripts.check).toBe("pnpm run lint && pnpm run typecheck && pnpm run test");
+    expect(packageJson.scripts.prepublishOnly).toContain("pnpm run check");
+    expect(packageJson.scripts.publint).toBe("publint --pack npm");
+    expect(packageJson.scripts.attw).toBe("attw --pack . --profile esm-only");
+    expect(packageJson.scripts["release:check"]).toContain(
+      "npm publish --dry-run --ignore-scripts",
+    );
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
     expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json"]);
@@ -130,6 +151,31 @@ describe("buildProjectFiles", () => {
     expect(pnpmWorkspaceLines).toContain('- "."');
   });
 
+  it("generates a README with install, usage, license, and optional CLI docs", () => {
+    const files = buildProjectFiles(baseConfig);
+    const readme = findGeneratedFile(files, "README.md");
+    const cliReadme = findGeneratedFile(
+      buildProjectFiles({
+        ...baseConfig,
+        includeCli: true,
+        projectName: "@scope/example-cli",
+      }),
+      "README.md",
+    );
+
+    expect(readme.content).toContain("# `example-lib`");
+    expect(readme.content).toContain(
+      "[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)",
+    );
+    expect(readme.content).toContain("A test library");
+    expect(readme.content).toContain("pnpm add example-lib");
+    expect(readme.content).toContain('import { formatValue } from "example-lib";');
+    expect(readme.content).toContain("MIT - Harold Martin.");
+    expect(readme.content).not.toContain("## CLI");
+    expect(cliReadme.content).toContain("## CLI");
+    expect(cliReadme.content).toContain("example-cli --help");
+  });
+
   it("adds CLI files and binary metadata when requested", () => {
     const files = buildProjectFiles({
       ...baseConfig,
@@ -158,6 +204,7 @@ describe("buildProjectFiles", () => {
     }).map((file) => file.path);
 
     expect(filePaths).not.toContain(".github/workflows/ci.yml");
+    expect(filePaths).not.toContain(".github/workflows/release.yml");
   });
 
   it.each(["npm", "yarn"] as const)("skips GitHub workflows for %s projects", (packageManager) => {
@@ -167,6 +214,7 @@ describe("buildProjectFiles", () => {
     }).map((file) => file.path);
 
     expect(filePaths).not.toContain(".github/workflows/ci.yml");
+    expect(filePaths).not.toContain(".github/workflows/release.yml");
   });
 
   it("renders parseable JSON and JSONC config files", () => {
@@ -231,6 +279,79 @@ describe("scaffoldProject", () => {
 
     expect(packageJson).toContain(`"name": "example-lib"`);
     expect(sourceFiles).toContain("index.ts");
+  });
+
+  it("writes into an existing empty target directory", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-empty-"));
+    const targetDirectory = join(tempDirectory, "example-lib");
+    await mkdir(targetDirectory);
+
+    await scaffoldProject(
+      {
+        ...baseConfig,
+        githubRepoUrl: "",
+      },
+      {
+        postScaffold: false,
+        targetDirectory,
+      },
+    );
+
+    await expect(readFile(join(targetDirectory, "package.json"), "utf8")).resolves.toContain(
+      `"name": "example-lib"`,
+    );
+  });
+
+  it("rejects non-empty target directories unless force is enabled", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-non-empty-"));
+    const targetDirectory = join(tempDirectory, "example-lib");
+    await mkdir(targetDirectory);
+    await writeFile(join(targetDirectory, "package.json"), '{"name":"existing"}\n', "utf8");
+
+    await expect(
+      scaffoldProject(baseConfig, {
+        postScaffold: false,
+        targetDirectory,
+      }),
+    ).rejects.toThrow("Target directory is not empty");
+
+    await expect(readFile(join(targetDirectory, "package.json"), "utf8")).resolves.toBe(
+      '{"name":"existing"}\n',
+    );
+  });
+
+  it("allows overwriting generated paths in non-empty targets when force is enabled", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-force-"));
+    const targetDirectory = join(tempDirectory, "example-lib");
+    await mkdir(targetDirectory);
+    await writeFile(join(targetDirectory, "package.json"), '{"name":"existing"}\n', "utf8");
+
+    await scaffoldProject(baseConfig, {
+      force: true,
+      postScaffold: false,
+      targetDirectory,
+    });
+
+    await expect(readFile(join(targetDirectory, "package.json"), "utf8")).resolves.toContain(
+      `"name": "example-lib"`,
+    );
+  });
+
+  it("rejects invalid project names through the programmatic API", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-invalid-name-"));
+
+    await expect(
+      scaffoldProject(
+        {
+          ...baseConfig,
+          projectName: "@scope/",
+        },
+        {
+          postScaffold: false,
+          targetDirectory: join(tempDirectory, "example-lib"),
+        },
+      ),
+    ).rejects.toThrow('Invalid project name "@scope/"');
   });
 });
 
