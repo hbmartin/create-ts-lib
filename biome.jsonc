@@ -162,6 +162,7 @@
         "scripts/**/*.mjs",
         "source/cli.ts",
         "source/cli-helpers.ts",
+        "source/github-cli.ts",
         "source/prompts.ts",
         "source/scaffold.ts",
         "source/templates/**/*.ts",

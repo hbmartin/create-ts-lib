@@ -20,6 +20,9 @@ importers:
       yoctocolors:
         specifier: ^2.1.2
         version: 2.1.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: ^0.18.3
@@ -1555,6 +1558,9 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@andrewbranch/untar.js@1.0.3': {}
@@ -2741,3 +2747,5 @@ snapshots:
       yargs-parser: 20.2.9
 
   yoctocolors@2.1.2: {}
+
+  zod@4.4.3: {}
