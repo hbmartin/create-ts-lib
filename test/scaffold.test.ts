@@ -29,6 +29,9 @@ const baseConfig: ScaffoldConfig = {
   projectName: "example-lib",
 };
 
+const tsgoProbeCommand =
+  "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
+
 interface GeneratedPackageJson {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
@@ -50,6 +53,8 @@ interface GeneratedPackageJson {
     "release:check": string;
     "security:lint": string;
     "size:report": string;
+    test: string;
+    "test:coverage": string;
     "types:lint": string;
     "verify:artifacts": string;
     "verify:package": string;
@@ -76,6 +81,7 @@ describe("buildProjectFiles", () => {
     const filePaths = files.map((file) => file.path);
     const ciWorkflow = files.find((file) => file.path === ".github/workflows/ci.yml");
     const releaseWorkflow = files.find((file) => file.path === ".github/workflows/release.yml");
+    const ciWorkflowContent = ciWorkflow?.content ?? "";
 
     expect(filePaths).toContain(".github/workflows/ci.yml");
     expect(filePaths).toContain(".github/workflows/release.yml");
@@ -91,6 +97,14 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
     expect(ciWorkflow?.content).toContain("pnpm run publint");
     expect(ciWorkflow?.content).toContain("pnpm run check");
+    expect(ciWorkflowContent).toContain("name: TypeScript 7 compatibility probe");
+    expect(ciWorkflowContent).toContain(tsgoProbeCommand);
+    expect(ciWorkflowContent.indexOf("pnpm run check")).toBeLessThan(
+      ciWorkflowContent.indexOf(tsgoProbeCommand),
+    );
+    expect(ciWorkflowContent.indexOf(tsgoProbeCommand)).toBeLessThan(
+      ciWorkflowContent.indexOf("pnpm run build"),
+    );
     expect(ciWorkflow?.content).not.toContain("python3 -m pip");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
@@ -117,6 +131,7 @@ describe("buildProjectFiles", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const agents = findGeneratedFile(files, "AGENTS.md");
+    const biomeFile = findGeneratedFile(files, "biome.jsonc");
     const biomeConfig = parseGeneratedJsonc(files, "biome.jsonc") as GeneratedBiomeConfig;
     const dependencyCruiser = findGeneratedFile(files, ".dependency-cruiser.cjs");
     const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
@@ -148,8 +163,13 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).not.toHaveProperty("@vitest/coverage-istanbul");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.devDependencies).not.toHaveProperty("semgrep");
+    expect(packageJson.devDependencies).not.toHaveProperty("@typescript/native-preview");
+    expect(Object.keys(packageJson.scripts)).not.toContain("typecheck:tsgo");
+    expect(Object.values(packageJson.scripts).some((script) => script.includes("tsgo"))).toBe(
+      false,
+    );
     expect(packageJson.scripts.check).toBe(
-      "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test",
+      "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
     );
     expect(packageJson.scripts["deps:lint"]).toBe(
       "depcruise --config .dependency-cruiser.cjs source test",
@@ -162,6 +182,8 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts["release:check"]).toContain("pnpm run verify:package");
     expect(packageJson.scripts["security:lint"]).toBe("node scripts/security-lint.mjs");
     expect(packageJson.scripts["size:report"]).toBe("npm pack --dry-run --json");
+    expect(packageJson.scripts.test).toBe("vitest run");
+    expect(packageJson.scripts["test:coverage"]).toBe("vitest run --coverage");
     expect(packageJson.scripts["types:lint"]).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["verify:artifacts"]).toContain("node -e");
     expect(packageJson.scripts["verify:artifacts"]).toContain("dist/index.js");
@@ -174,6 +196,7 @@ describe("buildProjectFiles", () => {
     expect(agents.content).toContain("uvx semgrep@1.165.0");
     expect(dependencyCruiser.content).toContain("source-not-to-test");
     expect(dependencyCruiser.content).toContain("source-not-to-dev-dependencies");
+    expect(biomeFile.content).toContain("JSON, JSONC, and YAML stay out of Biome");
     expect(biomeConfig.files.includes).toEqual(
       expect.arrayContaining(["!*.jsonc", "!**/*.jsonc", "!*.yml", "!**/*.yml"]),
     );
@@ -189,12 +212,17 @@ describe("buildProjectFiles", () => {
     expect(semgrep.content).toContain("no-eval-like-execution");
     expect(semgrep.content).toContain("no-child-process-exec");
     expect(semgrep.content).toContain("no-shell-true-process");
+    expect(semgrep.content).toContain("metavariable-regex");
+    expect(semgrep.content).toContain(
+      "^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$",
+    );
     expect(semgrep.content).toContain("no-weak-crypto-hash");
     expect(semgrep.content).toContain("no-math-random-security-sensitive");
     expect(securityLint.content).toContain('semgrepVersion = "1.165.0"');
     expect(securityLint.content).toContain('runCommand("uvx"');
     expect(securityLint.content).toContain("SECURITY_LINT_FORCE_UVX");
     expect(securityLint.content).toContain("node:child_process");
+    expect(securityLint.content).not.toContain("console.");
     expect(vitestConfig.content).toContain(`provider: "v8"`);
   });
 

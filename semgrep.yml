@@ -39,7 +39,11 @@ rules:
       - pattern: 'spawn($COMMAND, $ARGS, { ..., shell: true, ... })'
       - pattern: 'spawnSync($COMMAND, $ARGS, { ..., shell: true, ... })'
       - pattern: 'execa($COMMAND, $ARGS, { ..., shell: true, ... })'
-      - pattern: '$PROCESS($COMMAND, { ..., shell: true, ... })'
+      - patterns:
+          - pattern: '$PROCESS($COMMAND, { ..., shell: true, ... })'
+          - metavariable-regex:
+              metavariable: $PROCESS
+              regex: ^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$
 
   - id: no-weak-crypto-hash
     message: Avoid weak cryptographic hashes. Use SHA-256 or stronger for security-sensitive hashing.

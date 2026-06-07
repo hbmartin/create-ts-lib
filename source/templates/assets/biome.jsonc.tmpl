@@ -13,6 +13,7 @@
       "!coverage",
       "!.cache",
       "!node_modules",
+      // JSON, JSONC, and YAML stay out of Biome to avoid oxfmt/Biome ownership conflicts.
       "!*.json",
       "!**/*.json",
       "!*.jsonc",

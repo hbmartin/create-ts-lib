@@ -17,6 +17,21 @@
       "matchStrings": ["\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\": \"\\^(?<currentValue>[^\"]+)\""],
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track pinned TypeScript native-preview probes in CI workflows.",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/",
+        "/^source/templates/assets/github/ci\\.yml\\.tmpl$/",
+        "/^source/templates/files\\.ts$/"
+      ],
+      "matchStrings": [
+        "@typescript/native-preview@(?<currentValue>[^\\s]+)\\s+dlx\\s+tsgo"
+      ],
+      "depNameTemplate": "@typescript/native-preview",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
     }
   ]
 }
