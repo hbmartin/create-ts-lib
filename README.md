@@ -126,7 +126,7 @@ The generator asks for:
 | Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                        |
 | License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                         |
 | GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes                             |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI                                  |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                  |
 | Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                            |
 | Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                              |
 
@@ -188,7 +188,8 @@ Generated packages include:
 - Vitest with v8 coverage and 80% thresholds
 - Lefthook with a lint-only `pre-commit` hook
 - `zod` as a default runtime dependency
-- `meow` and CLI coverage only when CLI support is enabled
+- `meow` and CLI coverage only when CLI support is enabled, including a CLI test
+  mock with default `flags` and `input`
 - `@arethetypeswrong/cli` and `publint` release checks
 - `check`, `deps:lint`, `security:lint`, `prepublishOnly`, `publint`,
   `types:lint`, `verify:artifacts`, `verify:package`, `size:report`, and
@@ -209,7 +210,7 @@ Before writing files, the generator rejects non-empty target directories unless 
 3. `<package-manager> run build`
 4. `<package-manager> run test`
 
-The CLI prints a summary before writing and shows progress during post-scaffold setup. In non-TTY or CI environments it uses plain step logs instead of spinners.
+The CLI prints a summary before writing and shows progress during post-scaffold setup. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
 
 ## Next Steps After Scaffolding
 

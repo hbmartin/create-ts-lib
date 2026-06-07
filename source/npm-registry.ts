@@ -1,19 +1,35 @@
 const npmRegistryUrl = "https://registry.npmjs.org/";
+const registryRequestTimeoutMilliseconds = 3000;
 
 type RegistryFetch = (url: string, init: RequestInit) => Promise<{ status: number }>;
 
-export type NpmPackageNameAvailabilityStatus = "available" | "exists" | "unknown";
-
-export interface NpmPackageNameAvailability {
-  error?: string;
+interface NpmPackageNameAvailabilityBase {
   packageName: string;
-  status: NpmPackageNameAvailabilityStatus;
-  statusCode?: number;
 }
+
+export type NpmPackageNameAvailabilityUnknown =
+  | (NpmPackageNameAvailabilityBase & {
+      error: string;
+      status: "unknown";
+      statusCode?: never;
+    })
+  | (NpmPackageNameAvailabilityBase & {
+      error?: never;
+      status: "unknown";
+      statusCode: number;
+    });
+
+export type NpmPackageNameAvailability =
+  | (NpmPackageNameAvailabilityBase & { status: "available" })
+  | (NpmPackageNameAvailabilityBase & { status: "exists" })
+  | NpmPackageNameAvailabilityUnknown;
+
+export type NpmPackageNameAvailabilityStatus = NpmPackageNameAvailability["status"];
 
 export interface CheckNpmPackageNameAvailabilityOptions {
   fetch?: RegistryFetch;
   registryUrl?: string;
+  timeoutMilliseconds?: number;
 }
 
 export const checkNpmPackageNameAvailability = async (
@@ -21,14 +37,27 @@ export const checkNpmPackageNameAvailability = async (
   options: CheckNpmPackageNameAvailabilityOptions = {},
 ): Promise<NpmPackageNameAvailability> => {
   const fetchPackage = options.fetch ?? fetch;
-  const url = buildPackageMetadataUrl(packageName, options.registryUrl ?? npmRegistryUrl);
+  const abortController = new AbortController();
+  const timeoutMilliseconds = options.timeoutMilliseconds ?? registryRequestTimeoutMilliseconds;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      abortController.abort();
+      reject(new Error("Request timed out"));
+    }, timeoutMilliseconds);
+  });
 
   try {
-    const response = await fetchPackage(url, {
-      headers: {
-        Accept: "application/json",
-      },
-    });
+    const url = buildPackageMetadataUrl(packageName, options.registryUrl ?? npmRegistryUrl);
+    const response = await Promise.race([
+      fetchPackage(url, {
+        headers: {
+          Accept: "application/json",
+        },
+        signal: abortController.signal,
+      }),
+      timeout,
+    ]);
 
     if (response.status === 200) {
       return { packageName, status: "exists" };
@@ -40,11 +69,24 @@ export const checkNpmPackageNameAvailability = async (
 
     return { packageName, status: "unknown", statusCode: response.status };
   } catch (error) {
+    const isAbortError = error instanceof Error && error.name === "AbortError";
+    let errorMessage = "Unknown registry error";
+
+    if (isAbortError) {
+      errorMessage = "Request timed out";
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
     return {
-      error: error instanceof Error ? error.message : "Unknown registry error",
+      error: errorMessage,
       packageName,
       status: "unknown",
     };
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 };
 

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
 import type { DetectedDefaults } from "../source/cli-helpers.js";
 import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
+import { PostScaffoldSetupError, type ScaffoldProgress } from "../source/scaffold.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -27,7 +28,11 @@ interface RunCliOptions {
     }): Promise<string>;
     select(options: { message: string }): Promise<string>;
   };
+  ora?: (message: string) => {
+    start(): { fail(message: string): void; succeed(message: string): void };
+  };
   scaffoldProject?: ReturnType<typeof vi.fn>;
+  stdoutIsTTY?: boolean;
 }
 
 afterEach(() => {
@@ -254,6 +259,58 @@ describe("cli entrypoint", () => {
     expect(promptModule.select).toHaveBeenCalledTimes(3);
   });
 
+  it("warns and continues when interactive npm availability cannot be checked", async () => {
+    const checkNpmPackageNameAvailability = vi.fn(
+      async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        error: "network unavailable",
+        packageName,
+        status: "unknown",
+      }),
+    );
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(
+        async ({
+          message,
+          validate,
+        }: {
+          default?: string;
+          message: string;
+          validate?: (value: string) => boolean | string;
+        }) => {
+          if (message === "Project name") {
+            expect(validate?.("network-lib")).toBe(true);
+            return "network-lib";
+          }
+
+          if (message === "Description") {
+            return "Prompted description";
+          }
+
+          if (message === "Author") {
+            return "Prompt Author <prompt@example.com>";
+          }
+
+          return "https://github.com/hbmartin/network-lib";
+        },
+      ),
+      select: vi.fn(async ({ message }: { message: string }) =>
+        message === "License" ? "Apache-2.0" : "pnpm",
+      ),
+    };
+
+    const result = await runCli(["network-lib", "--dry-run"], {
+      checkNpmPackageNameAvailability,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain('Could not check npm availability for "network-lib"');
+    expect(result.stderr).toContain("network unavailable");
+    expect(result.stdout).toContain("Project: network-lib");
+    expect(promptModule.input).toHaveBeenCalledTimes(4);
+  });
+
   it("warns and continues in --yes mode when the npm package name exists", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
     const checkNpmPackageNameAvailability = vi.fn(
@@ -311,6 +368,130 @@ describe("cli entrypoint", () => {
     );
   });
 
+  it.each([
+    {
+      excludedCommands: [],
+      includedCommands: ["pnpm install", "pnpm run build", "pnpm run test"],
+      step: "install",
+    },
+    {
+      excludedCommands: ["pnpm install"],
+      includedCommands: ["pnpm run build", "pnpm run test"],
+      step: "build",
+    },
+    {
+      excludedCommands: ["pnpm install", "pnpm run build"],
+      includedCommands: ["pnpm run test"],
+      step: "test",
+    },
+  ] as const)(
+    "prints recovery steps when post-scaffold $step setup fails",
+    async ({ excludedCommands, includedCommands, step }) => {
+      const scaffoldProject = vi.fn(
+        async (
+          _config: unknown,
+          options: {
+            targetDirectory: string;
+          },
+        ) => {
+          throw new PostScaffoldSetupError({
+            cause: new Error(`pnpm ${step} failed`),
+            packageManager: "pnpm",
+            step,
+            targetDirectory: options.targetDirectory,
+          });
+        },
+      );
+
+      const result = await runCli(["demo-lib", "--yes"], { scaffoldProject });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).not.toContain("Created demo-lib");
+      expect(result.stderr).toContain(`pnpm ${step} failed`);
+      expect(result.stderr).toContain("Project files were created at");
+      expect(result.stderr).toContain("/demo-lib");
+      expect(result.stderr).toContain("cd ");
+      for (const command of includedCommands) {
+        expect(result.stderr).toContain(`  ${command}\n`);
+      }
+      for (const command of excludedCommands) {
+        expect(result.stderr).not.toContain(`  ${command}\n`);
+      }
+    },
+  );
+
+  it("does not print recovery steps for scaffold write failures", async () => {
+    const scaffoldProject = vi.fn(async () => {
+      throw new Error("Target directory is not empty");
+    });
+
+    const result = await runCli(["demo-lib", "--yes"], { scaffoldProject });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Target directory is not empty");
+    expect(result.stderr).not.toContain("Project files were created at");
+    expect(result.stderr).not.toContain("pnpm install");
+  });
+
+  it("reports scaffold progress without a TTY", async () => {
+    const scaffoldProject = vi.fn(
+      async (
+        _config: unknown,
+        options: {
+          progress?: ScaffoldProgress;
+        },
+      ) => {
+        options.progress?.start("Preparing git repository");
+        options.progress?.info("Using cached packages");
+        options.progress?.succeed("Git repository ready");
+        options.progress?.fail("Installing dependencies");
+      },
+    );
+
+    const result = await runCli(["demo-lib", "--yes"], { scaffoldProject });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("start Preparing git repository");
+    expect(result.stdout).toContain("info Using cached packages");
+    expect(result.stdout).toContain("done Git repository ready");
+    expect(result.stdout).toContain("failed Installing dependencies");
+  });
+
+  it("reports scaffold progress with an ora spinner when stdout is a TTY", async () => {
+    const spinner = {
+      fail: vi.fn(),
+      succeed: vi.fn(),
+    };
+    const ora = vi.fn(() => ({
+      start: vi.fn(() => spinner),
+    }));
+    const scaffoldProject = vi.fn(
+      async (
+        _config: unknown,
+        options: {
+          progress?: ScaffoldProgress;
+        },
+      ) => {
+        options.progress?.start("Installing dependencies");
+        options.progress?.succeed("Dependencies installed");
+        options.progress?.start("Testing generated project");
+        options.progress?.fail("Testing generated project");
+      },
+    );
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      ora,
+      scaffoldProject,
+      stdoutIsTTY: true,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(ora).toHaveBeenCalledWith("Installing dependencies");
+    expect(ora).toHaveBeenCalledWith("Testing generated project");
+    expect(spinner.succeed).toHaveBeenCalledWith("Dependencies installed");
+    expect(spinner.fail).toHaveBeenCalledWith("Testing generated project");
+  });
+
   it("passes --force to the scaffold operation", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
 
@@ -329,6 +510,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   vi.doUnmock("../source/npm-registry.js");
   vi.doUnmock("../source/prompts.js");
   vi.doUnmock("../source/scaffold.js");
+  vi.doUnmock("ora");
 
   vi.doMock("../source/cli-helpers.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("../source/cli-helpers.js")>();
@@ -361,7 +543,14 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
 
   if (options.scaffoldProject) {
     vi.doMock("../source/scaffold.js", () => ({
+      PostScaffoldSetupError,
       scaffoldProject: options.scaffoldProject,
+    }));
+  }
+
+  if (options.ora) {
+    vi.doMock("ora", () => ({
+      default: options.ora,
     }));
   }
 
@@ -378,6 +567,13 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
 
   process.argv = [process.execPath, "create-ts-lib", ...args];
   process.exitCode = undefined;
+  const originalStdoutIsTTY = process.stdout.isTTY;
+  if (options.stdoutIsTTY !== undefined) {
+    Object.defineProperty(process.stdout, "isTTY", {
+      configurable: true,
+      value: options.stdoutIsTTY,
+    });
+  }
 
   try {
     await import("../source/cli.js");
@@ -387,6 +583,12 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
       stdout: stdout.join(""),
     };
   } finally {
+    if (options.stdoutIsTTY !== undefined) {
+      Object.defineProperty(process.stdout, "isTTY", {
+        configurable: true,
+        value: originalStdoutIsTTY,
+      });
+    }
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   }

@@ -16,11 +16,11 @@ import {
 } from "./cli-helpers.js";
 import {
   checkNpmPackageNameAvailability,
-  type NpmPackageNameAvailability,
+  type NpmPackageNameAvailabilityUnknown,
 } from "./npm-registry.js";
 import { assertValidPackageName, validatePackageName } from "./package-name.js";
 import { loadPromptModule, type PromptModule } from "./prompts.js";
-import { type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
+import { PostScaffoldSetupError, type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
 import {
   buildProjectFiles,
   type LicenseName,
@@ -100,8 +100,7 @@ const main = async (): Promise<void> => {
       targetDirectory,
     });
 
-    const runPrefix =
-      config.packageManager === "pnpm" ? "pnpm run" : `${config.packageManager} run`;
+    const runPrefix = getPackageManagerRunPrefix(config.packageManager);
     process.stdout.write(`Created ${config.projectName}
 
 Next steps:
@@ -111,12 +110,57 @@ Next steps:
   ${runPrefix} test
 `);
   } catch (error) {
+    if (error instanceof PostScaffoldSetupError) {
+      process.stderr.write(`${red("error")} ${error.message}\n\n`);
+      printPostScaffoldRecovery(error);
+      process.exitCode = 1;
+      return;
+    }
+
     process.stderr.write(
       `${red("error")} ${error instanceof Error ? error.message : "Scaffolding failed"}\n`,
     );
     process.exitCode = 1;
   }
 };
+
+const printPostScaffoldRecovery = (error: PostScaffoldSetupError): void => {
+  process.stderr.write(
+    `${yellow("recovery")} Project files were created at ${error.targetDirectory}, but setup did not finish.\n`,
+  );
+  process.stderr.write("Run these commands to retry the failed setup steps:\n");
+  process.stderr.write(`  cd ${formatShellArgument(error.targetDirectory)}\n`);
+
+  for (const command of buildPostScaffoldRecoveryCommands(error)) {
+    process.stderr.write(`  ${command}\n`);
+  }
+};
+
+const buildPostScaffoldRecoveryCommands = (error: PostScaffoldSetupError): string[] => {
+  const runPrefix = getPackageManagerRunPrefix(error.packageManager);
+  const installCommand = `${error.packageManager} install`;
+  const buildCommand = `${runPrefix} build`;
+  const testCommand = `${runPrefix} test`;
+
+  switch (error.step) {
+    case "git":
+      return ["git init", installCommand, buildCommand, testCommand];
+    case "install":
+      return [installCommand, buildCommand, testCommand];
+    case "build":
+      return [buildCommand, testCommand];
+    case "test":
+      return [testCommand];
+  }
+};
+
+const getPackageManagerRunPrefix = (packageManager: PackageManager): string =>
+  packageManager === "pnpm" ? "pnpm run" : `${packageManager} run`;
+
+const safeShellArgumentRegex = /^[\w./:@%+=,-]+$/;
+
+const formatShellArgument = (value: string): string =>
+  safeShellArgumentRegex.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 
 const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
   author: defaults.author,
@@ -256,15 +300,15 @@ const warnForNpmPackageNameAvailability = async (
 const formatNpmPackageNameExistsWarning = (packageName: string): string =>
   `Package name "${packageName}" already exists on npm.`;
 
-const formatNpmAvailabilityUnknownWarning = (availability: NpmPackageNameAvailability): string => {
+const formatNpmAvailabilityUnknownWarning = (
+  availability: NpmPackageNameAvailabilityUnknown,
+): string => {
   const detail =
     availability.statusCode === undefined
       ? availability.error
       : `npm registry returned HTTP ${availability.statusCode}`;
 
-  return detail
-    ? `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`
-    : `Could not check npm availability for "${availability.packageName}"; continuing.`;
+  return `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`;
 };
 
 const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {

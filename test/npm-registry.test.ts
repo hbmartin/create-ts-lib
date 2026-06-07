@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { checkNpmPackageNameAvailability } from "../source/npm-registry.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("checkNpmPackageNameAvailability", () => {
   it("reports existing package names", async () => {
@@ -12,9 +16,13 @@ describe("checkNpmPackageNameAvailability", () => {
       packageName: "react",
       status: "exists",
     });
-    expect(fetchPackage).toHaveBeenCalledWith("https://registry.npmjs.org/react", {
-      headers: { Accept: "application/json" },
-    });
+    expect(fetchPackage).toHaveBeenCalledWith(
+      "https://registry.npmjs.org/react",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it("reports available package names", async () => {
@@ -26,9 +34,13 @@ describe("checkNpmPackageNameAvailability", () => {
       packageName: "@scope/example-lib",
       status: "available",
     });
-    expect(fetchPackage).toHaveBeenCalledWith("https://registry.npmjs.org/%40scope%2Fexample-lib", {
-      headers: { Accept: "application/json" },
-    });
+    expect(fetchPackage).toHaveBeenCalledWith(
+      "https://registry.npmjs.org/%40scope%2Fexample-lib",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it("reports unexpected registry statuses as unknown", async () => {
@@ -55,5 +67,76 @@ describe("checkNpmPackageNameAvailability", () => {
       packageName: "example-lib",
       status: "unknown",
     });
+  });
+
+  it("reports timed out registry requests as unknown when fetch ignores abort", async () => {
+    vi.useFakeTimers();
+    const fetchPackage = vi.fn(
+      (_url: string, _init: RequestInit) => new Promise<{ status: number }>(() => undefined),
+    );
+
+    const availability = checkNpmPackageNameAvailability("example-lib", {
+      fetch: fetchPackage,
+      timeoutMilliseconds: 10,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    await expect(availability).resolves.toEqual({
+      error: "Request timed out",
+      packageName: "example-lib",
+      status: "unknown",
+    });
+    expect(fetchPackage.mock.calls[0]?.[1].signal?.aborted).toBe(true);
+  });
+
+  it("reports thrown non-error values as unknown registry errors", async () => {
+    const fetchPackage = vi.fn(() => Promise.reject("network unavailable"));
+
+    await expect(
+      checkNpmPackageNameAvailability("example-lib", { fetch: fetchPackage }),
+    ).resolves.toEqual({
+      error: "Unknown registry error",
+      packageName: "example-lib",
+      status: "unknown",
+    });
+  });
+
+  it("uses custom registry URLs and encodes scoped package names", async () => {
+    const fetchPackage = vi.fn(async () => ({ status: 200 }));
+
+    await expect(
+      checkNpmPackageNameAvailability("@scope/example-lib", {
+        fetch: fetchPackage,
+        registryUrl: "https://registry.example.test/npm",
+      }),
+    ).resolves.toEqual({
+      packageName: "@scope/example-lib",
+      status: "exists",
+    });
+
+    expect(fetchPackage).toHaveBeenCalledWith(
+      "https://registry.example.test/npm/%40scope%2Fexample-lib",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("reports malformed registry URLs as unknown without fetching", async () => {
+    const fetchPackage = vi.fn(async () => ({ status: 200 }));
+
+    await expect(
+      checkNpmPackageNameAvailability("example-lib", {
+        fetch: fetchPackage,
+        registryUrl: "://registry.example.test",
+      }),
+    ).resolves.toEqual({
+      error: expect.stringContaining("Invalid URL"),
+      packageName: "example-lib",
+      status: "unknown",
+    });
+    expect(fetchPackage).not.toHaveBeenCalled();
   });
 });

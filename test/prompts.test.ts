@@ -32,6 +32,21 @@ describe("createFallbackPrompts", () => {
     await expect(result).resolves.toBe("valid-lib");
   });
 
+  it("uses a default validation message for false validation results", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const prompts = createFallbackPrompts(input, output);
+    const result = prompts.input({
+      message: "Project name",
+      validate: (value) => value === "valid-lib",
+    });
+
+    input.write("My Lib\n");
+    input.end("valid-lib\n");
+
+    await expect(result).resolves.toBe("valid-lib");
+  });
+
   it("rejects when input closes during validation", async () => {
     const input = new PassThrough();
     const prompts = createFallbackPrompts(input, new PassThrough());
@@ -99,5 +114,11 @@ describe("createFallbackPrompts", () => {
         message: "License",
       }),
     ).rejects.toThrow("Invalid selection: 3");
+  });
+
+  it("rejects empty choices when no default can be selected", async () => {
+    await expect(createPrompts("").select({ choices: [], message: "License" })).rejects.toThrow(
+      "At least one choice is required.",
+    );
   });
 });
