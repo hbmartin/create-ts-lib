@@ -132,7 +132,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       attw: "attw --pack . --profile esm-only",
       prepare: "lefthook install",
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} attw`,
-      publint: "publint --pack npm",
+      publint: `publint --pack ${config.packageManager}`,
       "release:check": `${pmConfig.runPrefix} prepublishOnly && npm publish --dry-run --ignore-scripts`,
       test: "vitest run --coverage",
       typecheck: "tsc --noEmit",
@@ -237,7 +237,7 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.5.2`,
-    PUBLINT_COMMAND: "pnpm exec publint --pack npm",
+    PUBLINT_COMMAND: "pnpm exec publint --pack pnpm",
     RUN_PREFIX: "pnpm run",
   });
 };

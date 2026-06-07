@@ -32,6 +32,17 @@ describe("createFallbackPrompts", () => {
     await expect(result).resolves.toBe("valid-lib");
   });
 
+  it("rejects when input closes during validation", async () => {
+    const prompts = createFallbackPrompts(Readable.from([]), new PassThrough());
+
+    await expect(
+      prompts.input({
+        message: "Project name",
+        validate: () => "Invalid package name.",
+      }),
+    ).rejects.toThrow("Input stream closed");
+  });
+
   it("parses confirmations with defaults", async () => {
     await expect(
       createPrompts("yes").confirm({ default: false, message: "Continue?" }),
