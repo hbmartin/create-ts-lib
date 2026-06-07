@@ -400,6 +400,12 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       executable: true,
       path: "source/cli.ts",
     });
+    files.push({
+      content: renderTemplate("test/cli.test.ts.tmpl", {
+        BIN_NAME: getBinName(config.projectName),
+      }),
+      path: "test/cli.test.ts",
+    });
   }
 
   if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {

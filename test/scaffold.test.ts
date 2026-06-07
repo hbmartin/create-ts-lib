@@ -162,7 +162,13 @@ describe("buildProjectFiles", () => {
     expect(packageJson.dependencies).toMatchObject({
       zod: "^4.4.3",
     });
-    expect(packageJson.devDependencies).not.toHaveProperty("@vitest/coverage-istanbul");
+    expect(
+      Object.keys(packageJson.devDependencies).filter((dependency) =>
+        dependency.startsWith("@vitest/coverage-"),
+      ),
+    ).toStrictEqual(["@vitest/coverage-v8"]);
+    expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/cli");
+    expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/config-conventional");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.devDependencies).not.toHaveProperty("semgrep");
     expect(packageJson.devDependencies).not.toHaveProperty("@typescript/native-preview");
@@ -351,8 +357,11 @@ describe("buildProjectFiles", () => {
     });
     const packageJsonFile = findGeneratedFile(files, "package.json");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const cliTest = findGeneratedFile(files, "test/cli.test.ts");
 
     expect(files.map((file) => file.path)).toContain("source/cli.ts");
+    expect(files.map((file) => file.path)).toContain("test/cli.test.ts");
+    expect(cliTest.content).toContain(`expect.stringContaining("$ example-cli <input>")`);
     expect(packageJsonFile.content).toContain(
       `"${getBinName("@scope/example-cli")}": "dist/cli.js"`,
     );

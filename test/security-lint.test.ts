@@ -42,11 +42,11 @@ const baseConfig: ScaffoldConfig = {
 
 const createFakeCommand = async (binDirectory: string, name: string): Promise<void> => {
   const executablePath = join(binDirectory, name);
-  const script = `#!/bin/sh
+  const script = String.raw`#!/bin/sh
 {
-  printf '%s\\n' '${name}'
+  printf '%s\n' '${name}'
   for argument do
-    printf '%s\\n' "$argument"
+    printf '%s\n' "$argument"
   done
 } > "$COMMAND_LOG"
 exit 0
