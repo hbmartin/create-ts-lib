@@ -33,14 +33,22 @@ describe("createFallbackPrompts", () => {
   });
 
   it("rejects when input closes during validation", async () => {
-    const prompts = createFallbackPrompts(Readable.from([]), new PassThrough());
+    const input = new PassThrough();
+    const prompts = createFallbackPrompts(input, new PassThrough());
+    const validatedValues: string[] = [];
 
-    await expect(
-      prompts.input({
-        message: "Project name",
-        validate: () => "Invalid package name.",
-      }),
-    ).rejects.toThrow("Input stream closed");
+    const result = prompts.input({
+      message: "Project name",
+      validate: (value) => {
+        validatedValues.push(value);
+        return "Invalid package name.";
+      },
+    });
+
+    input.end("invalid\n");
+
+    await expect(result).rejects.toThrow("Input stream closed");
+    expect(validatedValues).toEqual(["invalid"]);
   });
 
   it("parses confirmations with defaults", async () => {
