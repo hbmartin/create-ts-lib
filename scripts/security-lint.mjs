@@ -9,13 +9,17 @@ const runCommand = (command, arguments_) =>
     stdio: "inherit",
   });
 
+const warn = (message) => {
+  process.stderr.write(`${message}\n`);
+};
+
 const exitWithResult = (result) => {
   if (result.error) {
     throw result.error;
   }
 
   if (result.signal) {
-    console.error(`warning: security lint exited after signal ${result.signal}`);
+    warn(`warning: security lint exited after signal ${result.signal}`);
     process.exit(1);
   }
 
@@ -46,10 +50,8 @@ if (semgrepResult.error.code !== "ENOENT") {
 const uvxResult = runPinnedSemgrep();
 
 if (uvxResult.error?.code === "ENOENT") {
-  console.error(
-    `warning: security:lint requires semgrep on PATH or uvx for semgrep@${semgrepVersion}.`,
-  );
-  console.error("warning: install Semgrep directly or install uv so uvx can run the pinned scan.");
+  warn(`warning: security:lint requires semgrep on PATH or uvx for semgrep@${semgrepVersion}.`);
+  warn("warning: install Semgrep directly or install uv so uvx can run the pinned scan.");
   process.exit(1);
 }
 

@@ -42,6 +42,8 @@ jobs:
       - run: pnpm run check
         env:
           SECURITY_LINT_FORCE_UVX: "1"
+      - name: TypeScript 7 compatibility probe
+        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.typecheck.json --noEmit
       - run: pnpm run build
       - run: pnpm run publint
       - run: pnpm run types:lint
@@ -103,6 +105,9 @@ jobs:
           SECURITY_LINT_FORCE_UVX: "1"
         working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
       - run: pnpm run build
+        working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
+      - name: Run generated project TypeScript 7 compatibility probe
+        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit
         working-directory: ${{ runner.temp }}/e2e-pnpm-${{ matrix.include-cli }}
       - name: Run generated project publint
         run: pnpm run publint

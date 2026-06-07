@@ -30,7 +30,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
     "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
     "format": "oxfmt . --write",
     "lint": "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
@@ -42,7 +42,7 @@
     "security:lint": "node scripts/security-lint.mjs",
     "size:report": "npm pack --dry-run --json",
     "attw": "attw",
-    "test": "vitest run --coverage",
+    "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "types:lint": "attw --pack . --profile esm-only",

@@ -46,6 +46,9 @@ const packageManagerConfig = {
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
 
+const tsgoProbeCommand =
+  "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
+
 const readTemplate = (relativePath: string): string =>
   readFileSync(new URL(`./assets/${relativePath}`, import.meta.url), "utf8");
 
@@ -131,7 +134,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     scripts: {
       build: "tsc -p tsconfig.build.json",
-      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} test`,
+      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} test:coverage`,
       "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
       dev: "tsc --watch",
       format: "oxfmt . --write",
@@ -143,7 +146,8 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       "release:check": `${pmConfig.runPrefix} prepublishOnly && ${pmConfig.runPrefix} verify:package`,
       "security:lint": "node scripts/security-lint.mjs",
       "size:report": "npm pack --dry-run --json",
-      test: "vitest run --coverage",
+      test: "vitest run",
+      "test:coverage": "vitest run --coverage",
       typecheck: "tsc --noEmit",
       "types:lint": "attw --pack . --profile esm-only",
       "verify:artifacts": verifyArtifactsScript,
@@ -254,6 +258,7 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
           version: 11.5.2`,
     PUBLINT_COMMAND: "pnpm run publint",
     RUN_PREFIX: "pnpm run",
+    TSGO_PROBE_COMMAND: tsgoProbeCommand,
   });
 };
 
