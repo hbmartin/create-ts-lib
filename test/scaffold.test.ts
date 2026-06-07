@@ -31,11 +31,15 @@ const baseConfig: ScaffoldConfig = {
 };
 
 interface GeneratedPackageJson {
+  bugs?: {
+    url: string;
+  };
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   exports: {
     ".": Record<string, string>;
   };
+  homepage?: string;
   repository?: {
     type: string;
     url: string;
@@ -306,9 +310,35 @@ describe("buildProjectFiles", () => {
       "README.md",
     );
 
-    expect(emailOnlyReadme.content).toContain("[MIT](LICENSE) © <harold@example.com>.");
+    expect(emailOnlyReadme.content).toContain("[MIT](LICENSE) © harold@example.com.");
+    expect(emailOnlyReadme.content).not.toContain("© <harold@example.com>.");
     expect(anonymousReadme.content).toContain("[MIT](LICENSE) © Unknown Author.");
   });
+
+  it.each([
+    ["SSH", "git@github.com:hbmartin/example-lib.git"],
+    ["git+https", "git+https://github.com/hbmartin/example-lib.git"],
+  ])(
+    "normalizes %s GitHub URLs in generated metadata and README badges",
+    (_label, githubRepoUrl) => {
+      const files = buildProjectFiles({
+        ...baseConfig,
+        githubRepoUrl,
+      });
+      const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+      const readme = findGeneratedFile(files, "README.md");
+
+      expect(packageJson.repository).toEqual({
+        type: "git",
+        url: "git+https://github.com/hbmartin/example-lib.git",
+      });
+      expect(packageJson.homepage).toBe("https://github.com/hbmartin/example-lib#readme");
+      expect(packageJson.bugs?.url).toBe("https://github.com/hbmartin/example-lib/issues");
+      expect(readme.content).toContain(
+        "[![CI](https://github.com/hbmartin/example-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/hbmartin/example-lib/actions/workflows/ci.yml)",
+      );
+    },
+  );
 
   it("adds CLI files and binary metadata when requested", () => {
     const files = buildProjectFiles({

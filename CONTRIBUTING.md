@@ -21,9 +21,13 @@ pnpm run deps:lint   # dependency-cruiser architecture rules
 pnpm run security:lint
 pnpm test            # vitest run
 pnpm build           # tsc + copy template assets into dist/
+pnpm run smoke:scaffold
 ```
 
 `pnpm run check` runs lint, typecheck, dependency and security checks, and coverage in the same order CI does.
+`pnpm run smoke:scaffold` builds the generator, scaffolds pnpm projects with and
+without CLI support, installs them from a frozen lockfile, and runs the generated
+release checks. Use `SMOKE_INCLUDE_CLI=true` or `false` for a single variant.
 
 To run a single test file or a single case:
 

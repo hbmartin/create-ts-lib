@@ -59,6 +59,16 @@ exit 0
 const isMissingCommandError = (error: Error | undefined): boolean =>
   (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 
+const hasRunnableCommand = (command: string): boolean => {
+  const result = spawnSync(command, ["--version"], {
+    stdio: "ignore",
+  });
+
+  return result.error === undefined && result.status === 0;
+};
+
+const hasSemgrepRunner = hasRunnableCommand("semgrep") || hasRunnableCommand("uvx");
+
 const runSecurityLint = async (
   commands: string[],
   env: Record<string, string> = {},
@@ -200,7 +210,7 @@ describe("Semgrep security rules", () => {
     expect(generatedConfig?.content).toBe(rootConfig);
   });
 
-  it("flags child_process exec and execSync aliases", async () => {
+  it.skipIf(!hasSemgrepRunner)("flags child_process exec and execSync aliases", async () => {
     const scan = await runSemgrepScan(await readFile(semgrepConfigPath, "utf8"), {
       "default-import.ts": `
         import childProcess from "child_process";

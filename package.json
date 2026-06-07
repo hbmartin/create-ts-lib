@@ -1,6 +1,6 @@
 {
   "name": "@hbmartin/create-ts-lib",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Opinionated TypeScript library scaffolder.",
   "keywords": [
     "create",
@@ -40,6 +40,7 @@
     "publint": "publint --pack pnpm",
     "release:check": "pnpm run prepublishOnly && pnpm run verify:package",
     "security:lint": "node scripts/security-lint.mjs",
+    "smoke:scaffold": "pnpm run build && node scripts/smoke-test-scaffold.mjs",
     "size:report": "npm pack --dry-run --json",
     "attw": "attw",
     "test": "vitest run",

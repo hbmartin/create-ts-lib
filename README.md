@@ -104,7 +104,7 @@ The generator asks for:
 | Description              | empty string                                     | Written to `package.json`                             |
 | Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available             |
 | License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`              |
-| GitHub repo URL          | detected from `git remote origin`                | Normalizes `git@github.com:` remotes to HTTPS         |
+| GitHub repo URL          | detected from `git remote origin`                | Normalizes SSH and `git+https://github.com/` remotes  |
 | Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm generated CI       |
 | Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, and `source/cli.ts`               |
 | Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only   |
@@ -267,9 +267,15 @@ pnpm run typecheck
 pnpm run test
 pnpm run test:coverage
 pnpm run build
+pnpm run smoke:scaffold
 pnpm run publint
 pnpm run types:lint
 ```
+
+`pnpm run smoke:scaffold` builds the generator, scaffolds pnpm projects with and
+without CLI support, installs them from a frozen lockfile, and runs their generated
+release checks. Set `SMOKE_INCLUDE_CLI=true` or `false` to run one variant, and
+set `SMOKE_DIR` to choose the generated project directory.
 
 Template assets live under `source/templates/assets` and are copied into `dist/templates/assets` during `pnpm build`.
 
