@@ -160,7 +160,8 @@ Generated packages include:
 - `zod` as a default runtime dependency
 - `meow` only when CLI support is enabled
 - `@arethetypeswrong/cli` and `publint` release checks
-- `check`, `prepublishOnly`, `publint`, `attw`, and `release:check` scripts
+- `check`, `prepublishOnly`, `publint`, `types:lint`, `verify:artifacts`,
+  `verify:package`, `size:report`, and `release:check` scripts
 - `Apache-2.0` license by default
 
 Release-please is not generated. Pnpm projects with a GitHub repo URL include a release workflow that publishes to npm when a GitHub release is published.
@@ -185,13 +186,16 @@ cd my-lib
 # write your code in source/, then:
 pnpm run check          # lint + typecheck + coverage
 pnpm run release:check  # package validation + npm publish dry run
+pnpm run size:report    # packed package size report
 pnpm version patch      # or minor / major
 git push --follow-tags
 ```
 
 For pnpm projects with a GitHub repo URL, publishing a GitHub release for the pushed tag runs the generated npm publish workflow. Prereleases publish with the `next` tag; normal releases publish with `latest`.
 
-`prepublishOnly`-style validation (`publint`, are-the-types-wrong, and a dry-run publish) is wired into the generated package so packaging problems surface before you ship.
+`prepublishOnly`-style validation (`verify:artifacts`, `publint`, are-the-types-wrong,
+and a dry-run publish) is wired into the generated package so packaging problems surface
+before you ship.
 
 ## Programmatic API
 

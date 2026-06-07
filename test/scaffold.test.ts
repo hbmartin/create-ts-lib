@@ -47,6 +47,10 @@ interface GeneratedPackageJson {
     prepublishOnly: string;
     publint: string;
     "release:check": string;
+    "size:report": string;
+    "types:lint": string;
+    "verify:artifacts": string;
+    "verify:package": string;
   } & Record<string, string>;
 }
 
@@ -75,7 +79,13 @@ describe("buildProjectFiles", () => {
     expect(releaseWorkflow?.content).toContain("types: [published]");
     expect(releaseWorkflow?.content).toContain("id-token: write");
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
-    expect(releaseWorkflow?.content).toContain("pnpm run release:check");
+    expect(releaseWorkflow?.content).toContain("version: 11.4.0");
+    expect(releaseWorkflow?.content).toContain("node-version: '22.x'");
+    expect(releaseWorkflow?.content).toContain("pnpm run verify:artifacts");
+    expect(releaseWorkflow?.content).toContain("pnpm run verify:package");
+    expect(releaseWorkflow?.content).toContain("pnpm run size:report");
+    expect(releaseWorkflow?.content).toContain("pnpm run publint");
+    expect(releaseWorkflow?.content).toContain("pnpm run types:lint");
     expect(releaseWorkflow?.content).toContain('TAG="next"');
     expect(releaseWorkflow?.content).toContain(
       'npm publish --tag "$TAG" --access public --provenance',
@@ -107,11 +117,17 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.scripts.check).toBe("pnpm run lint && pnpm run typecheck && pnpm run test");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run check");
+    expect(packageJson.scripts.prepublishOnly).toContain("pnpm run verify:artifacts");
+    expect(packageJson.scripts.prepublishOnly).toContain("pnpm run types:lint");
     expect(packageJson.scripts.publint).toBe("publint --pack pnpm");
     expect(packageJson.scripts.attw).toBe("attw --pack . --profile esm-only");
-    expect(packageJson.scripts["release:check"]).toContain(
-      "npm publish --dry-run --ignore-scripts",
-    );
+    expect(packageJson.scripts["release:check"]).toContain("pnpm run verify:package");
+    expect(packageJson.scripts["size:report"]).toBe("npm pack --dry-run --json");
+    expect(packageJson.scripts["types:lint"]).toBe("attw --pack . --profile esm-only");
+    expect(packageJson.scripts["verify:artifacts"]).toContain("node -e");
+    expect(packageJson.scripts["verify:artifacts"]).toContain("dist/index.js");
+    expect(packageJson.scripts["verify:artifacts"]).not.toContain("dist/cli.js");
+    expect(packageJson.scripts["verify:package"]).toBe("npm publish --dry-run --ignore-scripts");
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
     expect(oxfmtConfig.ignorePatterns).toEqual(["*.json", "**/*.json"]);
@@ -195,6 +211,7 @@ describe("buildProjectFiles", () => {
       type: "git",
       url: "git+https://github.com/hbmartin/example-lib.git",
     });
+    expect(packageJson.scripts["verify:artifacts"]).toContain("dist/cli.js");
   });
 
   it("skips GitHub workflows when no repository URL is provided", () => {
