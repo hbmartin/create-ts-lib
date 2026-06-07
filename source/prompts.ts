@@ -39,8 +39,11 @@ export const createFallbackPrompts = (
       ask: async (message: string): Promise<string> => {
         output.write(message);
         const line = await lines.next();
+        if (line.done) {
+          throw new Error("Input stream closed");
+        }
 
-        return line.done ? "" : line.value.trim();
+        return line.value.trim();
       },
       close: () => rl.close(),
     };

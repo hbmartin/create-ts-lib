@@ -34,7 +34,7 @@
     "format": "oxfmt . --write",
     "lint": "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run check && pnpm run build && pnpm publint --pack npm",
+    "prepublishOnly": "pnpm run check && pnpm run build && pnpm publint --pack pnpm",
     "prepare": "lefthook install",
     "publint": "publint",
     "release:check": "pnpm run prepublishOnly && pnpm attw --pack . --profile esm-only && npm publish --dry-run --ignore-scripts",

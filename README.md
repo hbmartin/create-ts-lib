@@ -247,7 +247,7 @@ pnpm run typecheck
 pnpm run test
 pnpm run test:coverage
 pnpm run build
-pnpm publint --pack npm
+pnpm publint --pack pnpm
 pnpm attw --pack . --profile esm-only
 ```
 

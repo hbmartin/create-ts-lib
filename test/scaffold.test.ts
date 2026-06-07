@@ -68,7 +68,7 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".release-please-manifest.json");
     expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
-    expect(ciWorkflow?.content).toContain("pnpm exec publint --pack npm");
+    expect(ciWorkflow?.content).toContain("pnpm exec publint --pack pnpm");
     expect(ciWorkflow?.content).toContain("pnpm run lint");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
@@ -107,7 +107,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.scripts.check).toBe("pnpm run lint && pnpm run typecheck && pnpm run test");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run check");
-    expect(packageJson.scripts.publint).toBe("publint --pack npm");
+    expect(packageJson.scripts.publint).toBe("publint --pack pnpm");
     expect(packageJson.scripts.attw).toBe("attw --pack . --profile esm-only");
     expect(packageJson.scripts["release:check"]).toContain(
       "npm publish --dry-run --ignore-scripts",
