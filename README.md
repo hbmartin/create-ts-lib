@@ -124,6 +124,8 @@ my-lib/
 │   │   └── index.ts
 │   └── utils/
 │       └── formatting.ts
+├── scripts/
+│   └── security-lint.mjs
 ├── test/
 │   └── utils/
 │       └── formatting.test.ts
@@ -205,8 +207,9 @@ For pnpm projects with a GitHub repo URL, publishing a GitHub release for the pu
 and a dry-run publish) is wired into the generated package so packaging problems surface
 before you ship.
 
-`pnpm run security:lint` requires the Semgrep CLI on PATH. Install it with
-`pipx install semgrep` when running checks locally.
+`pnpm run security:lint` prefers a `semgrep` binary on PATH and otherwise runs
+the pinned `uvx semgrep@1.165.0` scan. Install Semgrep directly or install uv
+if both commands are missing locally.
 
 ## Programmatic API
 

@@ -5,7 +5,6 @@ import { renderBiomeJsonc } from "./biome.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 export type LicenseName = "MIT" | "ISC" | "Apache-2.0" | "UNLICENSED";
-const authorNameRegex = /^(.*?)\s*</u;
 
 /**
  * Options that control the files emitted for a generated TypeScript library.
@@ -100,7 +99,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     "dist/index.d.ts",
     ...(config.includeCli ? ["dist/cli.js", "dist/cli.d.ts"] : []),
   ];
-  const artifactFilesLiteral = `[${artifactFiles.map((file) => `'${file}'`).join(",")}]`;
+  const artifactFilesLiteral = JSON.stringify(artifactFiles).replaceAll('"', "'");
   const verifyArtifactsScript = `node -e "for (const file of ${artifactFilesLiteral}) require('node:fs').statSync(file)"`;
   const packageJson = {
     name: config.projectName,
@@ -132,7 +131,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     scripts: {
       build: "tsc -p tsconfig.build.json",
-      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} test`,
+      check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} test`,
       "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
       dev: "tsc --watch",
       format: "oxfmt . --write",
@@ -142,7 +141,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
       publint: `publint --pack ${config.packageManager}`,
       "release:check": `${pmConfig.runPrefix} prepublishOnly && ${pmConfig.runPrefix} verify:package`,
-      "security:lint": "semgrep scan --config semgrep.yml --error source test",
+      "security:lint": "node scripts/security-lint.mjs",
       "size:report": "npm pack --dry-run --json",
       test: "vitest run --coverage",
       typecheck: "tsc --noEmit",
@@ -220,6 +219,8 @@ ${pmConfig.runPrefix} check
 ${pmConfig.runPrefix} release:check
 \`\`\`
 
+\`${pmConfig.runPrefix} security:lint\` prefers \`semgrep\` on PATH and otherwise runs the pinned \`uvx semgrep@1.165.0\` scan.
+
 ## License
 
 ${config.license} - ${authorName}.
@@ -251,7 +252,7 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.5.2`,
-    PUBLINT_COMMAND: "pnpm exec publint --pack pnpm",
+    PUBLINT_COMMAND: "pnpm run publint",
     RUN_PREFIX: "pnpm run",
   });
 };
@@ -307,6 +308,10 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     {
       content: renderTemplate("semgrep.yml.tmpl"),
       path: "semgrep.yml",
+    },
+    {
+      content: renderTemplate("scripts/security-lint.mjs.tmpl"),
+      path: "scripts/security-lint.mjs",
     },
     {
       content: buildPackageJson(config),
@@ -369,23 +374,28 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   }
 
   if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {
-    files.push({
-      content: buildCiWorkflow(config),
-      path: ".github/workflows/ci.yml",
-    });
-    files.push({
-      content: buildReleaseWorkflow(),
-      path: ".github/workflows/release.yml",
-    });
+    files.push(
+      {
+        content: buildCiWorkflow(config),
+        path: ".github/workflows/ci.yml",
+      },
+      {
+        content: buildReleaseWorkflow(),
+        path: ".github/workflows/release.yml",
+      },
+    );
   }
 
   return files;
 };
 
 const extractAuthorName = (author: string): string => {
-  const match = authorNameRegex.exec(author);
-  if (match?.[1]?.trim().length) {
-    return match[1].trim();
+  const emailStartIndex = author.indexOf("<");
+  if (emailStartIndex >= 0) {
+    const authorName = author.slice(0, emailStartIndex).trim();
+    if (authorName.length > 0) {
+      return authorName;
+    }
   }
 
   return author || "Unknown Author";

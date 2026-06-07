@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    exclude: ["dist/**"],
     environment: "node",
+    include: ["test/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["lcov", "text"],
