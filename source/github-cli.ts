@@ -160,7 +160,7 @@ const runGitHubGraphQlCommand = async <T>(
   const args = ["api", "graphql", "-f", `query=${query}`];
 
   for (const [name, value] of Object.entries(fields)) {
-    args.push("-F", `${name}=${value}`);
+    args.push("-f", `${name}=${value}`);
   }
 
   const output = await runGitHubCliCommand(args, options);

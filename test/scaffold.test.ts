@@ -47,6 +47,13 @@ const forbiddenReleasePleaseContent = [
   "release-please",
 ];
 
+const actionPins = {
+  checkout: "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3",
+  codecov: "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0",
+  pnpmSetup: "pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8",
+  setupNode: "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0",
+};
+
 interface GeneratedPackageJson {
   bugs?: {
     url: string;
@@ -57,6 +64,7 @@ interface GeneratedPackageJson {
     ".": Record<string, string>;
   };
   homepage?: string;
+  packageManager?: string;
   repository?: {
     type: string;
     url: string;
@@ -107,6 +115,10 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".github/workflows/release-please.yml");
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
+    expect(ciWorkflow?.content).toContain(actionPins.checkout);
+    expect(ciWorkflow?.content).toContain(actionPins.pnpmSetup);
+    expect(ciWorkflow?.content).toContain(actionPins.setupNode);
+    expect(ciWorkflow?.content).toContain(actionPins.codecov);
     expect(ciWorkflow?.content).toContain("version: 11.5.2");
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("fail-fast: false");
@@ -131,6 +143,9 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).not.toContain("python3 -m pip");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
+    expect(releaseWorkflow?.content).toContain(actionPins.checkout);
+    expect(releaseWorkflow?.content).toContain(actionPins.pnpmSetup);
+    expect(releaseWorkflow?.content).toContain(actionPins.setupNode);
     expect(releaseWorkflow?.content).toContain("types: [published]");
     expect(releaseWorkflow?.content).toContain("id-token: write");
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
@@ -229,6 +244,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts["verify:artifacts"]).toContain("dist/index.js");
     expect(packageJson.scripts["verify:artifacts"]).not.toContain("dist/cli.js");
     expect(packageJson.scripts["verify:package"]).toBe("npm publish --dry-run --ignore-scripts");
+    expect(packageJson.packageManager).toBe("pnpm@11.5.2");
     expect(packageJson.scripts.lint).toContain("oxlint");
     expect(packageJson.scripts.format).toContain("oxfmt");
     expect(agents.content).toContain("Guidance for Codex and other coding agents");
@@ -400,7 +416,7 @@ describe("buildProjectFiles", () => {
       `"${getBinName("@scope/example-cli")}": "dist/cli.js"`,
     );
     expect(packageJsonFile.content).toContain(`"meow": "^14.0.0"`);
-    expect(packageJsonFile.content).not.toContain(`"packageManager"`);
+    expect(packageJson.packageManager).toBe("pnpm@11.5.2");
     expect(packageJson.repository).toEqual({
       type: "git",
       url: "git+https://github.com/hbmartin/example-lib.git",
@@ -423,13 +439,16 @@ describe("buildProjectFiles", () => {
   });
 
   it.each(["npm", "yarn"] as const)("skips GitHub workflows for %s projects", (packageManager) => {
-    const filePaths = buildProjectFiles({
+    const files = buildProjectFiles({
       ...baseConfig,
       packageManager,
-    }).map((file) => file.path);
+    });
+    const filePaths = files.map((file) => file.path);
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
 
     expect(filePaths).not.toContain(".github/workflows/ci.yml");
     expect(filePaths).not.toContain(".github/workflows/release.yml");
+    expect(packageJson.packageManager).toBeUndefined();
   });
 
   it("renders parseable JSON and JSONC config files", () => {

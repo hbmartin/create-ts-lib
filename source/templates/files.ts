@@ -46,6 +46,8 @@ const packageManagerConfig = {
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
 
+const pnpmVersion = "11.5.2";
+
 export const tsgoProbeCommand =
   "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
 
@@ -126,6 +128,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       : {}),
     files: ["dist"],
     type: "module",
+    ...(config.packageManager === "pnpm" ? { packageManager: `pnpm@${pnpmVersion}` } : {}),
     exports: {
       ".": {
         types: "./dist/index.d.ts",
@@ -266,7 +269,7 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     ? `
       - name: Upload coverage to Codecov
         if: matrix.node-version == '24'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: \${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true`
@@ -278,9 +281,9 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     CACHE: "pnpm",
     CODECOV_STEP: codecovStep,
     INSTALL_CI_COMMAND: "pnpm install --frozen-lockfile",
-    PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+    PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
         with:
-          version: 11.5.2`,
+          version: ${pnpmVersion}`,
     PUBLINT_COMMAND: "pnpm run publint",
     RUN_PREFIX: "pnpm run",
     TSGO_PROBE_COMMAND: tsgoProbeCommand,
