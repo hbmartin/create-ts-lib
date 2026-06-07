@@ -17,6 +17,7 @@ import {
 import {
   createGitHubRepository,
   type GitHubRepositoryLookupResult,
+  type GitHubRepositoryVisibility,
   inspectPersonalGitHubRepository,
 } from "./github-cli.js";
 import {
@@ -25,12 +26,8 @@ import {
 } from "./npm-registry.js";
 import { assertValidPackageName, validatePackageName } from "./package-name.js";
 import { loadPromptModule, type PromptModule } from "./prompts.js";
-import {
-  PostScaffoldSetupError,
-  type ScaffoldOptions,
-  type ScaffoldProgress,
-  scaffoldProject,
-} from "./scaffold.js";
+import { PostScaffoldSetupError, type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
+import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import {
   buildProjectFiles,
   type LicenseName,
@@ -108,21 +105,26 @@ const runScaffoldWorkflow = async (
     cliArguments.directoryArgument ?? deriveDirectoryName(config.projectName),
   );
 
-  printSummary(config, targetDirectory, cliArguments.dryRun);
+  if (!cliArguments.dryRun) {
+    await assertTargetDirectoryIsSafe(targetDirectory, cliArguments.force);
+  }
+
+  printSummary(config, targetDirectory, cliArguments.dryRun, githubRepositoryCreation);
 
   if (cliArguments.dryRun) {
     printDryRunDetails(config, githubRepositoryCreation);
     return;
   }
 
+  const gitRemoteOriginUrl = getGitRemoteOriginUrl(cliArguments, config);
   await createGitHubRepositoryIfNeeded(config, githubRepositoryCreation, warn);
   await scaffoldProject(config, {
     force: cliArguments.force,
-    ...buildGitRemoteOriginOption(cliArguments, config),
+    ...(gitRemoteOriginUrl === undefined ? {} : { gitRemoteOriginUrl }),
     progress: createProgressReporter(),
     targetDirectory,
   });
-  printNextSteps(config, targetDirectory);
+  printNextSteps(config, targetDirectory, gitRemoteOriginUrl !== undefined);
 };
 
 const handleCliError = (error: unknown): void => {
@@ -163,6 +165,7 @@ const createGitHubRepositoryIfNeeded = async (
     description: config.description,
     owner: githubRepositoryCreation.owner,
     repositoryName: githubRepositoryCreation.repositoryName,
+    visibility: githubRepositoryCreation.visibility,
   });
 
   if (createResult.status === "failed") {
@@ -170,21 +173,32 @@ const createGitHubRepositoryIfNeeded = async (
   }
 };
 
-type GitRemoteOriginOption = Pick<ScaffoldOptions, "gitRemoteOriginUrl"> | Record<string, never>;
-
-const buildGitRemoteOriginOption = (
+const getGitRemoteOriginUrl = (
   cliArguments: CliArguments,
   config: ScaffoldConfig,
-): GitRemoteOriginOption => {
+): string | undefined => {
   if (cliArguments.yes || config.githubRepoUrl.length === 0) {
-    return {};
+    return undefined;
   }
 
-  return { gitRemoteOriginUrl: config.githubRepoUrl };
+  return config.githubRepoUrl;
 };
 
-const printNextSteps = (config: ScaffoldConfig, targetDirectory: string): void => {
+const printNextSteps = (
+  config: ScaffoldConfig,
+  targetDirectory: string,
+  includeGitHubPublishSteps: boolean,
+): void => {
   const runPrefix = getPackageManagerRunPrefix(config.packageManager);
+  const githubPublishSteps = includeGitHubPublishSteps
+    ? `
+Publish to GitHub:
+  git add .
+  git commit -m "Initial scaffold"
+  git push -u origin HEAD
+`
+    : "";
+
   process.stdout.write(`Created ${config.projectName}
 
 Next steps:
@@ -192,7 +206,7 @@ Next steps:
   ${runPrefix} dev
   ${runPrefix} lint
   ${runPrefix} test
-`);
+${githubPublishSteps}`);
 };
 
 const printPostScaffoldRecovery = (error: PostScaffoldSetupError): void => {
@@ -253,6 +267,7 @@ interface PendingGitHubRepositoryCreation {
   owner: string;
   repositoryName: string;
   url: string;
+  visibility: GitHubRepositoryVisibility;
 }
 
 const promptForConfig = async (
@@ -261,7 +276,7 @@ const promptForConfig = async (
   warn: WarningSink,
 ): Promise<PromptedConfig> => {
   const projectName = await promptForProjectName(defaults, promptModule, warn);
-  const githubRepositoryPrompt = await promptForGitHubRepository(projectName, promptModule, warn);
+  const githubRepositoryLookup = inspectPersonalGitHubRepository(projectName);
   const description = await promptModule.input({
     default: "",
     message: "Description",
@@ -280,6 +295,12 @@ const promptForConfig = async (
     default: "Apache-2.0",
     message: "License",
   });
+  const githubRepositoryPrompt = await promptForGitHubRepository(
+    await githubRepositoryLookup,
+    defaults.githubRepoUrl,
+    promptModule,
+    warn,
+  );
   const githubRepositoryAnswer = await promptForGitHubRepoUrl(githubRepositoryPrompt, promptModule);
   const includeCodecov = await promptModule.confirm({
     default: true,
@@ -317,7 +338,7 @@ const promptForConfig = async (
 };
 
 type ExistingPackageNameDecision = "rename" | "use-anyway";
-type MissingGitHubRepositoryDecision = "create" | "manual";
+type MissingGitHubRepositoryDecision = "create-private" | "create-public" | "manual";
 
 type GitHubRepositoryPrompt =
   | {
@@ -329,6 +350,7 @@ type GitHubRepositoryPrompt =
       kind: "create";
     }
   | {
+      defaultUrl?: string;
       kind: "manual";
     };
 
@@ -386,12 +408,11 @@ const validateProjectNameForPrompt = (projectName: string): true | string => {
 };
 
 const promptForGitHubRepository = async (
-  projectName: string,
+  lookup: GitHubRepositoryLookupResult,
+  defaultGitHubRepoUrl: string,
   promptModule: PromptModule,
   warn: WarningSink,
 ): Promise<GitHubRepositoryPrompt> => {
-  const lookup = await inspectPersonalGitHubRepository(projectName);
-
   if (lookup.status === "found") {
     return {
       defaultUrl: lookup.url,
@@ -401,23 +422,27 @@ const promptForGitHubRepository = async (
 
   if (lookup.status === "unavailable") {
     warn(formatGitHubRepositoryLookupWarning(lookup));
-    return { kind: "manual" };
+    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
   }
 
   const decision = await promptModule.select<MissingGitHubRepositoryDecision>({
     choices: [
       {
         name: `Create public GitHub repo ${lookup.owner}/${lookup.repositoryName}`,
-        value: "create",
+        value: "create-public",
+      },
+      {
+        name: `Create private GitHub repo ${lookup.owner}/${lookup.repositoryName}`,
+        value: "create-private",
       },
       { name: "Enter GitHub repo URL manually", value: "manual" },
     ],
-    default: "create",
+    default: "create-public",
     message: "No matching GitHub repo was found",
   });
 
   if (decision === "manual") {
-    return { kind: "manual" };
+    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
   }
 
   return {
@@ -425,10 +450,16 @@ const promptForGitHubRepository = async (
       owner: lookup.owner,
       repositoryName: lookup.repositoryName,
       url: lookup.predictedUrl,
+      visibility: decision === "create-private" ? "private" : "public",
     },
     kind: "create",
   };
 };
+
+const buildManualGitHubRepositoryPrompt = (defaultUrl: string): GitHubRepositoryPrompt => ({
+  ...(defaultUrl.length > 0 ? { defaultUrl } : {}),
+  kind: "manual",
+});
 
 const promptForGitHubRepoUrl = async (
   githubRepositoryPrompt: GitHubRepositoryPrompt,
@@ -441,10 +472,9 @@ const promptForGitHubRepoUrl = async (
     };
   }
 
+  const { defaultUrl } = githubRepositoryPrompt;
   const url = await promptModule.input({
-    ...(githubRepositoryPrompt.kind === "found"
-      ? { default: githubRepositoryPrompt.defaultUrl }
-      : {}),
+    ...(defaultUrl === undefined ? {} : { default: defaultUrl }),
     message: "GitHub repo URL",
   });
 
@@ -491,7 +521,12 @@ const formatGitHubRepositoryCreateWarning = (
 ): string =>
   `Could not create GitHub repo "${createResult.owner}/${createResult.repositoryName}" with gh; continuing with ${createResult.url}. ${createResult.reason}.`;
 
-const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: boolean): void => {
+const printSummary = (
+  config: ScaffoldConfig,
+  targetDirectory: string,
+  dryRun: boolean,
+  githubRepositoryCreation: PendingGitHubRepositoryCreation | undefined,
+): void => {
   const rows = [
     ["Project", config.projectName],
     ["Target", targetDirectory],
@@ -508,12 +543,17 @@ const printSummary = (config: ScaffoldConfig, targetDirectory: string, dryRun: b
   for (const [label, value] of rows) {
     process.stdout.write(`  ${label}: ${value}\n`);
   }
+  if (!dryRun && githubRepositoryCreation) {
+    process.stdout.write(
+      `  GitHub repo action: will create ${githubRepositoryCreation.visibility} repo ${githubRepositoryCreation.owner}/${githubRepositoryCreation.repositoryName}\n`,
+    );
+  }
   process.stdout.write("\n");
 };
 
 const printDryRunGitHubCreation = (creation: PendingGitHubRepositoryCreation): void => {
   process.stdout.write(
-    `${cyan("info")} GitHub repo creation skipped by --dry-run; would create ${creation.owner}/${creation.repositoryName}.\n`,
+    `${cyan("info")} GitHub repo creation skipped by --dry-run; would create ${creation.visibility} repo ${creation.owner}/${creation.repositoryName}.\n`,
   );
 };
 

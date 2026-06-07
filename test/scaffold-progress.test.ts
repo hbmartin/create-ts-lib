@@ -7,10 +7,27 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ScaffoldConfig, ScaffoldProgress } from "../source/index.js";
 
-const { execFileMock, spawnMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  spawnMock: vi.fn(),
-}));
+const { execFileMock, spawnMock } = vi.hoisted(() => {
+  const hoistedExecFileMock = vi.fn();
+  Object.defineProperty(hoistedExecFileMock, Symbol.for("nodejs.util.promisify.custom"), {
+    value: (...args: unknown[]): Promise<{ stderr: string; stdout: string }> =>
+      new Promise((resolve, reject) => {
+        hoistedExecFileMock(...args, (error: Error | null, stdout: string, stderr: string) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve({ stderr, stdout });
+        });
+      }),
+  });
+
+  return {
+    execFileMock: hoistedExecFileMock,
+    spawnMock: vi.fn(),
+  };
+});
 
 vi.mock("node:child_process", () => ({
   execFile: execFileMock,
@@ -148,10 +165,7 @@ describe("scaffoldProject post-scaffold progress", () => {
 
   it("skips git remote origin when the target is inside a parent repository", async () => {
     const targetDirectory = await createTempTarget("create-ts-lib-parent-");
-    mockExecFileSequence([
-      { stdout: { stdout: "/parent/repo" } },
-      { stdout: { stdout: "/parent/repo" } },
-    ]);
+    mockExecFileSequence([{ stdout: "/parent/repo" }, { stdout: "/parent/repo" }]);
     mockSpawnClose(0);
     const progress = createProgress();
     const { scaffoldProject } = await import("../source/scaffold.js");
@@ -259,7 +273,7 @@ const mockGitRepositoryCheckSuccess = (): void => {
   });
 };
 
-const mockExecFileSequence = (responses: Array<{ error?: Error; stdout?: unknown }>): void => {
+const mockExecFileSequence = (responses: Array<{ error?: Error; stdout?: string }>): void => {
   execFileMock.mockImplementation((...args: unknown[]) => {
     const callback = args.findLast(
       (argument): argument is (error: Error | null, stdout: string, stderr: string) => void =>
@@ -267,7 +281,7 @@ const mockExecFileSequence = (responses: Array<{ error?: Error; stdout?: unknown
     );
     const response = responses.shift() ?? {};
 
-    callback?.(response.error ?? null, (response.stdout ?? "") as string, "");
+    callback?.(response.error ?? null, response.stdout ?? "", "");
 
     return new EventEmitter();
   });
