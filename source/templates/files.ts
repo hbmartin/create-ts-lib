@@ -33,7 +33,7 @@ export interface ScaffoldConfig {
   projectName: string;
 }
 
-export const defaultScaffoldConfig = (overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig => ({
+const defaultScaffoldConfigValues = {
   author: "",
   description: "",
   githubRepoUrl: "",
@@ -44,7 +44,16 @@ export const defaultScaffoldConfig = (overrides: Partial<ScaffoldConfig> = {}): 
   lintFormatTooling: defaultLintFormatTooling,
   packageManager: "pnpm",
   projectName: "my-lib",
-  ...overrides,
+} satisfies ScaffoldConfig;
+
+const stripUndefinedOverrides = (overrides: Partial<ScaffoldConfig>): Partial<ScaffoldConfig> =>
+  Object.fromEntries(
+    Object.entries(overrides).filter(([, value]) => value !== undefined),
+  ) as Partial<ScaffoldConfig>;
+
+export const defaultScaffoldConfig = (overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig => ({
+  ...defaultScaffoldConfigValues,
+  ...stripUndefinedOverrides(overrides),
 });
 
 export interface GeneratedFile {
