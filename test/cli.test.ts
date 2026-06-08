@@ -80,6 +80,7 @@ describe("cli entrypoint", () => {
     expect(result.exitCode).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("pnpm create @hbmartin/ts-lib my-lib");
+    expect(result.stdout).toContain("--no-codecov");
     expect(result.stdout).toContain("--zod");
   });
 
@@ -104,12 +105,31 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Zod: no");
     expect(result.stdout).toContain("Files to create:");
     expect(result.stdout).toContain("package.json");
+    expect(result.stdout).not.toContain("Set up Codecov:");
   });
 
   it("passes --lint-format to the scaffold operation", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
 
     const result = await runCli(["demo-lib", "--yes", "--lint-format", "biome"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Lint/format: Biome");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lintFormatTooling: "biome",
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("passes --lint-format equals form to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--lint-format=biome"], {
       scaffoldProject,
     });
 
@@ -136,6 +156,25 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         includeZod: true,
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("passes --no-codecov to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--no-codecov"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Codecov: no");
+    expect(result.stdout).not.toContain("Set up Codecov:");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeCodecov: false,
         projectName: "demo-lib",
       }),
       expect.any(Object),
@@ -805,6 +844,14 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Created demo-lib");
     expect(result.stdout).toContain("cd demo-lib");
     expect(result.stdout).toContain("pnpm run lint");
+    expect(result.stdout).toContain(
+      "Set up Codecov: https://app.codecov.io/gh/hbmartin/create-ts-lib/new",
+    );
+    expect(
+      result.stdout.endsWith(
+        "Set up Codecov: https://app.codecov.io/gh/hbmartin/create-ts-lib/new\n",
+      ),
+    ).toBe(true);
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         lintFormatTooling: "oxlint-oxfmt",
@@ -814,6 +861,70 @@ describe("cli entrypoint", () => {
       expect.objectContaining({ targetDirectory: expect.stringContaining("demo-lib") }),
     );
   });
+
+  it.each([
+    ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
+    ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
+    ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],
+    ["SSH URL", "ssh://git@github.com/hbmartin/example-lib.git"],
+    ["git protocol", "git://github.com/hbmartin/example-lib.git"],
+  ])("prints a normalized Codecov setup URL for %s defaults", async (_label, githubRepoUrl) => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      detectedDefaults: { githubRepoUrl },
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain(
+      "Set up Codecov: https://app.codecov.io/gh/hbmartin/example-lib/new",
+    );
+  });
+
+  it.each([
+    ["blank", ""],
+    ["non-GitHub", "https://gitlab.com/hbmartin/example-lib.git"],
+  ])("omits the Codecov setup URL for a %s repo URL", async (_label, githubRepoUrl) => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      detectedDefaults: { githubRepoUrl },
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).not.toContain("Set up Codecov:");
+  });
+
+  it.each(["npm", "yarn"] as const)(
+    "omits the Codecov setup URL for %s projects",
+    async (packageManager) => {
+      const scaffoldProject = vi.fn(async () => undefined);
+      const promptModule = buildGitHubPromptModule({
+        description: "Prompted description",
+        githubRepoUrl: "https://github.com/hbmartin/example-lib",
+        includeCodecov: true,
+        packageManager,
+        projectName: `codecov-${packageManager}-lib`,
+      });
+
+      const result = await runCli([`codecov-${packageManager}-lib`], {
+        promptModule,
+        scaffoldProject,
+      });
+
+      expect(result.exitCode).toBeUndefined();
+      expect(result.stdout).not.toContain("Set up Codecov:");
+      expect(scaffoldProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          includeCodecov: true,
+          packageManager,
+        }),
+        expect.any(Object),
+      );
+    },
+  );
 
   it.each([
     {
@@ -956,7 +1067,9 @@ interface BuildGitHubPromptModuleOptions {
   description: string;
   expectedGithubRepoUrlDefault?: string;
   githubRepoUrl?: string;
+  includeCodecov?: boolean;
   missingRepositoryChoice?: "create-private" | "create-public" | "manual";
+  packageManager?: "npm" | "pnpm" | "yarn";
   projectName: string;
 }
 
@@ -965,10 +1078,15 @@ const buildGitHubPromptModule = ({
   description,
   expectedGithubRepoUrlDefault,
   githubRepoUrl,
+  includeCodecov = false,
   missingRepositoryChoice,
+  packageManager = "pnpm",
   projectName,
 }: BuildGitHubPromptModuleOptions): PromptModule => ({
-  confirm: vi.fn(async () => false),
+  confirm: vi.fn(
+    async ({ message }: { default?: boolean; message: string }) =>
+      message === "Include Codecov?" && includeCodecov,
+  ),
   input: vi.fn(async ({ default: defaultValue, message }: PromptInputOptions) => {
     if (message === "Project name") {
       return projectName;
@@ -1003,12 +1121,13 @@ const buildGitHubPromptModule = ({
       return "oxlint-oxfmt";
     }
 
-    return "pnpm";
+    return packageManager;
   }),
 });
 
 const ciEnvironmentVariable = "CI";
 const forceColorEnvironmentVariable = "FORCE_COLOR";
+const noColorEnvironmentVariable = "NO_COLOR";
 
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
@@ -1110,9 +1229,11 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   process.exitCode = undefined;
   const originalCi = process.env[ciEnvironmentVariable];
   const originalForceColor = process.env[forceColorEnvironmentVariable];
+  const originalNoColor = process.env[noColorEnvironmentVariable];
   const originalStdoutIsTTY = process.stdout.isTTY;
   delete process.env[ciEnvironmentVariable];
   delete process.env[forceColorEnvironmentVariable];
+  process.env[noColorEnvironmentVariable] = "1";
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,
@@ -1136,6 +1257,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
     }
     restoreEnvironmentVariable(ciEnvironmentVariable, originalCi);
     restoreEnvironmentVariable(forceColorEnvironmentVariable, originalForceColor);
+    restoreEnvironmentVariable(noColorEnvironmentVariable, originalNoColor);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   }

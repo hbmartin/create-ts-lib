@@ -25,6 +25,7 @@ import {
   formatLintFormatTooling,
   type LintFormatTooling,
 } from "./lint-format-tooling.js";
+import { parseGitHubRepositoryUrl } from "./name-helpers.js";
 import {
   checkNpmPackageNameAvailability,
   type NpmPackageNameAvailabilityUnknown,
@@ -43,13 +44,14 @@ import {
 const helpText = `create-ts-lib
 
 Usage:
-  create-ts-lib [directory] [--yes] [--dry-run] [--force] [--lint-format <tooling>] [--zod]
+  create-ts-lib [directory] [--yes] [--dry-run] [--force] [--lint-format <tooling>] [--no-codecov] [--zod]
 
 Options:
   --yes, -y                 Use detected/default answers without prompting
   --dry-run                 Print the scaffold plan without writing files
   --force                   Allow writing into a non-empty target directory
   --lint-format <tooling>   Choose oxlint-oxfmt or biome
+  --no-codecov              Omit the Codecov upload step from generated CI
   --zod                     Include Zod in the generated project
   --help, -h                Show help
   --version, -v             Show version
@@ -100,12 +102,20 @@ const runScaffoldWorkflow = async (
 ): Promise<void> => {
   const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
   const configResult = cliArguments.yes
-    ? { config: buildDefaultConfig(defaults, cliArguments.lintFormatTooling, cliArguments.zod) }
+    ? {
+        config: buildDefaultConfig(
+          defaults,
+          cliArguments.lintFormatTooling,
+          cliArguments.zod,
+          cliArguments.codecov ?? true,
+        ),
+      }
     : await promptForConfig(
         defaults,
         await loadPromptModule(warn),
         warn,
         cliArguments.lintFormatTooling,
+        cliArguments.codecov,
         cliArguments.zod,
       );
   const { config, githubRepositoryCreation } = configResult;
@@ -211,6 +221,7 @@ Publish to GitHub:
   git push -u origin HEAD
 `
     : "";
+  const codecovSetupStep = buildCodecovSetupStep(config);
 
   process.stdout.write(`Created ${config.projectName}
 
@@ -219,7 +230,22 @@ Next steps:
   ${runPrefix} dev
   ${runPrefix} lint
   ${runPrefix} test
-${githubPublishSteps}`);
+${githubPublishSteps}${codecovSetupStep}`);
+};
+
+const buildCodecovSetupStep = (config: ScaffoldConfig): string => {
+  if (!config.includeCodecov || config.packageManager !== "pnpm") {
+    return "";
+  }
+
+  const repository = parseGitHubRepositoryUrl(config.githubRepoUrl);
+  if (repository === undefined) {
+    return "";
+  }
+
+  return `
+Set up Codecov: https://app.codecov.io/gh/${repository.owner}/${repository.repo}/new
+`;
 };
 
 const printPostScaffoldRecovery = (error: PostScaffoldSetupError): void => {
@@ -264,12 +290,13 @@ const buildDefaultConfig = (
   defaults: DetectedDefaults,
   lintFormatTooling: LintFormatTooling = defaultLintFormatTooling,
   includeZod = false,
+  includeCodecov = true,
 ): ScaffoldConfig => ({
   author: defaults.author,
   description: "",
   githubRepoUrl: defaults.githubRepoUrl,
   includeCli: false,
-  includeCodecov: true,
+  includeCodecov,
   includeZod,
   license: "Apache-2.0",
   lintFormatTooling,
@@ -294,6 +321,7 @@ const promptForConfig = async (
   promptModule: PromptModule,
   warn: WarningSink,
   providedLintFormatTooling: LintFormatTooling | undefined,
+  includeCodecovFromCli: boolean | undefined,
   includeZodFromCli: boolean,
 ): Promise<PromptedConfig> => {
   const projectName = await promptForProjectName(defaults, promptModule, warn);
@@ -333,10 +361,12 @@ const promptForConfig = async (
     warn,
   );
   const githubRepositoryAnswer = await promptForGitHubRepoUrl(githubRepositoryPrompt, promptModule);
-  const includeCodecov = await promptModule.confirm({
-    default: true,
-    message: "Include Codecov?",
-  });
+  const includeCodecov =
+    includeCodecovFromCli ??
+    (await promptModule.confirm({
+      default: true,
+      message: "Include Codecov?",
+    }));
   const includeCli = await promptModule.confirm({
     default: false,
     message: "Include CLI entry point?",
@@ -566,18 +596,20 @@ const printSummary = (
   dryRun: boolean,
   githubRepositoryCreation: PendingGitHubRepositoryCreation | undefined,
 ): void => {
+  const includeZod = config.includeZod ?? false;
+  const lintFormatTooling = config.lintFormatTooling ?? defaultLintFormatTooling;
   const rows = [
     ["Project", config.projectName],
     ["Target", targetDirectory],
     ["Description", config.description || "(empty)"],
     ["Author", config.author || "(empty)"],
     ["License", config.license],
-    ["Lint/format", formatLintFormatTooling(config.lintFormatTooling)],
+    ["Lint/format", formatLintFormatTooling(lintFormatTooling)],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
     ["Codecov", config.includeCodecov ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
-    ["Zod", config.includeZod ? "yes" : "no"],
+    ["Zod", includeZod ? "yes" : "no"],
   ];
 
   process.stdout.write(`${dryRun ? cyan("Dry run") : cyan("Scaffold summary")}\n`);

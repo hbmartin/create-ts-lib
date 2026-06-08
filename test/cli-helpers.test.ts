@@ -8,7 +8,11 @@ import {
   normalizeGitHubUrl,
   parseCliArguments,
 } from "../source/cli-helpers.js";
-import { stripGitSuffix, stripPackageScope } from "../source/name-helpers.js";
+import {
+  parseGitHubRepositoryUrl,
+  stripGitSuffix,
+  stripPackageScope,
+} from "../source/name-helpers.js";
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -43,8 +47,34 @@ describe("parseCliArguments", () => {
     });
   });
 
+  it("parses Codecov opt-out", () => {
+    expect(parseCliArguments(["my-lib", "--no-codecov"])).toEqual({
+      codecov: false,
+      directoryArgument: "my-lib",
+      dryRun: false,
+      force: false,
+      help: false,
+      version: false,
+      yes: false,
+      zod: false,
+    });
+  });
+
   it("parses lint and format tooling selection", () => {
     expect(parseCliArguments(["my-lib", "--lint-format", "biome"])).toEqual({
+      directoryArgument: "my-lib",
+      dryRun: false,
+      force: false,
+      help: false,
+      lintFormatTooling: "biome",
+      version: false,
+      yes: false,
+      zod: false,
+    });
+  });
+
+  it("parses lint and format tooling selection with equals syntax", () => {
+    expect(parseCliArguments(["my-lib", "--lint-format=biome"])).toEqual({
       directoryArgument: "my-lib",
       dryRun: false,
       force: false,
@@ -59,7 +89,11 @@ describe("parseCliArguments", () => {
   it("rejects unknown options and extra positional arguments", () => {
     expect(() => parseCliArguments(["--bad"])).toThrow("Unknown option");
     expect(() => parseCliArguments(["--lint-format"])).toThrow("Missing value");
+    expect(() => parseCliArguments(["--lint-format="])).toThrow("Missing value");
     expect(() => parseCliArguments(["--lint-format", "eslint"])).toThrow(
+      "Invalid --lint-format value",
+    );
+    expect(() => parseCliArguments(["--lint-format=eslint"])).toThrow(
       "Invalid --lint-format value",
     );
     expect(() => parseCliArguments(["one", "two"])).toThrow("Unexpected extra argument");
@@ -103,6 +137,34 @@ describe("normalizeGitHubUrl", () => {
     expect(normalizeGitHubUrl("https://gitlab.com/hbmartin/example-lib.git")).toBe(
       "https://gitlab.com/hbmartin/example-lib.git",
     );
+  });
+});
+
+describe("parseGitHubRepositoryUrl", () => {
+  it.each([
+    ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
+    ["HTTPS", "https://github.com/hbmartin/example-lib.git"],
+    ["HTTPS trailing slash", "https://github.com/hbmartin/example-lib/"],
+    ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
+    ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],
+    ["SSH URL", "ssh://git@github.com/hbmartin/example-lib.git"],
+    ["git protocol", "git://github.com/hbmartin/example-lib.git"],
+  ])("parses %s GitHub repository URLs", (_label, githubRepoUrl) => {
+    expect(parseGitHubRepositoryUrl(githubRepoUrl)).toEqual({
+      owner: "hbmartin",
+      repo: "example-lib",
+    });
+  });
+
+  it.each([
+    "",
+    "https://gitlab.com/hbmartin/example-lib.git",
+    "http://github.com/hbmartin/example-lib",
+    "https://github.com/hbmartin",
+    "https://github.com/hbmartin/example-lib/issues",
+    "https://github.com/hbmartin/example-lib?tab=readme-ov-file",
+  ])("rejects unsupported repository URL %s", (githubRepoUrl) => {
+    expect(parseGitHubRepositoryUrl(githubRepoUrl)).toBeUndefined();
   });
 });
 

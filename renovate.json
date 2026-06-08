@@ -13,8 +13,14 @@
     {
       "customType": "regex",
       "description": "Track npm dependencies embedded in generated package.json templates.",
-      "managerFilePatterns": ["/^source/templates/files\\.ts$/"],
-      "matchStrings": ["\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\": \"\\^(?<currentValue>[^\"]+)\""],
+      "managerFilePatterns": [
+        "/^source/templates/files\\.ts$/",
+        "/^source/templates/generated-versions\\.ts$/"
+      ],
+      "matchStrings": [
+        "\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\": \"\\^(?<currentValue>[^\"]+)\"",
+        "(?<depName>[a-z][\\w-]*): \"\\^(?<currentValue>[^\"]+)\""
+      ],
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     },

@@ -57,7 +57,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 | CI + release workflow         | GitHub Actions (pnpm)                   | —                    | Manual               |
 | Project status                | Actively maintained                     | Inactive since ~2021 | n/a                  |
 
-The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** with one lint/format tooling choice. If you need a dual CJS/ESM build or a different broader tooling stack, a hand-rolled template gives you more control at the cost of the wiring.
+The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** with a focused lint/format choice between Oxlint + Oxfmt and Biome. If you need a dual CJS/ESM build or a different broader tooling stack, a hand-rolled template gives you more control at the cost of the wiring.
 
 ## Requirements
 
@@ -106,6 +106,12 @@ To include Zod as a generated runtime dependency:
 npx @hbmartin/create-ts-lib my-lib --zod
 ```
 
+To omit the default Codecov upload step from generated pnpm CI:
+
+```bash
+npx @hbmartin/create-ts-lib my-lib --no-codecov
+```
+
 By default the generator refuses to write into a non-empty target directory. Use `--force` only when you intentionally want generated files written into an existing directory:
 
 ```bash
@@ -125,6 +131,7 @@ create-ts-lib [directory] [options]
 | `--dry-run`       | Print the scaffold plan without writing files   |
 | `--force`         | Allow writing into a non-empty target directory |
 | `--lint-format`   | Choose `oxlint-oxfmt` or `biome`                |
+| `--no-codecov`    | Omit the Codecov upload step from generated CI  |
 | `--zod`           | Include Zod in the generated project            |
 | `--help`, `-h`    | Print usage and exit                            |
 | `--version`, `-v` | Print the CLI version and exit                  |
@@ -141,14 +148,14 @@ The generator asks for:
 | License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                                                              |
 | Lint and format tooling  | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                |
 | GitHub repo URL          | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH and `git+https://github.com/` remotes |
-| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                                                       |
+| Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI; automation can pass `--no-codecov` to omit it                        |
 | Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                                                                 |
 | Include Zod?             | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`             |
 | Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                                                   |
 
-After the final project name is accepted, interactive mode starts a `gh` lookup for a matching personal GitHub repository while it continues asking local project prompts. If the repo exists, that URL is offered as the repo URL default. If it does not exist, the CLI lets you create a public or private repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. If `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default.
+After the final project name is accepted, interactive mode starts a `gh` lookup for a matching personal GitHub repository while it continues asking local project prompts. Existing repos are offered as the repo URL default. When no matching repo exists, the CLI lets you create a public or private repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. When `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default.
 
-If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default for generated metadata such as `package.json` repository fields, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup. Pass `--zod` with `--yes` to opt into Zod without prompting. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
+If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default for generated metadata such as `package.json` repository fields, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup. Pass `--zod` with `--yes` to opt into Zod without prompting, or `--no-codecov` to omit the default Codecov upload. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
 ## Generated Project Layout
 
