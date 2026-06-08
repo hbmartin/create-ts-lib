@@ -58,8 +58,6 @@ const packageManagerConfig = {
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
 
-const nodeTypesVersion = "^22";
-
 const readTemplate = (relativePath: string): string =>
   readFileSync(new URL(`./assets/${relativePath}`, import.meta.url), "utf8");
 
@@ -184,7 +182,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     devDependencies: {
       "@arethetypeswrong/cli": generatedPackageDevDependencies["@arethetypeswrong/cli"],
       "@sindresorhus/tsconfig": generatedPackageDevDependencies["@sindresorhus/tsconfig"],
-      "@types/node": nodeTypesVersion,
+      "@types/node": generatedPackageDevDependencies["@types/node"],
       "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
       "dependency-cruiser": generatedPackageDevDependencies["dependency-cruiser"],
       lefthook: generatedPackageDevDependencies.lefthook,
@@ -214,19 +212,19 @@ type PackageManagerOverrideFields =
 const packageManagerOverrideFields = {
   npm: {
     overrides: {
-      "@types/node": nodeTypesVersion,
+      "@types/node": generatedPackageDevDependencies["@types/node"],
     },
   },
   pnpm: {
     pnpm: {
       overrides: {
-        "@types/node": nodeTypesVersion,
+        "@types/node": generatedPackageDevDependencies["@types/node"],
       },
     },
   },
   yarn: {
     resolutions: {
-      "@types/node": nodeTypesVersion,
+      "@types/node": generatedPackageDevDependencies["@types/node"],
     },
   },
 } satisfies Record<PackageManager, PackageManagerOverrideFields>;
