@@ -64,6 +64,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "dependency-cruiser": "^17.4.3",
     "lefthook": "^2.1.9",
+    "meow": "^14.1.0",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "publint": "^0.3.21",
