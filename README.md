@@ -287,10 +287,11 @@ The package exports:
 - `defaultScaffoldConfig(overrides?)`
 - `scaffoldProject(config, options)`
 - `ScaffoldConfig`
+- `ScaffoldConfigOverrides`
 - `ScaffoldOptions`
 - `ScaffoldProgress`
 
-`ScaffoldConfig` is a complete required config shape. Use `defaultScaffoldConfig()` to start from the documented defaults and override only the project-specific values.
+`ScaffoldConfig` is a complete required config shape. Use `defaultScaffoldConfig()` to start from the documented defaults and override only the project-specific values. `undefined` override values are ignored, preserving the documented defaults.
 
 `scaffoldProject` writes the generated project, rejects invalid package names, refuses non-empty target directories unless `force: true` is set, can optionally receive progress callbacks for post-scaffold steps, and can add a best-effort `origin` remote with `gitRemoteOriginUrl`.
 

@@ -105,11 +105,9 @@ const runScaffoldWorkflow = async (
         config: defaultScaffoldConfig({
           author: defaults.author,
           githubRepoUrl: defaults.githubRepoUrl,
-          ...(cliArguments.codecov === undefined ? {} : { includeCodecov: cliArguments.codecov }),
-          ...(cliArguments.lintFormatTooling === undefined
-            ? {}
-            : { lintFormatTooling: cliArguments.lintFormatTooling }),
-          ...(cliArguments.zod === undefined ? {} : { includeZod: cliArguments.zod }),
+          includeCodecov: cliArguments.codecov,
+          includeZod: cliArguments.zod,
+          lintFormatTooling: cliArguments.lintFormatTooling,
           projectName: defaults.projectName,
         }),
       }

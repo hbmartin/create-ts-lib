@@ -33,6 +33,10 @@ export interface ScaffoldConfig {
   projectName: string;
 }
 
+export type ScaffoldConfigOverrides = {
+  [Key in keyof ScaffoldConfig]?: ScaffoldConfig[Key] | undefined;
+};
+
 const defaultScaffoldConfigValues = {
   author: "",
   description: "",
@@ -46,12 +50,12 @@ const defaultScaffoldConfigValues = {
   projectName: "my-lib",
 } satisfies ScaffoldConfig;
 
-const stripUndefinedOverrides = (overrides: Partial<ScaffoldConfig>): Partial<ScaffoldConfig> =>
+const stripUndefinedOverrides = (overrides: ScaffoldConfigOverrides): Partial<ScaffoldConfig> =>
   Object.fromEntries(
     Object.entries(overrides).filter(([, value]) => value !== undefined),
   ) as Partial<ScaffoldConfig>;
 
-export const defaultScaffoldConfig = (overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig => ({
+export const defaultScaffoldConfig = (overrides: ScaffoldConfigOverrides = {}): ScaffoldConfig => ({
   ...defaultScaffoldConfigValues,
   ...stripUndefinedOverrides(overrides),
 });
