@@ -188,7 +188,7 @@ export const runPackageManagerCommand = async (
   cwd: string,
 ): Promise<void> => {
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const childProcess = spawn(packageManager, args, {
+    const childProcess = spawn(getPackageManagerExecutable(packageManager), args, {
       cwd,
       stdio: "inherit",
     });
@@ -206,6 +206,11 @@ export const runPackageManagerCommand = async (
     });
   });
 };
+
+export const getPackageManagerExecutable = (
+  packageManager: PackageManager,
+  platform: NodeJS.Platform = process.platform,
+): string => (platform === "win32" ? `${packageManager}.cmd` : packageManager);
 
 interface PostScaffoldStepOptions {
   packageManager: PackageManager;

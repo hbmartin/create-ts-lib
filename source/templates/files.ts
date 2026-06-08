@@ -26,15 +26,26 @@ export interface ScaffoldConfig {
   githubRepoUrl: string;
   includeCli: boolean;
   includeCodecov: boolean;
-  includeZod?: boolean;
+  includeZod: boolean;
   license: LicenseName;
-  lintFormatTooling?: LintFormatTooling;
+  lintFormatTooling: LintFormatTooling;
   packageManager: PackageManager;
   projectName: string;
 }
 
-type ResolvedScaffoldConfig = Omit<ScaffoldConfig, "includeZod" | "lintFormatTooling"> &
-  Required<Pick<ScaffoldConfig, "includeZod" | "lintFormatTooling">>;
+export const defaultScaffoldConfig = (overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig => ({
+  author: "",
+  description: "",
+  githubRepoUrl: "",
+  includeCli: false,
+  includeCodecov: true,
+  includeZod: false,
+  license: "Apache-2.0",
+  lintFormatTooling: defaultLintFormatTooling,
+  packageManager: "pnpm",
+  projectName: "my-lib",
+  ...overrides,
+});
 
 export interface GeneratedFile {
   content: string;
@@ -118,13 +129,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
   };
 };
 
-const resolveScaffoldConfig = (config: ScaffoldConfig): ResolvedScaffoldConfig => ({
-  ...config,
-  includeZod: config.includeZod ?? false,
-  lintFormatTooling: config.lintFormatTooling ?? defaultLintFormatTooling,
-});
-
-const buildPackageJson = (config: ResolvedScaffoldConfig): string => {
+const buildPackageJson = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];
   const lintFormatScripts = buildLintFormatScripts(config.lintFormatTooling);
   const repositoryMetadata = repositoryFields(config.githubRepoUrl);
@@ -268,7 +273,7 @@ const buildLintFormatDevDependencies = (
   lintFormatTooling: LintFormatTooling,
 ): Record<string, string> => lintFormatDevDependencies[lintFormatTooling];
 
-const buildReadme = (config: ResolvedScaffoldConfig): string => {
+const buildReadme = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];
   const description = config.description || "A TypeScript library.";
   const authorName = extractAuthorName(config.author);
@@ -324,7 +329,7 @@ See [\`AGENTS.md\`](AGENTS.md) for the conventions this project follows.
 `;
 };
 
-const buildReadmeBadges = (config: ResolvedScaffoldConfig): string => {
+const buildReadmeBadges = (config: ScaffoldConfig): string => {
   const badges = [
     `[![npm version](https://img.shields.io/npm/v/${config.projectName}.svg)](https://www.npmjs.com/package/${config.projectName})`,
   ];
@@ -347,7 +352,7 @@ const buildLicenseBadge = (license: LicenseName): string => {
   return `[![License: ${license}](https://img.shields.io/badge/license-${escapedLicense}-blue.svg)](LICENSE)`;
 };
 
-const buildCiWorkflow = (config: ResolvedScaffoldConfig): string => {
+const buildCiWorkflow = (config: ScaffoldConfig): string => {
   const codecovStep = config.includeCodecov
     ? `
       - name: Upload coverage to Codecov
@@ -399,19 +404,18 @@ const buildLicense = (license: LicenseName, author: string): string => {
 export const getBinName = (projectName: string): string => stripPackageScope(projectName);
 
 export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
-  const resolvedConfig = resolveScaffoldConfig(config);
   const pmConfig = packageManagerConfig[config.packageManager];
   const files: GeneratedFile[] = [
     {
       content: renderTemplate("gitignore.tmpl"),
       path: ".gitignore",
     },
-    ...buildLintFormatFiles(resolvedConfig),
+    ...buildLintFormatFiles(config),
     {
       content: renderTemplate("agents.md.tmpl", {
-        LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(resolvedConfig.lintFormatTooling),
+        LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
         SEMGREP_VERSION: semgrepVersion,
-        ZOD_GUIDANCE: buildZodAgentGuidance(resolvedConfig.includeZod),
+        ZOD_GUIDANCE: buildZodAgentGuidance(config.includeZod),
       }),
       path: "AGENTS.md",
     },
@@ -436,11 +440,11 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       path: "scripts/security-lint.mjs",
     },
     {
-      content: buildPackageJson(resolvedConfig),
+      content: buildPackageJson(config),
       path: "package.json",
     },
     {
-      content: buildReadme(resolvedConfig),
+      content: buildReadme(config),
       path: "README.md",
     },
     ...(config.packageManager === "pnpm"
@@ -504,7 +508,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   if (config.githubRepoUrl.length > 0 && config.packageManager === "pnpm") {
     files.push(
       {
-        content: buildCiWorkflow(resolvedConfig),
+        content: buildCiWorkflow(config),
         path: ".github/workflows/ci.yml",
       },
       {
@@ -517,7 +521,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   return files;
 };
 
-const buildLintFormatFiles = (config: ResolvedScaffoldConfig): GeneratedFile[] => {
+const buildLintFormatFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   if (config.lintFormatTooling === "biome") {
     return [
       {

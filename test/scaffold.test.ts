@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import generatorPackageJson from "../package.json" with { type: "json" };
 import {
+  getPackageManagerExecutable,
   initializeGitRepositoryIfNeeded,
   runPackageManagerCommand,
   scaffoldProject,
@@ -14,6 +15,7 @@ import {
 import { renderBiomeJsonc } from "../source/templates/biome.js";
 import {
   buildProjectFiles,
+  defaultScaffoldConfig,
   type GeneratedFile,
   getBinName,
   type LicenseName,
@@ -240,17 +242,26 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow.content).not.toContain("CODECOV_TOKEN");
   });
 
-  it("defaults newly optional scaffold config fields", () => {
-    const {
-      includeZod: _includeZod,
-      lintFormatTooling: _lintFormatTooling,
-      ...legacyConfig
-    } = baseConfig;
-    const files = buildProjectFiles(legacyConfig);
+  it("builds a complete scaffold config with documented defaults", () => {
+    const config = defaultScaffoldConfig({
+      author: baseConfig.author,
+      description: baseConfig.description,
+      githubRepoUrl: baseConfig.githubRepoUrl,
+      license: baseConfig.license,
+      projectName: baseConfig.projectName,
+    });
+    const files = buildProjectFiles(config);
     const filePaths = files.map((file) => file.path);
     const agents = findGeneratedFile(files, "AGENTS.md");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
 
+    expect(config).toMatchObject({
+      includeCli: false,
+      includeCodecov: true,
+      includeZod: false,
+      lintFormatTooling: "oxlint-oxfmt",
+      packageManager: "pnpm",
+    });
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
     expect(filePaths).not.toContain("biome.jsonc");
@@ -848,6 +859,17 @@ describe("initializeGitRepositoryIfNeeded", () => {
 });
 
 describe("runPackageManagerCommand", () => {
+  it("uses Windows command shims without enabling a shell", () => {
+    expect(getPackageManagerExecutable("pnpm", "win32")).toBe("pnpm.cmd");
+    expect(getPackageManagerExecutable("npm", "win32")).toBe("npm.cmd");
+    expect(getPackageManagerExecutable("yarn", "win32")).toBe("yarn.cmd");
+  });
+
+  it("uses package manager names directly on non-Windows platforms", () => {
+    expect(getPackageManagerExecutable("pnpm", "darwin")).toBe("pnpm");
+    expect(getPackageManagerExecutable("npm", "linux")).toBe("npm");
+  });
+
   it("resolves when the package manager exits successfully", async () => {
     const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-pm-"));
     await writeFile(

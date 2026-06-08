@@ -80,6 +80,7 @@ describe("scaffoldProject post-scaffold progress", () => {
       ["install"],
       expect.objectContaining({ cwd: targetDirectory, stdio: "inherit" }),
     );
+    expect(spawnMock.mock.calls[0]?.[2]).not.toHaveProperty("shell");
     expect(spawnMock).toHaveBeenNthCalledWith(
       2,
       "pnpm",

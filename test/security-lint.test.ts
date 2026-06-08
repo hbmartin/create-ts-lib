@@ -22,6 +22,7 @@ const semgrepScanArguments = [
   "test",
 ];
 const semgrepVersion = "1.165.0";
+const semgrepScanTestTimeout = 20_000;
 
 interface SemgrepScanOutput {
   results: Array<{
@@ -212,66 +213,70 @@ describe("Semgrep security rules", () => {
     expect(generatedConfig?.content).toBe(rootConfig);
   });
 
-  it.skipIf(!hasSemgrepRunner)("flags child_process exec and execSync aliases", async () => {
-    const scan = await runSemgrepScan(await readFile(semgrepConfigPath, "utf8"), {
-      "default-import.ts": `
+  it.skipIf(!hasSemgrepRunner)(
+    "flags child_process exec and execSync aliases",
+    async () => {
+      const scan = await runSemgrepScan(await readFile(semgrepConfigPath, "utf8"), {
+        "default-import.ts": `
         import childProcess from "child_process";
 
         childProcess.exec("echo unsafe");
         childProcess.execSync("echo unsafe");
       `,
-      "named-import.ts": `
+        "named-import.ts": `
         import { exec, execSync } from "node:child_process";
 
         exec("echo unsafe");
         execSync("echo unsafe");
       `,
-      "named-import-alias.ts": `
+        "named-import-alias.ts": `
         import { exec as run, execSync as runSync } from "child_process";
 
         run("echo unsafe");
         runSync("echo unsafe");
       `,
-      "namespace-import.ts": `
+        "namespace-import.ts": `
         import * as childProcess from "node:child_process";
 
         childProcess.exec("echo unsafe");
         childProcess.execSync("echo unsafe");
       `,
-      "require-destructure.ts": `
+        "require-destructure.ts": `
         const { exec, execSync } = require("child_process");
 
         exec("echo unsafe");
         execSync("echo unsafe");
       `,
-      "require-destructure-alias.ts": `
+        "require-destructure-alias.ts": `
         const { exec: run, execSync: runSync } = require("node:child_process");
 
         run("echo unsafe");
         runSync("echo unsafe");
       `,
-      "require-namespace.ts": `
+        "require-namespace.ts": `
         const childProcess = require("node:child_process");
 
         childProcess.exec("echo unsafe");
         childProcess.execSync("echo unsafe");
       `,
-    });
+      });
 
-    const findingCounts = scan.results.reduce<Record<string, number>>((counts, result) => {
-      const fileName = result.path.split(/[\\/]/u).at(-1) ?? result.path;
-      counts[fileName] = (counts[fileName] ?? 0) + 1;
-      return counts;
-    }, {});
+      const findingCounts = scan.results.reduce<Record<string, number>>((counts, result) => {
+        const fileName = result.path.split(/[\\/]/u).at(-1) ?? result.path;
+        counts[fileName] = (counts[fileName] ?? 0) + 1;
+        return counts;
+      }, {});
 
-    expect(findingCounts).toEqual({
-      "default-import.ts": 2,
-      "named-import.ts": 2,
-      "named-import-alias.ts": 2,
-      "namespace-import.ts": 2,
-      "require-destructure.ts": 2,
-      "require-destructure-alias.ts": 2,
-      "require-namespace.ts": 2,
-    });
-  });
+      expect(findingCounts).toEqual({
+        "default-import.ts": 2,
+        "named-import.ts": 2,
+        "named-import-alias.ts": 2,
+        "namespace-import.ts": 2,
+        "require-destructure.ts": 2,
+        "require-destructure-alias.ts": 2,
+        "require-namespace.ts": 2,
+      });
+    },
+    semgrepScanTestTimeout,
+  );
 });
