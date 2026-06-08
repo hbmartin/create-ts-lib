@@ -21,6 +21,7 @@ export interface CliArguments {
   lintFormatTooling?: LintFormatTooling;
   version: boolean;
   yes: boolean;
+  zod: boolean;
 }
 
 export interface DetectedDefaults {
@@ -30,7 +31,7 @@ export interface DetectedDefaults {
 }
 
 export type WarningSink = (message: string) => void;
-type CliBooleanFlag = "dryRun" | "force" | "help" | "version" | "yes";
+type CliBooleanFlag = "dryRun" | "force" | "help" | "version" | "yes" | "zod";
 
 interface GitReaders {
   readGitConfigValue(key: string): Promise<string>;
@@ -43,6 +44,7 @@ const cliFlagAliases = new Map<string, CliBooleanFlag>([
   ["--help", "help"],
   ["--version", "version"],
   ["--yes", "yes"],
+  ["--zod", "zod"],
   ["-h", "help"],
   ["-v", "version"],
   ["-y", "yes"],
@@ -55,6 +57,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     help: false,
     version: false,
     yes: false,
+    zod: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {

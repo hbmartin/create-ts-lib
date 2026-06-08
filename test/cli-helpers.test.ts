@@ -27,6 +27,19 @@ describe("parseCliArguments", () => {
       help: false,
       version: false,
       yes: true,
+      zod: false,
+    });
+  });
+
+  it("parses Zod opt-in", () => {
+    expect(parseCliArguments(["my-lib", "--zod"])).toEqual({
+      directoryArgument: "my-lib",
+      dryRun: false,
+      force: false,
+      help: false,
+      version: false,
+      yes: false,
+      zod: true,
     });
   });
 
@@ -39,6 +52,7 @@ describe("parseCliArguments", () => {
       lintFormatTooling: "biome",
       version: false,
       yes: false,
+      zod: false,
     });
   });
 

@@ -118,6 +118,7 @@ try {
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
         includeCli,
         includeCodecov: false,
+        includeZod: false,
         license: "MIT",
         lintFormatTooling: "oxlint-oxfmt",
         packageManager,

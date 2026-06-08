@@ -40,6 +40,7 @@ const baseConfig: ScaffoldConfig = {
   githubRepoUrl: "",
   includeCli: false,
   includeCodecov: true,
+  includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",

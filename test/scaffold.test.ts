@@ -34,6 +34,7 @@ const baseConfig: ScaffoldConfig = {
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
@@ -72,7 +73,9 @@ interface GeneratedPackageJson {
   bugs?: {
     url: string;
   };
-  dependencies: Record<string, string>;
+  dependencies: Record<string, string> & {
+    zod?: string;
+  };
   devDependencies: Record<string, string>;
   exports: {
     ".": Record<string, string>;
@@ -127,7 +130,7 @@ interface GeneratedBiomeConfig {
 describe("renderTemplate", () => {
   it("throws when a standalone template placeholder remains unresolved", () => {
     expect(() => renderTemplate("agents.md.tmpl")).toThrow(
-      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}, {{SEMGREP_VERSION}}",
+      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}, {{ZOD_GUIDANCE}}, {{SEMGREP_VERSION}}",
     );
   });
 
@@ -230,6 +233,14 @@ describe("buildProjectFiles", () => {
       }),
       "package.json",
     );
+    const zodPackageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles({
+        ...baseConfig,
+        includeCli: true,
+        includeZod: true,
+      }),
+      "package.json",
+    );
     const expectedNodeTypesVersion = readGeneratorSpecifier(
       generatorDevDependencies,
       "@types/node",
@@ -242,8 +253,11 @@ describe("buildProjectFiles", () => {
     expect(packageJson.packageManager).toBe(generatorPackageJson.packageManager);
     expect(packageJson.dependencies).toMatchObject({
       meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
-      zod: readGeneratorSpecifier(generatorDependencies, "zod"),
     });
+    expect(packageJson.dependencies).not.toHaveProperty("zod");
+    expect(zodPackageJson.dependencies.zod).toBe(
+      readGeneratorSpecifier(generatorDependencies, "zod"),
+    );
 
     for (const dependency of [
       "@arethetypeswrong/cli",
@@ -335,9 +349,7 @@ describe("buildProjectFiles", () => {
       oxlint: expect.any(String),
       publint: expect.any(String),
     });
-    expect(packageJson.dependencies).toMatchObject({
-      zod: generatedPackageDependencies.zod,
-    });
+    expect(packageJson.dependencies).toEqual({});
     expect(
       Object.keys(packageJson.devDependencies).filter((dependency) =>
         dependency.startsWith("@vitest/coverage-"),
@@ -381,6 +393,7 @@ describe("buildProjectFiles", () => {
     expect(agents.content).toContain(
       "Linting is handled by Oxlint, and formatting is handled by Oxfmt.",
     );
+    expect(agents.content).not.toContain("Use Zod");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
     expect(agents.content).toContain(`uvx semgrep@${semgrepVersion}`);
     expect(dependencyCruiser.content).toContain("source-not-to-test");
@@ -409,6 +422,22 @@ describe("buildProjectFiles", () => {
     expect(securityLint.content).toContain("node:child_process");
     expect(securityLint.content).not.toContain("console.");
     expect(vitestConfig.content).toContain(`provider: "v8"`);
+  });
+
+  it("emits Zod dependency and agent guidance when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeZod: true,
+    });
+    const agents = findGeneratedFile(files, "AGENTS.md");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+
+    expect(packageJson.dependencies).toMatchObject({
+      zod: generatedPackageDependencies.zod,
+    });
+    expect(agents.content).toContain(
+      "Use Zod for external input validation and anywhere runtime validation is needed.",
+    );
   });
 
   it("emits Biome tooling when selected", () => {

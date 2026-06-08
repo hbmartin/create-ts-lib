@@ -8,8 +8,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
 - Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. {{LINT_FORMAT_GUIDANCE}}
-- Use Zod for external input validation and anywhere runtime validation is needed.
-
+{{ZOD_GUIDANCE}}
 ## Code Changes
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.

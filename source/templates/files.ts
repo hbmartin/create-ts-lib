@@ -26,6 +26,7 @@ export interface ScaffoldConfig {
   githubRepoUrl: string;
   includeCli: boolean;
   includeCodecov: boolean;
+  includeZod: boolean;
   license: LicenseName;
   lintFormatTooling: LintFormatTooling;
   packageManager: PackageManager;
@@ -177,7 +178,7 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     dependencies: {
       ...(config.includeCli ? { meow: generatedPackageDependencies.meow } : {}),
-      zod: generatedPackageDependencies.zod,
+      ...(config.includeZod ? { zod: generatedPackageDependencies.zod } : {}),
     },
     devDependencies: {
       "@arethetypeswrong/cli": generatedPackageDevDependencies["@arethetypeswrong/cli"],
@@ -400,6 +401,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       content: renderTemplate("agents.md.tmpl", {
         LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
         SEMGREP_VERSION: semgrepVersion,
+        ZOD_GUIDANCE: buildZodAgentGuidance(config.includeZod),
       }),
       path: "AGENTS.md",
     },
@@ -534,6 +536,11 @@ const lintFormatAgentGuidance = {
 
 const buildLintFormatAgentGuidance = (lintFormatTooling: LintFormatTooling): string =>
   lintFormatAgentGuidance[lintFormatTooling];
+
+const buildZodAgentGuidance = (includeZod: boolean): string =>
+  includeZod
+    ? "- Use Zod for external input validation and anywhere runtime validation is needed.\n\n"
+    : "\n";
 
 const extractAuthorName = (author: string): string => {
   const trimmedAuthor = author.trim();

@@ -36,7 +36,7 @@ interface PromptSelectOptions {
 }
 
 interface PromptModule {
-  confirm(options: { message: string }): Promise<boolean>;
+  confirm(options: { default?: boolean; message: string }): Promise<boolean>;
   input(options: PromptInputOptions): Promise<string>;
   select(options: PromptSelectOptions): Promise<string>;
 }
@@ -80,6 +80,7 @@ describe("cli entrypoint", () => {
     expect(result.exitCode).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("pnpm create @hbmartin/ts-lib my-lib");
+    expect(result.stdout).toContain("--zod");
   });
 
   it("prints an error and help for invalid arguments", async () => {
@@ -100,6 +101,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: demo-lib");
     expect(result.stdout).toContain("License: Apache-2.0");
     expect(result.stdout).toContain("Lint/format: Oxlint + Oxfmt");
+    expect(result.stdout).toContain("Zod: no");
     expect(result.stdout).toContain("Files to create:");
     expect(result.stdout).toContain("package.json");
   });
@@ -116,6 +118,24 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         lintFormatTooling: "biome",
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("passes --zod to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--zod"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Zod: yes");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeZod: true,
         projectName: "demo-lib",
       }),
       expect.any(Object),
@@ -198,8 +218,9 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Lint/format: Biome");
     expect(result.stdout).toContain("Package manager: pnpm");
     expect(result.stdout).toContain("CLI entry: yes");
+    expect(result.stdout).toContain("Zod: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.confirm).toHaveBeenCalledTimes(2);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(3);
     expect(promptModule.select).toHaveBeenCalledTimes(3);
   });
 
