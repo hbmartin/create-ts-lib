@@ -12,15 +12,23 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track npm dependencies embedded in generated package.json templates.",
+      "description": "Track quoted npm dependencies embedded in generated package.json templates.",
       "managerFilePatterns": [
         "/^source/templates/files\\.ts$/",
         "/^source/templates/generated-versions\\.ts$/"
       ],
       "matchStrings": [
-        "\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\": \"\\^(?<currentValue>[^\"]+)\"",
-        "(?<depName>[a-z][\\w-]*): \"\\^(?<currentValue>[^\"]+)\""
+        "\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\":\\s*\"\\^(?<currentValue>[^\"]+)\""
       ],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the template-only meow dependency emitted into generated package.json files.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": ["meow:\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "meow",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     },

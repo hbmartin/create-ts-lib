@@ -107,6 +107,9 @@ describe("shared name helpers", () => {
     expect(stripGitSuffix("https://github.com/hbmartin/example-lib.git")).toBe(
       "https://github.com/hbmartin/example-lib",
     );
+    expect(stripGitSuffix("https://github.com/hbmartin/example-lib.git/")).toBe(
+      "https://github.com/hbmartin/example-lib",
+    );
   });
 });
 
@@ -121,6 +124,7 @@ describe("normalizeGitHubUrl", () => {
   it.each([
     ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
     ["HTTPS", "https://github.com/hbmartin/example-lib.git"],
+    ["HTTPS with .git trailing slash", "https://github.com/hbmartin/example-lib.git/"],
     ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
     ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],
     ["SSH URL", "ssh://git@github.com/hbmartin/example-lib.git"],
@@ -144,6 +148,7 @@ describe("parseGitHubRepositoryUrl", () => {
   it.each([
     ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
     ["HTTPS", "https://github.com/hbmartin/example-lib.git"],
+    ["HTTPS with .git trailing slash", "https://github.com/hbmartin/example-lib.git/"],
     ["HTTPS trailing slash", "https://github.com/hbmartin/example-lib/"],
     ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
     ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],

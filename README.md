@@ -242,7 +242,7 @@ Before creating a GitHub repo or writing files, the generator rejects non-empty 
 4. `<package-manager> run build`
 5. `<package-manager> run test`
 
-Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively, the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
+Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively, the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. When Codecov is enabled for a pnpm project with a GitHub repo URL, the final next steps also include the Codecov setup URL for that repository. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
 
 ## Next Steps After Scaffolding
 
