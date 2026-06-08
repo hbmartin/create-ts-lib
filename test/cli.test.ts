@@ -903,6 +903,7 @@ describe("cli entrypoint", () => {
       const scaffoldProject = vi.fn(async () => undefined);
       const promptModule = buildGitHubPromptModule({
         description: "Prompted description",
+        expectedGithubRepoUrlDefault: `https://github.com/hbmartin/codecov-${packageManager}-lib`,
         githubRepoUrl: "https://github.com/hbmartin/example-lib",
         includeCodecov: true,
         packageManager,

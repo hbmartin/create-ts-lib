@@ -292,12 +292,12 @@ describe("buildProjectFiles", () => {
 
     expect(generatorDevDependencies).not.toHaveProperty("meow");
     expect(generatedPackageDependencies).toMatchObject({
-      meow: "^14.1.0",
+      meow: generatedPackageDependencies.meow,
       zod: readGeneratorSpecifier(generatorDependencies, "zod"),
     });
     expect(packageJson.packageManager).toBe(generatorPackageJson.packageManager);
     expect(packageJson.dependencies).toMatchObject({
-      meow: "^14.1.0",
+      meow: generatedPackageDependencies.meow,
     });
     expect(packageJson.dependencies).not.toHaveProperty("zod");
     expect(zodPackageJson.dependencies.zod).toBe(

@@ -1,4 +1,4 @@
-const gitSuffixRegex = /\.git$/u;
+const gitSuffixRegex = /\.git\/?$/u;
 const githubRepositoryUrlRegex =
   /^https:\/\/github\.com\/(?<owner>[^/\s?#]+)\/(?<repo>[^/\s?#]+)\/?$/u;
 const packageScopeRegex = /^@[^/]+\//u;
