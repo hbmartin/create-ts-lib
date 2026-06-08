@@ -1,7 +1,18 @@
 import { readFileSync } from "node:fs";
 
+import type { LintFormatTooling } from "../lint-format-tooling.js";
 import { normalizeGitHubUrl, stripPackageScope } from "../name-helpers.js";
 import { renderBiomeJsonc } from "./biome.js";
+import {
+  generatedPackageDependencies,
+  generatedPackageDevDependencies,
+  githubActionRefs,
+  pnpmVersion,
+  semgrepVersion,
+  tsgoProbeCommand,
+} from "./generated-versions.js";
+
+export { tsgoProbeCommand } from "./generated-versions.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 export type LicenseName = "MIT" | "ISC" | "Apache-2.0" | "UNLICENSED";
@@ -16,6 +27,7 @@ export interface ScaffoldConfig {
   includeCli: boolean;
   includeCodecov: boolean;
   license: LicenseName;
+  lintFormatTooling: LintFormatTooling;
   packageManager: PackageManager;
   projectName: string;
 }
@@ -46,15 +58,14 @@ const packageManagerConfig = {
   },
 } satisfies Record<PackageManager, PackageManagerConfig>;
 
-const pnpmVersion = "11.5.2";
-
-export const tsgoProbeCommand =
-  "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
+const nodeTypesVersion = "^22";
 
 const readTemplate = (relativePath: string): string =>
   readFileSync(new URL(`./assets/${relativePath}`, import.meta.url), "utf8");
 
-const renderTemplate = (
+const unresolvedTemplatePlaceholderPattern = /(?<!\$)\{\{[^{}]*\}\}/gu;
+
+export const renderTemplate = (
   relativePath: string,
   replacements: Record<string, string> = {},
 ): string => {
@@ -62,6 +73,15 @@ const renderTemplate = (
 
   for (const [key, value] of Object.entries(replacements)) {
     content = content.replaceAll(`{{${key}}}`, value);
+  }
+
+  const unresolvedPlaceholders = Array.from(
+    new Set(content.match(unresolvedTemplatePlaceholderPattern) ?? []),
+  );
+  if (unresolvedPlaceholders.length > 0) {
+    throw new Error(
+      `Unresolved template placeholder(s) in ${relativePath}: ${unresolvedPlaceholders.join(", ")}`,
+    );
   }
 
   return content;
@@ -98,6 +118,7 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
 
 const buildPackageJson = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];
+  const lintFormatScripts = buildLintFormatScripts(config.lintFormatTooling);
   const repositoryMetadata = repositoryFields(config.githubRepoUrl);
   const artifactFiles = [
     "dist/index.js",
@@ -140,8 +161,8 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} test:coverage`,
       "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
       dev: "tsc --watch",
-      format: "oxfmt . --write",
-      lint: "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
+      format: lintFormatScripts.format,
+      lint: lintFormatScripts.lint,
       attw: "attw --pack . --profile esm-only",
       prepare: "lefthook install",
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
@@ -157,26 +178,22 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
       "verify:package": "npm publish --dry-run --ignore-scripts",
     },
     dependencies: {
-      ...(config.includeCli ? { meow: "^14.0.0" } : {}),
-      zod: "^4.4.3",
+      ...(config.includeCli ? { meow: generatedPackageDependencies.meow } : {}),
+      zod: generatedPackageDependencies.zod,
     },
     devDependencies: {
-      "@arethetypeswrong/cli": "^0.18.3",
-      "@biomejs/biome": "^2.4.16",
-      "@sindresorhus/tsconfig": "^8.1.0",
-      "@types/node": "^22",
-      "@vitest/coverage-v8": "^4.1.8",
-      "dependency-cruiser": "^17.4.3",
-      lefthook: "^2.1.9",
-      oxfmt: "^0.53.0",
-      oxlint: "^1.68.0",
-      publint: "^0.3.21",
-      typescript: "^6.0.3",
-      vitest: "^4.1.8",
+      "@arethetypeswrong/cli": generatedPackageDevDependencies["@arethetypeswrong/cli"],
+      "@sindresorhus/tsconfig": generatedPackageDevDependencies["@sindresorhus/tsconfig"],
+      "@types/node": nodeTypesVersion,
+      "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
+      "dependency-cruiser": generatedPackageDevDependencies["dependency-cruiser"],
+      lefthook: generatedPackageDevDependencies.lefthook,
+      ...buildLintFormatDevDependencies(config.lintFormatTooling),
+      publint: generatedPackageDevDependencies.publint,
+      typescript: generatedPackageDevDependencies.typescript,
+      vitest: generatedPackageDevDependencies.vitest,
     },
-    resolutions: {
-      "@types/node": "^22",
-    },
+    ...buildPackageManagerOverrideFields(config.packageManager),
     engines: {
       node: ">=22",
     },
@@ -184,6 +201,64 @@ const buildPackageJson = (config: ScaffoldConfig): string => {
 
   return `${JSON.stringify(packageJson, null, 2)}\n`;
 };
+
+const buildPackageManagerOverrideFields = (
+  packageManager: PackageManager,
+): PackageManagerOverrideFields => packageManagerOverrideFields[packageManager];
+
+type PackageManagerOverrideFields =
+  | { overrides: { "@types/node": string } }
+  | { pnpm: { overrides: { "@types/node": string } } }
+  | { resolutions: { "@types/node": string } };
+
+const packageManagerOverrideFields = {
+  npm: {
+    overrides: {
+      "@types/node": nodeTypesVersion,
+    },
+  },
+  pnpm: {
+    pnpm: {
+      overrides: {
+        "@types/node": nodeTypesVersion,
+      },
+    },
+  },
+  yarn: {
+    resolutions: {
+      "@types/node": nodeTypesVersion,
+    },
+  },
+} satisfies Record<PackageManager, PackageManagerOverrideFields>;
+
+const lintFormatScripts = {
+  biome: {
+    format: "biome format --write .",
+    lint: "biome check --error-on-warnings .",
+  },
+  "oxlint-oxfmt": {
+    format: "oxfmt . --write",
+    lint: "oxlint --deny-warnings . && oxfmt --check .",
+  },
+} satisfies Record<LintFormatTooling, { format: string; lint: string }>;
+
+const buildLintFormatScripts = (
+  lintFormatTooling: LintFormatTooling,
+): { format: string; lint: string } => lintFormatScripts[lintFormatTooling];
+
+const lintFormatDevDependencies = {
+  biome: {
+    "@biomejs/biome": generatedPackageDevDependencies["@biomejs/biome"],
+  },
+  "oxlint-oxfmt": {
+    oxfmt: generatedPackageDevDependencies.oxfmt,
+    oxlint: generatedPackageDevDependencies.oxlint,
+  },
+} satisfies Record<LintFormatTooling, Record<string, string>>;
+
+const buildLintFormatDevDependencies = (
+  lintFormatTooling: LintFormatTooling,
+): Record<string, string> => lintFormatDevDependencies[lintFormatTooling];
 
 const buildReadme = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];
@@ -231,7 +306,7 @@ ${pmConfig.runPrefix} build         # build to dist/
 ${pmConfig.runPrefix} release:check # package validation + publish dry run
 \`\`\`
 
-\`${pmConfig.runPrefix} security:lint\` prefers \`semgrep\` on PATH and otherwise runs the pinned \`uvx semgrep@1.165.0\` scan.
+\`${pmConfig.runPrefix} security:lint\` prefers \`semgrep\` on PATH and otherwise runs the pinned \`uvx semgrep@${semgrepVersion}\` scan.
 
 See [\`AGENTS.md\`](AGENTS.md) for the conventions this project follows.
 
@@ -269,19 +344,22 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
     ? `
       - name: Upload coverage to Codecov
         if: matrix.node-version == '24'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: ${githubActionRefs.codecov}
         with:
           token: \${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true`
     : "";
 
   return renderTemplate("github/ci.yml.tmpl", {
+    ACTION_CHECKOUT: githubActionRefs.checkout,
+    ACTION_SETUP_NODE: githubActionRefs.setupNode,
+    ACTION_SETUP_UV: githubActionRefs.setupUv,
     AUDIT_COMMAND: "pnpm audit --prod",
     BUILD_COMMAND: "pnpm run build",
     CACHE: "pnpm",
     CODECOV_STEP: codecovStep,
     INSTALL_CI_COMMAND: "pnpm install --frozen-lockfile",
-    PACKAGE_MANAGER_SETUP: `      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+    PACKAGE_MANAGER_SETUP: `      - uses: ${githubActionRefs.pnpmSetup}
         with:
           version: ${pnpmVersion}`,
     PUBLINT_COMMAND: "pnpm run publint",
@@ -290,7 +368,14 @@ const buildCiWorkflow = (config: ScaffoldConfig): string => {
   });
 };
 
-const buildReleaseWorkflow = (): string => renderTemplate("github/release.yml.tmpl");
+const buildReleaseWorkflow = (): string =>
+  renderTemplate("github/release.yml.tmpl", {
+    ACTION_CHECKOUT: githubActionRefs.checkout,
+    ACTION_PNPM_SETUP: githubActionRefs.pnpmSetup,
+    ACTION_SETUP_NODE: githubActionRefs.setupNode,
+    ACTION_SETUP_UV: githubActionRefs.setupUv,
+    PNPM_VERSION: pnpmVersion,
+  });
 
 const buildLicense = (license: LicenseName, author: string): string => {
   const year = new Date().getUTCFullYear().toString();
@@ -312,25 +397,17 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       content: renderTemplate("gitignore.tmpl"),
       path: ".gitignore",
     },
+    ...buildLintFormatFiles(config),
     {
-      content: renderBiomeJsonc(config.includeCli),
-      path: "biome.jsonc",
-    },
-    {
-      content: renderTemplate("agents.md.tmpl"),
+      content: renderTemplate("agents.md.tmpl", {
+        LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
+        SEMGREP_VERSION: semgrepVersion,
+      }),
       path: "AGENTS.md",
     },
     {
       content: renderTemplate("dependency-cruiser.cjs.tmpl"),
       path: ".dependency-cruiser.cjs",
-    },
-    {
-      content: renderTemplate("oxfmtrc.json.tmpl"),
-      path: ".oxfmtrc.json",
-    },
-    {
-      content: renderTemplate("oxlintrc.json.tmpl"),
-      path: ".oxlintrc.json",
     },
     {
       content: renderTemplate("lefthook.yml.tmpl", {
@@ -343,7 +420,9 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       path: "semgrep.yml",
     },
     {
-      content: renderTemplate("scripts/security-lint.mjs.tmpl"),
+      content: renderTemplate("scripts/security-lint.mjs.tmpl", {
+        SEMGREP_VERSION: semgrepVersion,
+      }),
       path: "scripts/security-lint.mjs",
     },
     {
@@ -427,6 +506,36 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
 
   return files;
 };
+
+const buildLintFormatFiles = (config: ScaffoldConfig): GeneratedFile[] => {
+  if (config.lintFormatTooling === "biome") {
+    return [
+      {
+        content: renderBiomeJsonc(config.includeCli),
+        path: "biome.jsonc",
+      },
+    ];
+  }
+
+  return [
+    {
+      content: renderTemplate("oxfmtrc.json.tmpl"),
+      path: ".oxfmtrc.json",
+    },
+    {
+      content: renderTemplate("oxlintrc.json.tmpl"),
+      path: ".oxlintrc.json",
+    },
+  ];
+};
+
+const lintFormatAgentGuidance = {
+  biome: "Linting and formatting are handled by Biome.",
+  "oxlint-oxfmt": "Linting is handled by Oxlint, and formatting is handled by Oxfmt.",
+} satisfies Record<LintFormatTooling, string>;
+
+const buildLintFormatAgentGuidance = (lintFormatTooling: LintFormatTooling): string =>
+  lintFormatAgentGuidance[lintFormatTooling];
 
 const extractAuthorName = (author: string): string => {
   const trimmedAuthor = author.trim();
