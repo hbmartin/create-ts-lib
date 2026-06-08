@@ -1,0 +1,661 @@
+===== .gitignore =====
+executable: false
+
+node_modules
+dist
+coverage
+.nyc_output
+.DS_Store
+*.log
+*.tsbuildinfo
+*.tgz
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+package-lock.json
+yarn.lock
+report/
+
+===== .oxfmtrc.json =====
+executable: false
+
+{
+  "ignorePatterns": ["*.json", "**/*.json", "*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]
+}
+
+===== .oxlintrc.json =====
+executable: false
+
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"],
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {},
+  "env": {
+    "builtin": true
+  }
+}
+
+===== AGENTS.md =====
+executable: false
+
+# AGENTS.md
+
+Guidance for Codex and other coding agents working in this TypeScript library.
+
+## Project Conventions
+
+- Use pnpm for all package management and scripts.
+- Keep implementation code in `source/` and Vitest coverage in `test/`.
+- Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Do not add Prettier. Linting is handled by Oxlint, and formatting is handled by Oxfmt.
+
+## Code Changes
+
+- Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
+- Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- Prefer small, direct dependencies when they materially simplify the implementation.
+- Update or add Vitest tests for every behavior change.
+- Update dependency-cruiser and Semgrep checks when architecture or security expectations change.
+
+## Verification
+
+- Before handoff, run `pnpm run release:check`.
+- Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
+- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan. Install Semgrep directly or install uv if both commands are missing.
+
+===== .dependency-cruiser.cjs =====
+executable: false
+
+/** @type {import("dependency-cruiser").IConfiguration} */
+module.exports = {
+  forbidden: [
+    {
+      name: "no-circular",
+      severity: "error",
+      from: {},
+      to: {
+        circular: true,
+      },
+    },
+    {
+      name: "not-to-unresolvable",
+      severity: "error",
+      from: {},
+      to: {
+        couldNotResolve: true,
+      },
+    },
+    {
+      name: "no-undeclared-packages",
+      severity: "error",
+      from: {},
+      to: {
+        dependencyTypes: ["npm-no-pkg", "npm-unknown"],
+      },
+    },
+    {
+      name: "source-not-to-test",
+      severity: "error",
+      from: {
+        path: "^source/",
+      },
+      to: {
+        path: "^test/",
+      },
+    },
+    {
+      name: "source-not-to-dev-dependencies",
+      severity: "error",
+      from: {
+        path: "^source/",
+      },
+      to: {
+        dependencyTypes: ["npm-dev"],
+        dependencyTypesNot: ["type-only"],
+        pathNot: ["^node_modules/@types/"],
+      },
+    },
+  ],
+  options: {
+    doNotFollow: {
+      path: ["node_modules"],
+    },
+    enhancedResolveOptions: {
+      conditionNames: ["import", "node", "types", "default"],
+      exportsFields: ["exports"],
+      mainFields: ["module", "main", "types", "typings"],
+    },
+    tsConfig: {
+      fileName: "tsconfig.json",
+    },
+    tsPreCompilationDeps: "specify",
+  },
+};
+
+===== lefthook.yml =====
+executable: false
+
+pre-commit:
+  commands:
+    lint:
+      run: pnpm run lint
+
+===== semgrep.yml =====
+executable: false
+
+rules:
+  - id: no-eval-like-execution
+    message: Avoid eval-like dynamic code execution. Parse data or dispatch explicit functions instead.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: no-child-process-exec
+    message: Avoid child_process exec/execSync. Use execFile or spawn with explicit arguments instead.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - patterns:
+          - pattern-inside: |
+              import * as $CHILD_PROCESS from "node:child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import * as $CHILD_PROCESS from "child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import $CHILD_PROCESS from "node:child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import $CHILD_PROCESS from "child_process";
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const $CHILD_PROCESS = require("node:child_process");
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const $CHILD_PROCESS = require("child_process");
+              ...
+          - pattern-either:
+              - pattern: $CHILD_PROCESS.exec(...)
+              - pattern: $CHILD_PROCESS.execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec } from "node:child_process";
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec } from "child_process";
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync } from "node:child_process";
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync } from "child_process";
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec as $EXEC } from "node:child_process";
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              import { exec as $EXEC } from "child_process";
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync as $EXEC_SYNC } from "node:child_process";
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              import { execSync as $EXEC_SYNC } from "child_process";
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec } = require("node:child_process");
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec } = require("child_process");
+              ...
+          - pattern: exec(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync } = require("node:child_process");
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync } = require("child_process");
+              ...
+          - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec: $EXEC } = require("node:child_process");
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              const { exec: $EXEC } = require("child_process");
+              ...
+          - pattern: $EXEC(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync: $EXEC_SYNC } = require("node:child_process");
+              ...
+          - pattern: $EXEC_SYNC(...)
+      - patterns:
+          - pattern-inside: |
+              const { execSync: $EXEC_SYNC } = require("child_process");
+              ...
+          - pattern: $EXEC_SYNC(...)
+
+  - id: no-shell-true-process
+    message: Avoid shell:true process execution. Pass explicit argv to the executable instead.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - pattern: 'spawn($COMMAND, $ARGS, { ..., shell: true, ... })'
+      - pattern: 'spawnSync($COMMAND, $ARGS, { ..., shell: true, ... })'
+      - pattern: 'execa($COMMAND, $ARGS, { ..., shell: true, ... })'
+      - patterns:
+          - pattern: '$PROCESS($COMMAND, { ..., shell: true, ... })'
+          - metavariable-regex:
+              metavariable: $PROCESS
+              regex: ^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$
+
+  - id: no-weak-crypto-hash
+    message: Avoid weak cryptographic hashes. Use SHA-256 or stronger for security-sensitive hashing.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")
+      - pattern: createHash("md5")
+      - pattern: createHash("sha1")
+
+  - id: no-math-random-security-sensitive
+    message: Avoid Math.random for security-sensitive values. Use crypto.randomUUID or crypto.getRandomValues instead.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: const $NAME = Math.random()
+              - pattern: let $NAME = Math.random()
+              - pattern: var $NAME = Math.random()
+              - pattern: $OBJECT.$NAME = Math.random()
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)(token|secret|nonce|session|password|key|csrf|auth)
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  function $NAME(...) {
+                    ...
+                    return Math.random()
+                    ...
+                  }
+              - pattern: const $NAME = (...) => Math.random()
+              - pattern: |
+                  const $NAME = (...) => {
+                    ...
+                    return Math.random()
+                    ...
+                  }
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)(token|secret|nonce|session|password|key|csrf|auth)
+
+===== scripts/security-lint.mjs =====
+executable: false
+
+import { spawnSync } from "node:child_process";
+
+const semgrepVersion = "1.165.0";
+const semgrepArguments = ["scan", "--config", "semgrep.yml", "--error", "source", "test"];
+const forceUvx = process.env.SECURITY_LINT_FORCE_UVX === "1";
+
+const runCommand = (command, arguments_) =>
+  spawnSync(command, arguments_, {
+    stdio: "inherit",
+  });
+
+const warn = (message) => {
+  process.stderr.write(`${message}\n`);
+};
+
+const exitWithResult = (result) => {
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.signal) {
+    warn(`warning: security lint exited after signal ${result.signal}`);
+    process.exit(1);
+  }
+
+  process.exit(result.status ?? 1);
+};
+
+const runSemgrep = () => {
+  if (forceUvx) {
+    return { error: Object.assign(new Error("Forced uvx Semgrep"), { code: "ENOENT" }) };
+  }
+
+  return runCommand("semgrep", semgrepArguments);
+};
+
+const runPinnedSemgrep = () =>
+  runCommand("uvx", [`semgrep@${semgrepVersion}`, ...semgrepArguments]);
+
+const semgrepResult = runSemgrep();
+
+if (!semgrepResult.error) {
+  exitWithResult(semgrepResult);
+}
+
+if (semgrepResult.error.code !== "ENOENT") {
+  throw semgrepResult.error;
+}
+
+const uvxResult = runPinnedSemgrep();
+
+if (uvxResult.error?.code === "ENOENT") {
+  warn(`warning: security:lint requires semgrep on PATH or uvx for semgrep@${semgrepVersion}.`);
+  warn("warning: install Semgrep directly or install uv so uvx can run the pinned scan.");
+  process.exit(1);
+}
+
+exitWithResult(uvxResult);
+
+===== package.json =====
+executable: false
+
+{
+  "name": "apache-library",
+  "version": "0.1.0",
+  "description": "A generated TypeScript library",
+  "license": "Apache-2.0",
+  "author": "Harold Martin <harold@example.com>",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
+    "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
+    "dev": "tsc --watch",
+    "format": "oxfmt . --write",
+    "lint": "oxlint --deny-warnings . && oxfmt --check .",
+    "attw": "attw --pack . --profile esm-only",
+    "prepare": "lefthook install",
+    "prepublishOnly": "pnpm run check && pnpm run build && pnpm run verify:artifacts && pnpm run publint && pnpm run types:lint",
+    "publint": "publint --pack pnpm",
+    "release:check": "pnpm run prepublishOnly && pnpm run verify:package",
+    "security:lint": "node scripts/security-lint.mjs",
+    "size:report": "npm pack --dry-run --json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "types:lint": "attw --pack . --profile esm-only",
+    "verify:artifacts": "node -e \"for (const file of ['dist/index.js','dist/index.d.ts']) require('node:fs').statSync(file)\"",
+    "verify:package": "npm publish --dry-run --ignore-scripts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
+    "@sindresorhus/tsconfig": "^8.1.0",
+    "@types/node": "^25.9.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "dependency-cruiser": "^17.4.3",
+    "lefthook": "^2.1.9",
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0",
+    "publint": "^0.3.21",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/node": "^25.9.2"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
+
+===== README.md =====
+executable: false
+
+# `apache-library`
+
+[![npm version](https://img.shields.io/npm/v/apache-library.svg)](https://www.npmjs.com/package/apache-library)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+A generated TypeScript library
+
+## Install
+
+```bash
+pnpm add apache-library
+```
+
+## Usage
+
+```ts
+import { formatValue } from "apache-library";
+
+const output = formatValue({ ready: true });
+```
+
+## Development
+
+Lint, format, type-check, dependency and security policy checks, and tests are
+wired into a single command:
+
+```bash
+pnpm run check         # lint + dep/security checks + typecheck + coverage
+pnpm run test          # run tests
+pnpm run build         # build to dist/
+pnpm run release:check # package validation + publish dry run
+```
+
+`pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan.
+
+See [`AGENTS.md`](AGENTS.md) for the conventions this project follows.
+
+## License
+
+[Apache-2.0](LICENSE) © Harold Martin.
+
+===== pnpm-workspace.yaml =====
+executable: false
+
+packages:
+  - "."
+
+allowBuilds:
+  lefthook: true
+
+===== tsconfig.json =====
+executable: false
+
+{
+  "extends": "@sindresorhus/tsconfig",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noUnusedLocals": false,
+    "erasableSyntaxOnly": false
+  },
+  "include": ["source"]
+}
+
+===== tsconfig.build.json =====
+executable: false
+
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": "source"
+  }
+}
+
+===== vitest.config.ts =====
+executable: false
+
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    environment: "node",
+    include: ["test/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["lcov", "text"],
+      include: ["source/**/*.ts"],
+      exclude: ["test/**/*.test.ts"],
+      thresholds: {
+        branches: 80,
+        functions: 80,
+        lines: 80,
+        statements: 80,
+      },
+    },
+  },
+});
+
+===== LICENSE =====
+executable: false
+
+Apache License
+Version 2.0, January 2004
+https://www.apache.org/licenses/
+
+Copyright 2026 Harold Martin
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+===== source/index.ts =====
+executable: false
+
+export type { BrandedId } from "./types/index.js";
+export { formatValue } from "./utils/formatting.js";
+
+===== source/types/index.ts =====
+executable: false
+
+export type BrandedId<T extends string> = string & {
+  readonly __brand: T;
+};
+
+===== source/utils/formatting.ts =====
+executable: false
+
+export const formatValue = (value: unknown): string => {
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value) ?? "";
+};
+
+===== test/utils/formatting.test.ts =====
+executable: false
+
+import { describe, expect, it } from "vitest";
+
+import { formatValue } from "../../source/utils/formatting.js";
+
+describe("formatValue", () => {
+  it("returns empty string for undefined", () => {
+    expect(formatValue(undefined)).toBe("");
+  });
+
+  it("returns string values directly", () => {
+    expect(formatValue("hello")).toBe("hello");
+  });
+
+  it("JSON-serializes non-string values", () => {
+    expect(formatValue(42)).toBe("42");
+    expect(formatValue(null)).toBe("null");
+    expect(formatValue([1, 2, 3])).toBe("[1,2,3]");
+    expect(formatValue({ a: 1 })).toBe('{"a":1}');
+  });
+
+  it("returns empty string when JSON serialization has no string output", () => {
+    expect(formatValue(() => undefined)).toBe("");
+    expect(formatValue(Symbol("test"))).toBe("");
+  });
+});

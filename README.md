@@ -284,28 +284,25 @@ commands are missing locally.
 
 The package exports:
 
+- `defaultScaffoldConfig(overrides?)`
 - `scaffoldProject(config, options)`
 - `ScaffoldConfig`
 - `ScaffoldOptions`
 - `ScaffoldProgress`
 
+`ScaffoldConfig` is a complete required config shape. Use `defaultScaffoldConfig()` to start from the documented defaults and override only the project-specific values.
+
 `scaffoldProject` writes the generated project, rejects invalid package names, refuses non-empty target directories unless `force: true` is set, can optionally receive progress callbacks for post-scaffold steps, and can add a best-effort `origin` remote with `gitRemoteOriginUrl`.
 
 ```ts
-import { scaffoldProject, type ScaffoldConfig } from "@hbmartin/create-ts-lib";
+import { defaultScaffoldConfig, scaffoldProject } from "@hbmartin/create-ts-lib";
 
-const config: ScaffoldConfig = {
+const config = defaultScaffoldConfig({
   projectName: "my-lib",
   description: "An example library",
   author: "Jane Doe <jane@example.com>",
-  license: "Apache-2.0",
-  lintFormatTooling: "oxlint-oxfmt",
   githubRepoUrl: "https://github.com/jane/my-lib",
-  packageManager: "pnpm",
-  includeCodecov: true,
-  includeCli: false,
-  includeZod: false,
-};
+});
 
 await scaffoldProject(config, {
   targetDirectory: "./my-lib",

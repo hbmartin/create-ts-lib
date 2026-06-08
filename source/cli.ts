@@ -20,11 +20,7 @@ import {
   type GitHubRepositoryVisibility,
   inspectPersonalGitHubRepository,
 } from "./github-cli.js";
-import {
-  defaultLintFormatTooling,
-  formatLintFormatTooling,
-  type LintFormatTooling,
-} from "./lint-format-tooling.js";
+import { formatLintFormatTooling, type LintFormatTooling } from "./lint-format-tooling.js";
 import { parseGitHubRepositoryUrl } from "./name-helpers.js";
 import {
   checkNpmPackageNameAvailability,
@@ -36,6 +32,7 @@ import { PostScaffoldSetupError, type ScaffoldProgress, scaffoldProject } from "
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import {
   buildProjectFiles,
+  defaultScaffoldConfig,
   type LicenseName,
   type PackageManager,
   type ScaffoldConfig,
@@ -61,6 +58,8 @@ Examples:
   npm create @hbmartin/ts-lib my-lib
   npx @hbmartin/create-ts-lib my-lib
 `;
+
+const defaultConfig = defaultScaffoldConfig();
 
 const main = async (): Promise<void> => {
   const warn: WarningSink = (message) => {
@@ -103,12 +102,16 @@ const runScaffoldWorkflow = async (
   const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
   const configResult = cliArguments.yes
     ? {
-        config: buildDefaultConfig(
-          defaults,
-          cliArguments.lintFormatTooling,
-          cliArguments.zod,
-          cliArguments.codecov ?? true,
-        ),
+        config: defaultScaffoldConfig({
+          author: defaults.author,
+          githubRepoUrl: defaults.githubRepoUrl,
+          includeZod: cliArguments.zod,
+          ...(cliArguments.codecov === undefined ? {} : { includeCodecov: cliArguments.codecov }),
+          ...(cliArguments.lintFormatTooling === undefined
+            ? {}
+            : { lintFormatTooling: cliArguments.lintFormatTooling }),
+          projectName: defaults.projectName,
+        }),
       }
     : await promptForConfig(
         defaults,
@@ -286,24 +289,6 @@ const safeShellArgumentRegex = /^[\w./:@%+=,-]+$/;
 const formatShellArgument = (value: string): string =>
   safeShellArgumentRegex.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 
-const buildDefaultConfig = (
-  defaults: DetectedDefaults,
-  lintFormatTooling: LintFormatTooling = defaultLintFormatTooling,
-  includeZod = false,
-  includeCodecov = true,
-): ScaffoldConfig => ({
-  author: defaults.author,
-  description: "",
-  githubRepoUrl: defaults.githubRepoUrl,
-  includeCli: false,
-  includeCodecov,
-  includeZod,
-  license: "Apache-2.0",
-  lintFormatTooling,
-  packageManager: "pnpm",
-  projectName: defaults.projectName,
-});
-
 interface PromptedConfig {
   config: ScaffoldConfig;
   githubRepositoryCreation?: PendingGitHubRepositoryCreation;
@@ -341,7 +326,7 @@ const promptForConfig = async (
       { name: "ISC", value: "ISC" },
       { name: "UNLICENSED", value: "UNLICENSED" },
     ],
-    default: "Apache-2.0",
+    default: defaultConfig.license,
     message: "License",
   });
   const lintFormatTooling =
@@ -351,7 +336,7 @@ const promptForConfig = async (
         { name: "Oxlint + Oxfmt", value: "oxlint-oxfmt" },
         { name: "Biome", value: "biome" },
       ],
-      default: defaultLintFormatTooling,
+      default: defaultConfig.lintFormatTooling,
       message: "Lint and format tooling",
     }));
   const githubRepositoryPrompt = await promptForGitHubRepository(
@@ -364,17 +349,17 @@ const promptForConfig = async (
   const includeCodecov =
     includeCodecovFromCli ??
     (await promptModule.confirm({
-      default: true,
+      default: defaultConfig.includeCodecov,
       message: "Include Codecov?",
     }));
   const includeCli = await promptModule.confirm({
-    default: false,
+    default: defaultConfig.includeCli,
     message: "Include CLI entry point?",
   });
   const includeZod =
     includeZodFromCli ||
     (await promptModule.confirm({
-      default: false,
+      default: defaultConfig.includeZod,
       message: "Include Zod?",
     }));
   const packageManager = await promptModule.select<PackageManager>({
@@ -383,7 +368,7 @@ const promptForConfig = async (
       { name: "npm", value: "npm" },
       { name: "yarn", value: "yarn" },
     ],
-    default: "pnpm",
+    default: defaultConfig.packageManager,
     message: "Package manager",
   });
 
@@ -596,20 +581,18 @@ const printSummary = (
   dryRun: boolean,
   githubRepositoryCreation: PendingGitHubRepositoryCreation | undefined,
 ): void => {
-  const includeZod = config.includeZod ?? false;
-  const lintFormatTooling = config.lintFormatTooling ?? defaultLintFormatTooling;
   const rows = [
     ["Project", config.projectName],
     ["Target", targetDirectory],
     ["Description", config.description || "(empty)"],
     ["Author", config.author || "(empty)"],
     ["License", config.license],
-    ["Lint/format", formatLintFormatTooling(lintFormatTooling)],
+    ["Lint/format", formatLintFormatTooling(config.lintFormatTooling)],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
     ["Codecov", config.includeCodecov ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
-    ["Zod", includeZod ? "yes" : "no"],
+    ["Zod", config.includeZod ? "yes" : "no"],
   ];
 
   process.stdout.write(`${dryRun ? cyan("Dry run") : cyan("Scaffold summary")}\n`);
