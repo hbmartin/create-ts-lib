@@ -14,6 +14,7 @@ export { normalizeGitHubUrl } from "./name-helpers.js";
 const execFileAsync = promisify(execFile);
 
 export interface CliArguments {
+  codecov?: boolean;
   directoryArgument?: string;
   dryRun: boolean;
   force: boolean;
@@ -62,6 +63,18 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] ?? "";
+    if (argument === "--no-codecov") {
+      parsed.codecov = false;
+      continue;
+    }
+
+    if (argument.startsWith("--lint-format=")) {
+      parsed.lintFormatTooling = parseLintFormatToolingValue(
+        argument.slice("--lint-format=".length),
+      );
+      continue;
+    }
+
     if (argument === "--lint-format") {
       parsed.lintFormatTooling = parseLintFormatToolingArgument(args, index);
       index += 1;
@@ -89,8 +102,11 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 };
 
 const parseLintFormatToolingArgument = (args: string[], index: number): LintFormatTooling => {
-  const value = args[index + 1];
-  if (value === undefined || value.startsWith("-")) {
+  return parseLintFormatToolingValue(args[index + 1]);
+};
+
+const parseLintFormatToolingValue = (value: string | undefined): LintFormatTooling => {
+  if (value === undefined || value.length === 0 || value.startsWith("-")) {
     throw new Error(
       `Missing value for --lint-format. Expected one of: ${lintFormatToolingOptions.join(", ")}`,
     );

@@ -129,9 +129,20 @@ interface GeneratedBiomeConfig {
 
 describe("renderTemplate", () => {
   it("throws when a standalone template placeholder remains unresolved", () => {
-    expect(() => renderTemplate("agents.md.tmpl")).toThrow(
-      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}, {{ZOD_GUIDANCE}}, {{SEMGREP_VERSION}}",
-    );
+    let error: unknown;
+
+    try {
+      renderTemplate("agents.md.tmpl");
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain("Unresolved template placeholder(s) in agents.md.tmpl:");
+    expect(message).toContain("{{LINT_FORMAT_GUIDANCE}}");
+    expect(message).toContain("{{ZOD_GUIDANCE}}");
+    expect(message).toContain("{{SEMGREP_VERSION}}");
   });
 
   it("allows GitHub Actions expressions in templates", () => {
@@ -217,7 +228,40 @@ describe("buildProjectFiles", () => {
     expectNoReleasePleaseOrCommitlintArtifacts(buildProjectFiles(config));
   });
 
-  it("mirrors generator package specifiers for generated package versions", () => {
+  it("omits the Codecov upload step when Codecov is disabled", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeCodecov: false,
+    });
+    const ciWorkflow = findGeneratedFile(files, ".github/workflows/ci.yml");
+
+    expect(ciWorkflow.content).not.toContain("Upload coverage to Codecov");
+    expect(ciWorkflow.content).not.toContain(githubActionRefs.codecov);
+    expect(ciWorkflow.content).not.toContain("CODECOV_TOKEN");
+  });
+
+  it("defaults newly optional scaffold config fields", () => {
+    const {
+      includeZod: _includeZod,
+      lintFormatTooling: _lintFormatTooling,
+      ...legacyConfig
+    } = baseConfig;
+    const files = buildProjectFiles(legacyConfig);
+    const filePaths = files.map((file) => file.path);
+    const agents = findGeneratedFile(files, "AGENTS.md");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+
+    expect(filePaths).toContain(".oxfmtrc.json");
+    expect(filePaths).toContain(".oxlintrc.json");
+    expect(filePaths).not.toContain("biome.jsonc");
+    expect(packageJson.dependencies).not.toHaveProperty("zod");
+    expect(agents.content).toContain("Linting is handled by Oxlint");
+    expect(agents.content).not.toContain("Use Zod for external input validation");
+    expect(agents.content).toContain("Oxfmt.\n\n## Code Changes");
+    expect(agents.content).not.toContain("\n\n\n## Code Changes");
+  });
+
+  it("uses expected specifiers for generated package versions", () => {
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(
       buildProjectFiles({
         ...baseConfig,
@@ -246,13 +290,14 @@ describe("buildProjectFiles", () => {
       "@types/node",
     );
 
+    expect(generatorDevDependencies).not.toHaveProperty("meow");
     expect(generatedPackageDependencies).toMatchObject({
-      meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
+      meow: "^14.1.0",
       zod: readGeneratorSpecifier(generatorDependencies, "zod"),
     });
     expect(packageJson.packageManager).toBe(generatorPackageJson.packageManager);
     expect(packageJson.dependencies).toMatchObject({
-      meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
+      meow: "^14.1.0",
     });
     expect(packageJson.dependencies).not.toHaveProperty("zod");
     expect(zodPackageJson.dependencies.zod).toBe(
@@ -393,6 +438,11 @@ describe("buildProjectFiles", () => {
     expect(agents.content).toContain(
       "Linting is handled by Oxlint, and formatting is handled by Oxfmt.",
     );
+    expect(agents.content).toContain(
+      ["Linting is handled by Oxlint, and formatting is handled by Oxfmt.", "## Code Changes"].join(
+        "\n\n",
+      ),
+    );
     expect(agents.content).not.toContain("Use Zod");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
     expect(agents.content).toContain(`uvx semgrep@${semgrepVersion}`);
@@ -438,6 +488,13 @@ describe("buildProjectFiles", () => {
     expect(agents.content).toContain(
       "Use Zod for external input validation and anywhere runtime validation is needed.",
     );
+    expect(agents.content).toContain(
+      [
+        "Use Zod for external input validation and anywhere runtime validation is needed.",
+        "## Code Changes",
+      ].join("\n\n"),
+    );
+    expect(agents.content).not.toContain("\n\n\n## Code Changes");
   });
 
   it("emits Biome tooling when selected", () => {

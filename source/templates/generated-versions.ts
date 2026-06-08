@@ -30,8 +30,13 @@ const parsePnpmVersion = (packageManager: string): string => {
 
 export const pnpmVersion = parsePnpmVersion(packageJson.packageManager);
 
+const templateOnlyGeneratedPackageDependencies = {
+  // Used only in scaffolded projects; the generator does not import this at runtime.
+  meow: "^14.1.0",
+} as const satisfies DependencySection;
+
 export const generatedPackageDependencies = {
-  meow: readDependencySpecifier(devDependencies, "meow"),
+  ...templateOnlyGeneratedPackageDependencies,
   zod: readDependencySpecifier(dependencies, "zod"),
 } as const satisfies Record<string, string>;
 

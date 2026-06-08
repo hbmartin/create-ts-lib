@@ -1,4 +1,6 @@
 const gitSuffixRegex = /\.git$/u;
+const githubRepositoryUrlRegex =
+  /^https:\/\/github\.com\/(?<owner>[^/\s?#]+)\/(?<repo>[^/\s?#]+)\/?$/u;
 const packageScopeRegex = /^@[^/]+\//u;
 const githubRemotePrefixes = [
   ["git@github.com:", "https://github.com/"],
@@ -23,6 +25,28 @@ export const normalizeGitHubUrl = (input: string): string => {
   }
 
   return input;
+};
+
+export interface GitHubRepositoryPath {
+  owner: string;
+  repo: string;
+}
+
+export const parseGitHubRepositoryUrl = (input: string): GitHubRepositoryPath | undefined => {
+  const match = githubRepositoryUrlRegex.exec(normalizeGitHubUrl(input));
+  if (match?.groups === undefined) {
+    return undefined;
+  }
+
+  const { owner, repo } = match.groups;
+  if (owner === undefined || repo === undefined) {
+    return undefined;
+  }
+
+  return {
+    owner,
+    repo,
+  };
 };
 
 export const stripPackageScope = (packageName: string): string =>
