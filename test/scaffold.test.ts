@@ -21,6 +21,7 @@ import {
   type LicenseName,
   renderTemplate,
   type ScaffoldConfig,
+  type ScaffoldConfigOverrides,
   tsgoProbeCommand,
 } from "../source/templates/files.js";
 import {
@@ -274,9 +275,18 @@ describe("buildProjectFiles", () => {
 
   it("keeps documented defaults when overrides contain undefined values", () => {
     const documentedDefaults = defaultScaffoldConfig();
-    const undefinedOverrides = Object.fromEntries(
-      Object.keys(documentedDefaults).map((key) => [key, undefined]),
-    ) as Partial<ScaffoldConfig>;
+    const undefinedOverrides = {
+      author: undefined,
+      description: undefined,
+      githubRepoUrl: undefined,
+      includeCli: undefined,
+      includeCodecov: undefined,
+      includeZod: undefined,
+      license: undefined,
+      lintFormatTooling: undefined,
+      packageManager: undefined,
+      projectName: undefined,
+    } satisfies ScaffoldConfigOverrides;
 
     expect(defaultScaffoldConfig(undefinedOverrides)).toEqual(documentedDefaults);
   });
