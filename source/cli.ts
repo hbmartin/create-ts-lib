@@ -21,6 +21,11 @@ import {
   inspectPersonalGitHubRepository,
 } from "./github-cli.js";
 import {
+  defaultLintFormatTooling,
+  formatLintFormatTooling,
+  type LintFormatTooling,
+} from "./lint-format-tooling.js";
+import {
   checkNpmPackageNameAvailability,
   type NpmPackageNameAvailabilityUnknown,
 } from "./npm-registry.js";
@@ -38,14 +43,16 @@ import {
 const helpText = `create-ts-lib
 
 Usage:
-  create-ts-lib [directory] [--yes] [--dry-run] [--force]
+  create-ts-lib [directory] [--yes] [--dry-run] [--force] [--lint-format <tooling>] [--zod]
 
 Options:
-  --yes, -y    Use detected/default answers without prompting
-  --dry-run    Print the scaffold plan without writing files
-  --force      Allow writing into a non-empty target directory
-  --help, -h   Show help
-  --version, -v Show version
+  --yes, -y                 Use detected/default answers without prompting
+  --dry-run                 Print the scaffold plan without writing files
+  --force                   Allow writing into a non-empty target directory
+  --lint-format <tooling>   Choose oxlint-oxfmt or biome
+  --zod                     Include Zod in the generated project
+  --help, -h                Show help
+  --version, -v             Show version
 
 Examples:
   pnpm create @hbmartin/ts-lib my-lib
@@ -93,8 +100,14 @@ const runScaffoldWorkflow = async (
 ): Promise<void> => {
   const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
   const configResult = cliArguments.yes
-    ? { config: buildDefaultConfig(defaults) }
-    : await promptForConfig(defaults, await loadPromptModule(warn), warn);
+    ? { config: buildDefaultConfig(defaults, cliArguments.lintFormatTooling, cliArguments.zod) }
+    : await promptForConfig(
+        defaults,
+        await loadPromptModule(warn),
+        warn,
+        cliArguments.lintFormatTooling,
+        cliArguments.zod,
+      );
   const { config, githubRepositoryCreation } = configResult;
   assertValidPackageName(config.projectName);
   if (cliArguments.yes) {
@@ -247,13 +260,19 @@ const safeShellArgumentRegex = /^[\w./:@%+=,-]+$/;
 const formatShellArgument = (value: string): string =>
   safeShellArgumentRegex.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 
-const buildDefaultConfig = (defaults: DetectedDefaults): ScaffoldConfig => ({
+const buildDefaultConfig = (
+  defaults: DetectedDefaults,
+  lintFormatTooling: LintFormatTooling = defaultLintFormatTooling,
+  includeZod = false,
+): ScaffoldConfig => ({
   author: defaults.author,
   description: "",
   githubRepoUrl: defaults.githubRepoUrl,
   includeCli: false,
   includeCodecov: true,
+  includeZod,
   license: "Apache-2.0",
+  lintFormatTooling,
   packageManager: "pnpm",
   projectName: defaults.projectName,
 });
@@ -274,6 +293,8 @@ const promptForConfig = async (
   defaults: DetectedDefaults,
   promptModule: PromptModule,
   warn: WarningSink,
+  providedLintFormatTooling: LintFormatTooling | undefined,
+  includeZodFromCli: boolean,
 ): Promise<PromptedConfig> => {
   const projectName = await promptForProjectName(defaults, promptModule, warn);
   const githubRepositoryLookup = inspectPersonalGitHubRepository(projectName);
@@ -295,6 +316,16 @@ const promptForConfig = async (
     default: "Apache-2.0",
     message: "License",
   });
+  const lintFormatTooling =
+    providedLintFormatTooling ??
+    (await promptModule.select<LintFormatTooling>({
+      choices: [
+        { name: "Oxlint + Oxfmt", value: "oxlint-oxfmt" },
+        { name: "Biome", value: "biome" },
+      ],
+      default: defaultLintFormatTooling,
+      message: "Lint and format tooling",
+    }));
   const githubRepositoryPrompt = await promptForGitHubRepository(
     await githubRepositoryLookup,
     defaults.githubRepoUrl,
@@ -310,6 +341,12 @@ const promptForConfig = async (
     default: false,
     message: "Include CLI entry point?",
   });
+  const includeZod =
+    includeZodFromCli ||
+    (await promptModule.confirm({
+      default: false,
+      message: "Include Zod?",
+    }));
   const packageManager = await promptModule.select<PackageManager>({
     choices: [
       { name: "pnpm", value: "pnpm" },
@@ -327,7 +364,9 @@ const promptForConfig = async (
       githubRepoUrl: githubRepositoryAnswer.url,
       includeCli,
       includeCodecov,
+      includeZod,
       license,
+      lintFormatTooling,
       packageManager,
       projectName,
     },
@@ -533,10 +572,12 @@ const printSummary = (
     ["Description", config.description || "(empty)"],
     ["Author", config.author || "(empty)"],
     ["License", config.license],
+    ["Lint/format", formatLintFormatTooling(config.lintFormatTooling)],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
     ["Codecov", config.includeCodecov ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
+    ["Zod", config.includeZod ? "yes" : "no"],
   ];
 
   process.stdout.write(`${dryRun ? cyan("Dry run") : cyan("Scaffold summary")}\n`);

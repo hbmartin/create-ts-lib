@@ -34,7 +34,7 @@ An opinionated initializer that turns a single command into a building, testing,
 Setting up a publishable TypeScript library means making the same dozen decisions every time: module format, build output, lint and format tooling, test runner and coverage, git hooks, and packaging validation. `create-ts-lib` makes those decisions for you with a single, modern, opinionated stack:
 
 - **ESM-only, Node 22+** — no dual-format build complexity.
-- **Biome + Oxc** for fast linting and formatting instead of ESLint + Prettier.
+- **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
 - **dependency-cruiser + Semgrep** for lightweight architecture and security policy checks.
 - **Lefthook** for lightweight pre-commit hooks.
@@ -49,7 +49,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 | Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
 | ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
 | Output format                 | ESM-only (Node 22+)                     | CJS + ESM            | You decide           |
-| Lint + format                 | Biome + Oxc                             | ESLint + Prettier    | You wire it up       |
+| Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
 | Architecture + security gates | dependency-cruiser + Semgrep            | —                    | —                    |
 | Publish validation            | publint + are-the-types-wrong + dry-run | —                    | Manual               |
@@ -57,7 +57,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 | CI + release workflow         | GitHub Actions (pnpm)                   | —                    | Manual               |
 | Project status                | Actively maintained                     | Inactive since ~2021 | n/a                  |
 
-The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** rather than configurable. If you need a dual CJS/ESM build or a different tooling stack, a hand-rolled template gives you more control at the cost of the wiring.
+The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** with one lint/format tooling choice. If you need a dual CJS/ESM build or a different broader tooling stack, a hand-rolled template gives you more control at the cost of the wiring.
 
 ## Requirements
 
@@ -94,6 +94,18 @@ To preview the target options and file list without writing anything:
 npx @hbmartin/create-ts-lib my-lib --dry-run
 ```
 
+To choose Biome instead of the default Oxlint + Oxfmt stack:
+
+```bash
+npx @hbmartin/create-ts-lib my-lib --lint-format biome
+```
+
+To include Zod as a generated runtime dependency:
+
+```bash
+npx @hbmartin/create-ts-lib my-lib --zod
+```
+
 By default the generator refuses to write into a non-empty target directory. Use `--force` only when you intentionally want generated files written into an existing directory:
 
 ```bash
@@ -112,6 +124,8 @@ create-ts-lib [directory] [options]
 | `--yes`, `-y`     | Use detected/default answers without prompting  |
 | `--dry-run`       | Print the scaffold plan without writing files   |
 | `--force`         | Allow writing into a non-empty target directory |
+| `--lint-format`   | Choose `oxlint-oxfmt` or `biome`                |
+| `--zod`           | Include Zod in the generated project            |
 | `--help`, `-h`    | Print usage and exit                            |
 | `--version`, `-v` | Print the CLI version and exit                  |
 
@@ -125,14 +139,16 @@ The generator asks for:
 | Description              | empty string                                     | Written to `package.json`                                                                                             |
 | Author                   | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available                                                                             |
 | License                  | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`                                                                              |
+| Lint and format tooling  | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                |
 | GitHub repo URL          | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH and `git+https://github.com/` remotes |
 | Include Codecov?         | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI                                                                       |
 | Include CLI entry point? | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage                                                                 |
+| Include Zod?             | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`             |
 | Package manager          | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                                                   |
 
 After the final project name is accepted, interactive mode starts a `gh` lookup for a matching personal GitHub repository while it continues asking local project prompts. If the repo exists, that URL is offered as the repo URL default. If it does not exist, the CLI lets you create a public or private repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. If `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default.
 
-If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default for generated metadata such as `package.json` repository fields, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
+If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default for generated metadata such as `package.json` repository fields, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup. Pass `--zod` with `--yes` to opt into Zod without prompting. If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
 ## Generated Project Layout
 
@@ -160,7 +176,9 @@ my-lib/
 ├── AGENTS.md
 ├── .dependency-cruiser.cjs
 ├── .gitignore
-├── biome.jsonc
+├── biome.jsonc                # Biome projects only
+├── .oxfmtrc.json              # Oxlint + Oxfmt projects only
+├── .oxlintrc.json             # Oxlint + Oxfmt projects only
 ├── lefthook.yml
 ├── pnpm-workspace.yaml         # pnpm only
 ├── package.json
@@ -180,18 +198,20 @@ Generated packages include:
 
 - `version: "0.1.0"`
 - `type: "module"`
-- `packageManager: "pnpm@11.5.2"` for pnpm projects
+- `packageManager` matching this generator's pnpm version for pnpm projects
+- a package-manager-specific `@types/node` pin via `overrides`,
+  `pnpm.overrides`, or `resolutions`
 - `exports` pointing at `dist/index.js` and `dist/index.d.ts`
 - `engines.node: ">=22"`
 - `@sindresorhus/tsconfig`
-- strict Biome linting with formatting disabled
-- `oxlint` and `oxfmt`
+- `oxlint` and `oxfmt` by default, or `@biomejs/biome` when selected
+- matching lint/format scripts and config files for the selected tooling
 - dependency-cruiser architecture checks
 - Semgrep policy checks
 - Vitest with v8 coverage and 80% thresholds
 - SHA-pinned GitHub Actions CI and release workflows for pnpm projects
 - Lefthook with a lint-only `pre-commit` hook
-- `zod` as a default runtime dependency
+- optional `zod` runtime dependency when selected
 - `meow` and CLI coverage only when CLI support is enabled, including a CLI test
   mock with default `flags` and `input`
 - `@arethetypeswrong/cli` and `publint` release checks
@@ -250,8 +270,8 @@ and a dry-run publish) is wired into the generated package so packaging problems
 before you ship.
 
 `pnpm run security:lint` prefers a `semgrep` binary on PATH and otherwise runs
-the pinned `uvx semgrep@1.165.0` scan. Install Semgrep directly or install uv
-if both commands are missing locally.
+the pinned `uvx semgrep` scan. Install Semgrep directly or install uv if both
+commands are missing locally.
 
 ## Programmatic API
 
@@ -272,10 +292,12 @@ const config: ScaffoldConfig = {
   description: "An example library",
   author: "Jane Doe <jane@example.com>",
   license: "Apache-2.0",
+  lintFormatTooling: "oxlint-oxfmt",
   githubRepoUrl: "https://github.com/jane/my-lib",
   packageManager: "pnpm",
   includeCodecov: true,
   includeCli: false,
+  includeZod: false,
 };
 
 await scaffoldProject(config, {

@@ -21,15 +21,15 @@ jobs:
       matrix:
         node-version: ["22", "24"]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: {{ACTION_CHECKOUT}}
         with:
           persist-credentials: false
 {{PACKAGE_MANAGER_SETUP}}
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: {{ACTION_SETUP_NODE}}
         with:
           node-version: ${{ matrix.node-version }}
           cache: "{{CACHE}}"
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: {{ACTION_SETUP_UV}}
         with:
           enable-cache: true
       - run: {{INSTALL_CI_COMMAND}}

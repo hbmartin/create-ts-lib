@@ -35,7 +35,9 @@ const baseConfig: ScaffoldConfig = {
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeZod: false,
   license: "MIT",
+  lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
 };

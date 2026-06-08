@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const semgrepVersion = "1.165.0";
+const semgrepVersion = "{{SEMGREP_VERSION}}";
 const semgrepArguments = ["scan", "--config", "semgrep.yml", "--error", "source", "test"];
 const forceUvx = process.env.SECURITY_LINT_FORCE_UVX === "1";
 

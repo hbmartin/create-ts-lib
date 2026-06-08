@@ -2,6 +2,11 @@ import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 
+import {
+  type LintFormatTooling,
+  lintFormatToolingOptions,
+  lintFormatToolingSchema,
+} from "./lint-format-tooling.js";
 import { normalizeGitHubUrl, stripPackageScope } from "./name-helpers.js";
 
 export { normalizeGitHubUrl } from "./name-helpers.js";
@@ -13,8 +18,10 @@ export interface CliArguments {
   dryRun: boolean;
   force: boolean;
   help: boolean;
+  lintFormatTooling?: LintFormatTooling;
   version: boolean;
   yes: boolean;
+  zod: boolean;
 }
 
 export interface DetectedDefaults {
@@ -24,7 +31,7 @@ export interface DetectedDefaults {
 }
 
 export type WarningSink = (message: string) => void;
-type CliBooleanFlag = "dryRun" | "force" | "help" | "version" | "yes";
+type CliBooleanFlag = "dryRun" | "force" | "help" | "version" | "yes" | "zod";
 
 interface GitReaders {
   readGitConfigValue(key: string): Promise<string>;
@@ -37,6 +44,7 @@ const cliFlagAliases = new Map<string, CliBooleanFlag>([
   ["--help", "help"],
   ["--version", "version"],
   ["--yes", "yes"],
+  ["--zod", "zod"],
   ["-h", "help"],
   ["-v", "version"],
   ["-y", "yes"],
@@ -49,9 +57,17 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     help: false,
     version: false,
     yes: false,
+    zod: false,
   };
 
-  for (const argument of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] ?? "";
+    if (argument === "--lint-format") {
+      parsed.lintFormatTooling = parseLintFormatToolingArgument(args, index);
+      index += 1;
+      continue;
+    }
+
     const flag = cliFlagAliases.get(argument);
     if (flag) {
       parsed[flag] = true;
@@ -70,6 +86,24 @@ export const parseCliArguments = (args: string[]): CliArguments => {
   }
 
   return parsed;
+};
+
+const parseLintFormatToolingArgument = (args: string[], index: number): LintFormatTooling => {
+  const value = args[index + 1];
+  if (value === undefined || value.startsWith("-")) {
+    throw new Error(
+      `Missing value for --lint-format. Expected one of: ${lintFormatToolingOptions.join(", ")}`,
+    );
+  }
+
+  const result = lintFormatToolingSchema.safeParse(value);
+  if (!result.success) {
+    throw new Error(
+      `Invalid --lint-format value: ${value}. Expected one of: ${lintFormatToolingOptions.join(", ")}`,
+    );
+  }
+
+  return result.data;
 };
 
 export const deriveDirectoryName = (projectName: string): string => stripPackageScope(projectName);

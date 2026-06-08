@@ -36,7 +36,7 @@ interface PromptSelectOptions {
 }
 
 interface PromptModule {
-  confirm(options: { message: string }): Promise<boolean>;
+  confirm(options: { default?: boolean; message: string }): Promise<boolean>;
   input(options: PromptInputOptions): Promise<string>;
   select(options: PromptSelectOptions): Promise<string>;
 }
@@ -80,6 +80,7 @@ describe("cli entrypoint", () => {
     expect(result.exitCode).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("pnpm create @hbmartin/ts-lib my-lib");
+    expect(result.stdout).toContain("--zod");
   });
 
   it("prints an error and help for invalid arguments", async () => {
@@ -99,8 +100,58 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Dry run");
     expect(result.stdout).toContain("Project: demo-lib");
     expect(result.stdout).toContain("License: Apache-2.0");
+    expect(result.stdout).toContain("Lint/format: Oxlint + Oxfmt");
+    expect(result.stdout).toContain("Zod: no");
     expect(result.stdout).toContain("Files to create:");
     expect(result.stdout).toContain("package.json");
+  });
+
+  it("passes --lint-format to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--lint-format", "biome"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Lint/format: Biome");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lintFormatTooling: "biome",
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("passes --zod to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--zod"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Zod: yes");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeZod: true,
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it.each<[string, string[]]>([
+    ["missing value", ["--lint-format"]],
+    ["invalid value", ["--lint-format", "eslint"]],
+  ])("rejects %s for --lint-format", async (_label, args) => {
+    const result = await runCli(args);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--lint-format");
+    expect(result.stderr).toContain("Usage:");
   });
 
   it("rejects invalid project names in --yes mode", async () => {
@@ -145,9 +196,17 @@ describe("cli entrypoint", () => {
           return "https://github.com/hbmartin/prompt-lib";
         },
       ),
-      select: vi.fn(async ({ message }: { message: string }) =>
-        message === "License" ? "Apache-2.0" : "pnpm",
-      ),
+      select: vi.fn(async ({ message }: { message: string }) => {
+        if (message === "License") {
+          return "Apache-2.0";
+        }
+
+        if (message === "Lint and format tooling") {
+          return "biome";
+        }
+
+        return "pnpm";
+      }),
     };
 
     const result = await runCli(["prompt-lib", "--dry-run"], { promptModule });
@@ -156,11 +215,13 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Description: Prompted description");
     expect(result.stdout).toContain("Author: Prompt Author <prompt@example.com>");
     expect(result.stdout).toContain("License: Apache-2.0");
+    expect(result.stdout).toContain("Lint/format: Biome");
     expect(result.stdout).toContain("Package manager: pnpm");
     expect(result.stdout).toContain("CLI entry: yes");
+    expect(result.stdout).toContain("Zod: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.confirm).toHaveBeenCalledTimes(2);
-    expect(promptModule.select).toHaveBeenCalledTimes(2);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(3);
+    expect(promptModule.select).toHaveBeenCalledTimes(3);
   });
 
   it("uses an existing personal GitHub repository as the URL prompt default", async () => {
@@ -227,9 +288,17 @@ describe("cli entrypoint", () => {
 
         throw new Error(`Unexpected input prompt: ${message}`);
       }),
-      select: vi.fn(async ({ message }: PromptSelectOptions) =>
-        message === "License" ? "Apache-2.0" : "pnpm",
-      ),
+      select: vi.fn(async ({ message }: PromptSelectOptions) => {
+        if (message === "License") {
+          return "Apache-2.0";
+        }
+
+        if (message === "Lint and format tooling") {
+          return "oxlint-oxfmt";
+        }
+
+        return "pnpm";
+      }),
     };
 
     const result = await runCli(["prompt-lib", "--dry-run"], {
@@ -483,6 +552,7 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+        lintFormatTooling: "oxlint-oxfmt",
         projectName: "demo-lib",
       }),
       expect.not.objectContaining({
@@ -532,7 +602,15 @@ describe("cli entrypoint", () => {
           return "rename";
         }
 
-        return message === "License" ? "Apache-2.0" : "pnpm";
+        if (message === "License") {
+          return "Apache-2.0";
+        }
+
+        if (message === "Lint and format tooling") {
+          return "oxlint-oxfmt";
+        }
+
+        return "pnpm";
       }),
     };
 
@@ -549,7 +627,7 @@ describe("cli entrypoint", () => {
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
     expect(promptModule.input).toHaveBeenCalledTimes(5);
-    expect(promptModule.select).toHaveBeenCalledTimes(3);
+    expect(promptModule.select).toHaveBeenCalledTimes(4);
   });
 
   it("lets interactive users keep an existing npm package name", async () => {
@@ -591,7 +669,15 @@ describe("cli entrypoint", () => {
           return "use-anyway";
         }
 
-        return message === "License" ? "Apache-2.0" : "pnpm";
+        if (message === "License") {
+          return "Apache-2.0";
+        }
+
+        if (message === "Lint and format tooling") {
+          return "oxlint-oxfmt";
+        }
+
+        return "pnpm";
       }),
     };
 
@@ -605,7 +691,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: react");
     expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.select).toHaveBeenCalledTimes(3);
+    expect(promptModule.select).toHaveBeenCalledTimes(4);
   });
 
   it("warns and continues when interactive npm availability cannot be checked", async () => {
@@ -643,9 +729,17 @@ describe("cli entrypoint", () => {
           return "https://github.com/hbmartin/network-lib";
         },
       ),
-      select: vi.fn(async ({ message }: { message: string }) =>
-        message === "License" ? "Apache-2.0" : "pnpm",
-      ),
+      select: vi.fn(async ({ message }: { message: string }) => {
+        if (message === "License") {
+          return "Apache-2.0";
+        }
+
+        if (message === "Lint and format tooling") {
+          return "oxlint-oxfmt";
+        }
+
+        return "pnpm";
+      }),
     };
 
     const result = await runCli(["network-lib", "--dry-run"], {
@@ -712,7 +806,11 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("cd demo-lib");
     expect(result.stdout).toContain("pnpm run lint");
     expect(scaffoldProject).toHaveBeenCalledWith(
-      expect.objectContaining({ packageManager: "pnpm", projectName: "demo-lib" }),
+      expect.objectContaining({
+        lintFormatTooling: "oxlint-oxfmt",
+        packageManager: "pnpm",
+        projectName: "demo-lib",
+      }),
       expect.objectContaining({ targetDirectory: expect.stringContaining("demo-lib") }),
     );
   });
@@ -897,9 +995,20 @@ const buildGitHubPromptModule = ({
       return missingRepositoryChoice;
     }
 
-    return message === "License" ? "Apache-2.0" : "pnpm";
+    if (message === "License") {
+      return "Apache-2.0";
+    }
+
+    if (message === "Lint and format tooling") {
+      return "oxlint-oxfmt";
+    }
+
+    return "pnpm";
   }),
 });
+
+const ciEnvironmentVariable = "CI";
+const forceColorEnvironmentVariable = "FORCE_COLOR";
 
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
@@ -999,7 +1108,11 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
 
   process.argv = [process.execPath, "create-ts-lib", ...args];
   process.exitCode = undefined;
+  const originalCi = process.env[ciEnvironmentVariable];
+  const originalForceColor = process.env[forceColorEnvironmentVariable];
   const originalStdoutIsTTY = process.stdout.isTTY;
+  delete process.env[ciEnvironmentVariable];
+  delete process.env[forceColorEnvironmentVariable];
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,
@@ -1021,9 +1134,20 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
         value: originalStdoutIsTTY,
       });
     }
+    restoreEnvironmentVariable(ciEnvironmentVariable, originalCi);
+    restoreEnvironmentVariable(forceColorEnvironmentVariable, originalForceColor);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   }
+};
+
+const restoreEnvironmentVariable = (name: string, value: string | undefined): void => {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 };
 
 const buildDetectedDefaults = (directoryArgument: string | undefined): DetectedDefaults => ({

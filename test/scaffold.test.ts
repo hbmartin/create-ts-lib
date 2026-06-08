@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from "typescript";
 import { describe, expect, it } from "vitest";
 
+import generatorPackageJson from "../package.json" with { type: "json" };
 import {
   initializeGitRepositoryIfNeeded,
   runPackageManagerCommand,
@@ -16,9 +17,16 @@ import {
   type GeneratedFile,
   getBinName,
   type LicenseName,
+  renderTemplate,
   type ScaffoldConfig,
   tsgoProbeCommand,
 } from "../source/templates/files.js";
+import {
+  generatedPackageDependencies,
+  githubActionRefs,
+  pnpmVersion,
+  semgrepVersion,
+} from "../source/templates/generated-versions.js";
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
@@ -26,7 +34,9 @@ const baseConfig: ScaffoldConfig = {
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeZod: false,
   license: "MIT",
+  lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
 };
@@ -47,28 +57,40 @@ const forbiddenReleasePleaseContent = [
   "release-please",
 ];
 
-const actionPins = {
-  checkout: "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3",
-  codecov: "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0",
-  pnpmSetup: "pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8",
-  setupNode: "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0",
+const generatorDependencies: Record<string, string> = generatorPackageJson.dependencies;
+const generatorDevDependencies: Record<string, string> = generatorPackageJson.devDependencies;
+
+const readGeneratorSpecifier = (section: Record<string, string>, packageName: string): string => {
+  const specifier = section[packageName];
+  if (specifier === undefined) {
+    throw new Error(`Expected generator package.json to include ${packageName}`);
+  }
+
+  return specifier;
 };
 
 interface GeneratedPackageJson {
   bugs?: {
     url: string;
   };
-  dependencies: Record<string, string>;
+  dependencies: Record<string, string> & {
+    zod?: string;
+  };
   devDependencies: Record<string, string>;
   exports: {
     ".": Record<string, string>;
   };
   homepage?: string;
+  overrides?: Record<string, string>;
   packageManager?: string;
+  pnpm?: {
+    overrides: Record<string, string>;
+  };
   repository?: {
     type: string;
     url: string;
   };
+  resolutions?: Record<string, string>;
   scripts: {
     attw: string;
     check: string;
@@ -100,7 +122,30 @@ interface GeneratedBiomeConfig {
   files: {
     includes: string[];
   };
+  formatter: {
+    enabled: boolean;
+  };
 }
+
+describe("renderTemplate", () => {
+  it("throws when a standalone template placeholder remains unresolved", () => {
+    expect(() => renderTemplate("agents.md.tmpl")).toThrow(
+      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}, {{ZOD_GUIDANCE}}, {{SEMGREP_VERSION}}",
+    );
+  });
+
+  it("allows GitHub Actions expressions in templates", () => {
+    const releaseWorkflow = renderTemplate("github/release.yml.tmpl", {
+      ACTION_CHECKOUT: githubActionRefs.checkout,
+      ACTION_PNPM_SETUP: githubActionRefs.pnpmSetup,
+      ACTION_SETUP_NODE: githubActionRefs.setupNode,
+      ACTION_SETUP_UV: githubActionRefs.setupUv,
+      PNPM_VERSION: pnpmVersion,
+    });
+
+    expect(releaseWorkflow).toContain("ref: $" + "{{ github.event.release.tag_name }}");
+  });
+});
 
 describe("buildProjectFiles", () => {
   it("includes GitHub CI and release workflows without release-please files", () => {
@@ -115,18 +160,16 @@ describe("buildProjectFiles", () => {
     expect(filePaths).not.toContain(".github/workflows/release-please.yml");
     expect(filePaths).not.toContain("release-please-config.json");
     expect(filePaths).not.toContain(".release-please-manifest.json");
-    expect(ciWorkflow?.content).toContain(actionPins.checkout);
-    expect(ciWorkflow?.content).toContain(actionPins.pnpmSetup);
-    expect(ciWorkflow?.content).toContain(actionPins.setupNode);
-    expect(ciWorkflow?.content).toContain(actionPins.codecov);
-    expect(ciWorkflow?.content).toContain("version: 11.5.2");
+    expect(ciWorkflow?.content).toContain(githubActionRefs.checkout);
+    expect(ciWorkflow?.content).toContain(githubActionRefs.pnpmSetup);
+    expect(ciWorkflow?.content).toContain(githubActionRefs.setupNode);
+    expect(ciWorkflow?.content).toContain(githubActionRefs.codecov);
+    expect(ciWorkflow?.content).toContain(`version: ${pnpmVersion}`);
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("fail-fast: false");
     expect(ciWorkflow?.content).toContain('node-version: ["22", "24"]');
     expect(ciWorkflow?.content).toContain("node-version: $" + "{{ matrix.node-version }}");
-    expect(ciWorkflow?.content).toContain(
-      "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
-    );
+    expect(ciWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(ciWorkflow?.content).toContain("enable-cache: true");
     expect(ciWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
     expect(ciWorkflow?.content).toContain("pnpm run publint");
@@ -143,17 +186,15 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).not.toContain("python3 -m pip");
     expect(ciWorkflow?.content).not.toContain("setup-biome");
     expect(ciWorkflow?.content).not.toContain("biome ci");
-    expect(releaseWorkflow?.content).toContain(actionPins.checkout);
-    expect(releaseWorkflow?.content).toContain(actionPins.pnpmSetup);
-    expect(releaseWorkflow?.content).toContain(actionPins.setupNode);
+    expect(releaseWorkflow?.content).toContain(githubActionRefs.checkout);
+    expect(releaseWorkflow?.content).toContain(githubActionRefs.pnpmSetup);
+    expect(releaseWorkflow?.content).toContain(githubActionRefs.setupNode);
     expect(releaseWorkflow?.content).toContain("types: [published]");
     expect(releaseWorkflow?.content).toContain("id-token: write");
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
-    expect(releaseWorkflow?.content).toContain("version: 11.5.2");
+    expect(releaseWorkflow?.content).toContain(`version: ${pnpmVersion}`);
     expect(releaseWorkflow?.content).toContain("node-version: '22.x'");
-    expect(releaseWorkflow?.content).toContain(
-      "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
-    );
+    expect(releaseWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(releaseWorkflow?.content).toContain("enable-cache: true");
     expect(releaseWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
     expect(releaseWorkflow?.content).not.toContain("python3 -m pip");
@@ -176,12 +217,113 @@ describe("buildProjectFiles", () => {
     expectNoReleasePleaseOrCommitlintArtifacts(buildProjectFiles(config));
   });
 
-  it("emits Lefthook and Oxc tooling", () => {
+  it("mirrors generator package specifiers for generated package versions", () => {
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles({
+        ...baseConfig,
+        includeCli: true,
+      }),
+      "package.json",
+    );
+    const biomePackageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles({
+        ...baseConfig,
+        includeCli: true,
+        lintFormatTooling: "biome",
+      }),
+      "package.json",
+    );
+    const zodPackageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles({
+        ...baseConfig,
+        includeCli: true,
+        includeZod: true,
+      }),
+      "package.json",
+    );
+    const expectedNodeTypesVersion = readGeneratorSpecifier(
+      generatorDevDependencies,
+      "@types/node",
+    );
+
+    expect(generatedPackageDependencies).toMatchObject({
+      meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
+      zod: readGeneratorSpecifier(generatorDependencies, "zod"),
+    });
+    expect(packageJson.packageManager).toBe(generatorPackageJson.packageManager);
+    expect(packageJson.dependencies).toMatchObject({
+      meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
+    });
+    expect(packageJson.dependencies).not.toHaveProperty("zod");
+    expect(zodPackageJson.dependencies.zod).toBe(
+      readGeneratorSpecifier(generatorDependencies, "zod"),
+    );
+
+    for (const dependency of [
+      "@arethetypeswrong/cli",
+      "@sindresorhus/tsconfig",
+      "@vitest/coverage-v8",
+      "dependency-cruiser",
+      "lefthook",
+      "oxfmt",
+      "oxlint",
+      "publint",
+      "typescript",
+      "vitest",
+    ]) {
+      expect(packageJson.devDependencies[dependency]).toBe(
+        readGeneratorSpecifier(generatorDevDependencies, dependency),
+      );
+    }
+
+    expect(biomePackageJson.devDependencies["@biomejs/biome"]).toBe(
+      readGeneratorSpecifier(generatorDevDependencies, "@biomejs/biome"),
+    );
+    expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
+    expect(packageJson.pnpm?.overrides["@types/node"]).toBe(expectedNodeTypesVersion);
+  });
+
+  it.each(["npm", "pnpm", "yarn"] as const)(
+    "emits @types/node package-manager override fields for %s",
+    (packageManager) => {
+      const packageJson = parseGeneratedJson<GeneratedPackageJson>(
+        buildProjectFiles({
+          ...baseConfig,
+          packageManager,
+        }),
+        "package.json",
+      );
+      const expectedNodeTypesVersion = readGeneratorSpecifier(
+        generatorDevDependencies,
+        "@types/node",
+      );
+
+      expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
+
+      switch (packageManager) {
+        case "npm":
+          expect(packageJson.overrides).toEqual({ "@types/node": expectedNodeTypesVersion });
+          expect(packageJson.pnpm).toBeUndefined();
+          expect(packageJson.resolutions).toBeUndefined();
+          break;
+        case "pnpm":
+          expect(packageJson.overrides).toBeUndefined();
+          expect(packageJson.pnpm?.overrides).toEqual({ "@types/node": expectedNodeTypesVersion });
+          expect(packageJson.resolutions).toBeUndefined();
+          break;
+        case "yarn":
+          expect(packageJson.overrides).toBeUndefined();
+          expect(packageJson.pnpm).toBeUndefined();
+          expect(packageJson.resolutions).toEqual({ "@types/node": expectedNodeTypesVersion });
+          break;
+      }
+    },
+  );
+
+  it("emits Lefthook and Oxlint/Oxfmt tooling by default", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const agents = findGeneratedFile(files, "AGENTS.md");
-    const biomeFile = findGeneratedFile(files, "biome.jsonc");
-    const biomeConfig = parseGeneratedJsonc(files, "biome.jsonc") as GeneratedBiomeConfig;
     const dependencyCruiser = findGeneratedFile(files, ".dependency-cruiser.cjs");
     const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
     const oxlintConfig = parseGeneratedJson<GeneratedOxlintConfig>(files, ".oxlintrc.json");
@@ -195,6 +337,7 @@ describe("buildProjectFiles", () => {
     expect(filePaths).toContain("lefthook.yml");
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
+    expect(filePaths).not.toContain("biome.jsonc");
     expect(filePaths).toContain("semgrep.yml");
     expect(filePaths).toContain("scripts/security-lint.mjs");
     expect(packageJson.devDependencies).toMatchObject({
@@ -206,9 +349,7 @@ describe("buildProjectFiles", () => {
       oxlint: expect.any(String),
       publint: expect.any(String),
     });
-    expect(packageJson.dependencies).toMatchObject({
-      zod: "^4.4.3",
-    });
+    expect(packageJson.dependencies).toEqual({});
     expect(
       Object.keys(packageJson.devDependencies).filter((dependency) =>
         dependency.startsWith("@vitest/coverage-"),
@@ -216,6 +357,7 @@ describe("buildProjectFiles", () => {
     ).toStrictEqual(["@vitest/coverage-v8"]);
     expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/cli");
     expect(packageJson.devDependencies).not.toHaveProperty("@commitlint/config-conventional");
+    expect(packageJson.devDependencies).not.toHaveProperty("@biomejs/biome");
     expect(packageJson.devDependencies).not.toHaveProperty("husky");
     expect(packageJson.devDependencies).not.toHaveProperty("semgrep");
     expect(packageJson.devDependencies).not.toHaveProperty("@typescript/native-preview");
@@ -244,18 +386,18 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts["verify:artifacts"]).toContain("dist/index.js");
     expect(packageJson.scripts["verify:artifacts"]).not.toContain("dist/cli.js");
     expect(packageJson.scripts["verify:package"]).toBe("npm publish --dry-run --ignore-scripts");
-    expect(packageJson.packageManager).toBe("pnpm@11.5.2");
-    expect(packageJson.scripts.lint).toContain("oxlint");
-    expect(packageJson.scripts.format).toContain("oxfmt");
+    expect(packageJson.packageManager).toBe(`pnpm@${pnpmVersion}`);
+    expect(packageJson.scripts.lint).toBe("oxlint --deny-warnings . && oxfmt --check .");
+    expect(packageJson.scripts.format).toBe("oxfmt . --write");
     expect(agents.content).toContain("Guidance for Codex and other coding agents");
+    expect(agents.content).toContain(
+      "Linting is handled by Oxlint, and formatting is handled by Oxfmt.",
+    );
+    expect(agents.content).not.toContain("Use Zod");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
-    expect(agents.content).toContain("uvx semgrep@1.165.0");
+    expect(agents.content).toContain(`uvx semgrep@${semgrepVersion}`);
     expect(dependencyCruiser.content).toContain("source-not-to-test");
     expect(dependencyCruiser.content).toContain("source-not-to-dev-dependencies");
-    expect(biomeFile.content).toContain("JSON, JSONC, and YAML stay out of Biome");
-    expect(biomeConfig.files.includes).toEqual(
-      expect.arrayContaining(["!*.jsonc", "!**/*.jsonc", "!*.yml", "!**/*.yml"]),
-    );
     expect(oxfmtConfig.ignorePatterns).toEqual([
       "*.json",
       "**/*.json",
@@ -274,12 +416,57 @@ describe("buildProjectFiles", () => {
     );
     expect(semgrep.content).toContain("no-weak-crypto-hash");
     expect(semgrep.content).toContain("no-math-random-security-sensitive");
-    expect(securityLint.content).toContain('semgrepVersion = "1.165.0"');
+    expect(securityLint.content).toContain(`semgrepVersion = "${semgrepVersion}"`);
     expect(securityLint.content).toContain('runCommand("uvx"');
     expect(securityLint.content).toContain("SECURITY_LINT_FORCE_UVX");
     expect(securityLint.content).toContain("node:child_process");
     expect(securityLint.content).not.toContain("console.");
     expect(vitestConfig.content).toContain(`provider: "v8"`);
+  });
+
+  it("emits Zod dependency and agent guidance when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeZod: true,
+    });
+    const agents = findGeneratedFile(files, "AGENTS.md");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+
+    expect(packageJson.dependencies).toMatchObject({
+      zod: generatedPackageDependencies.zod,
+    });
+    expect(agents.content).toContain(
+      "Use Zod for external input validation and anywhere runtime validation is needed.",
+    );
+  });
+
+  it("emits Biome tooling when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      lintFormatTooling: "biome",
+    });
+    const filePaths = files.map((file) => file.path);
+    const agents = findGeneratedFile(files, "AGENTS.md");
+    const biomeFile = findGeneratedFile(files, "biome.jsonc");
+    const biomeConfig = parseGeneratedJsonc(files, "biome.jsonc") as GeneratedBiomeConfig;
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+
+    expect(filePaths).toContain("biome.jsonc");
+    expect(filePaths).not.toContain(".oxfmtrc.json");
+    expect(filePaths).not.toContain(".oxlintrc.json");
+    expect(packageJson.devDependencies).toMatchObject({
+      "@biomejs/biome": expect.any(String),
+    });
+    expect(packageJson.devDependencies).not.toHaveProperty("oxfmt");
+    expect(packageJson.devDependencies).not.toHaveProperty("oxlint");
+    expect(packageJson.scripts.lint).toBe("biome check --error-on-warnings .");
+    expect(packageJson.scripts.format).toBe("biome format --write .");
+    expect(agents.content).toContain("Linting and formatting are handled by Biome.");
+    expect(biomeFile.content).not.toContain("stay out of Biome");
+    expect(biomeConfig.formatter.enabled).toBe(true);
+    expect(biomeConfig.files.includes).not.toEqual(
+      expect.arrayContaining(["!*.jsonc", "!**/*.jsonc", "!*.yml", "!**/*.yml"]),
+    );
   });
 
   it("emits ignore patterns for local artifacts and environment files", () => {
@@ -334,7 +521,7 @@ describe("buildProjectFiles", () => {
     expect(readme.content).toContain("A test library");
     expect(readme.content).toContain("pnpm add example-lib");
     expect(readme.content).toContain('import { formatValue } from "example-lib";');
-    expect(readme.content).toContain("uvx semgrep@1.165.0");
+    expect(readme.content).toContain(`uvx semgrep@${semgrepVersion}`);
     expect(readme.content).toContain(
       "[![npm version](https://img.shields.io/npm/v/example-lib.svg)](https://www.npmjs.com/package/example-lib)",
     );
@@ -415,8 +602,8 @@ describe("buildProjectFiles", () => {
     expect(packageJsonFile.content).toContain(
       `"${getBinName("@scope/example-cli")}": "dist/cli.js"`,
     );
-    expect(packageJsonFile.content).toContain(`"meow": "^14.0.0"`);
-    expect(packageJson.packageManager).toBe("pnpm@11.5.2");
+    expect(packageJsonFile.content).toContain(`"meow": "${generatedPackageDependencies.meow}"`);
+    expect(packageJson.packageManager).toBe(`pnpm@${pnpmVersion}`);
     expect(packageJson.repository).toEqual({
       type: "git",
       url: "git+https://github.com/hbmartin/example-lib.git",
@@ -453,13 +640,17 @@ describe("buildProjectFiles", () => {
 
   it("renders parseable JSON and JSONC config files", () => {
     const files = buildProjectFiles(baseConfig);
+    const biomeFiles = buildProjectFiles({
+      ...baseConfig,
+      lintFormatTooling: "biome",
+    });
 
     expect(() => parseGeneratedJson(files, "package.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, ".oxfmtrc.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, ".oxlintrc.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.build.json")).not.toThrow();
-    expect(() => parseGeneratedJsonc(files, "biome.jsonc")).not.toThrow();
+    expect(() => parseGeneratedJsonc(biomeFiles, "biome.jsonc")).not.toThrow();
   });
 
   it.each<LicenseName>(["MIT", "ISC", "Apache-2.0", "UNLICENSED"])(

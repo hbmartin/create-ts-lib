@@ -27,11 +27,41 @@ describe("parseCliArguments", () => {
       help: false,
       version: false,
       yes: true,
+      zod: false,
+    });
+  });
+
+  it("parses Zod opt-in", () => {
+    expect(parseCliArguments(["my-lib", "--zod"])).toEqual({
+      directoryArgument: "my-lib",
+      dryRun: false,
+      force: false,
+      help: false,
+      version: false,
+      yes: false,
+      zod: true,
+    });
+  });
+
+  it("parses lint and format tooling selection", () => {
+    expect(parseCliArguments(["my-lib", "--lint-format", "biome"])).toEqual({
+      directoryArgument: "my-lib",
+      dryRun: false,
+      force: false,
+      help: false,
+      lintFormatTooling: "biome",
+      version: false,
+      yes: false,
+      zod: false,
     });
   });
 
   it("rejects unknown options and extra positional arguments", () => {
     expect(() => parseCliArguments(["--bad"])).toThrow("Unknown option");
+    expect(() => parseCliArguments(["--lint-format"])).toThrow("Missing value");
+    expect(() => parseCliArguments(["--lint-format", "eslint"])).toThrow(
+      "Invalid --lint-format value",
+    );
     expect(() => parseCliArguments(["one", "two"])).toThrow("Unexpected extra argument");
   });
 });
