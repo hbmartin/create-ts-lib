@@ -7,7 +7,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 - Use pnpm for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
 - Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
-- Do not add Prettier. Formatting is handled by oxfmt, and linting is handled by Biome and oxlint.
+- Do not add Prettier. {{LINT_FORMAT_GUIDANCE}}
 - Use Zod for external input validation and anywhere runtime validation is needed.
 
 ## Code Changes
@@ -22,4 +22,4 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@{{SEMGREP_VERSION}}` scan. Install Semgrep directly or install uv if both commands are missing.

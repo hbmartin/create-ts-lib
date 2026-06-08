@@ -127,7 +127,7 @@ interface GeneratedBiomeConfig {
 describe("renderTemplate", () => {
   it("throws when a standalone template placeholder remains unresolved", () => {
     expect(() => renderTemplate("agents.md.tmpl")).toThrow(
-      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}",
+      "Unresolved template placeholder(s) in agents.md.tmpl: {{LINT_FORMAT_GUIDANCE}}, {{SEMGREP_VERSION}}",
     );
   });
 
@@ -230,7 +230,10 @@ describe("buildProjectFiles", () => {
       }),
       "package.json",
     );
-    const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
+    const expectedNodeTypesVersion = readGeneratorSpecifier(
+      generatorDevDependencies,
+      "@types/node",
+    );
 
     expect(generatedPackageDependencies).toMatchObject({
       meow: readGeneratorSpecifier(generatorDevDependencies, "meow"),
@@ -276,7 +279,10 @@ describe("buildProjectFiles", () => {
         }),
         "package.json",
       );
-      const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
+      const expectedNodeTypesVersion = readGeneratorSpecifier(
+        generatorDevDependencies,
+        "@types/node",
+      );
 
       expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
 

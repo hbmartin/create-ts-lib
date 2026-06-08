@@ -119,6 +119,7 @@ try {
         includeCli,
         includeCodecov: false,
         license: "MIT",
+        lintFormatTooling: "oxlint-oxfmt",
         packageManager,
         projectName,
       },

@@ -36,6 +36,7 @@ const baseConfig: ScaffoldConfig = {
   includeCli: false,
   includeCodecov: true,
   license: "MIT",
+  lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
 };
