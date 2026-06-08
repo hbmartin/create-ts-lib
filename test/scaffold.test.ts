@@ -272,6 +272,15 @@ describe("buildProjectFiles", () => {
     expect(agents.content).not.toContain("\n\n\n## Code Changes");
   });
 
+  it("keeps documented defaults when overrides contain undefined values", () => {
+    const documentedDefaults = defaultScaffoldConfig();
+    const undefinedOverrides = Object.fromEntries(
+      Object.keys(documentedDefaults).map((key) => [key, undefined]),
+    ) as Partial<ScaffoldConfig>;
+
+    expect(defaultScaffoldConfig(undefinedOverrides)).toEqual(documentedDefaults);
+  });
+
   it("uses expected specifiers for generated package versions", () => {
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(
       buildProjectFiles({

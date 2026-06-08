@@ -105,11 +105,11 @@ const runScaffoldWorkflow = async (
         config: defaultScaffoldConfig({
           author: defaults.author,
           githubRepoUrl: defaults.githubRepoUrl,
-          includeZod: cliArguments.zod,
           ...(cliArguments.codecov === undefined ? {} : { includeCodecov: cliArguments.codecov }),
           ...(cliArguments.lintFormatTooling === undefined
             ? {}
             : { lintFormatTooling: cliArguments.lintFormatTooling }),
+          ...(cliArguments.zod === undefined ? {} : { includeZod: cliArguments.zod }),
           projectName: defaults.projectName,
         }),
       }
@@ -307,7 +307,7 @@ const promptForConfig = async (
   warn: WarningSink,
   providedLintFormatTooling: LintFormatTooling | undefined,
   includeCodecovFromCli: boolean | undefined,
-  includeZodFromCli: boolean,
+  includeZodFromCli: boolean | undefined,
 ): Promise<PromptedConfig> => {
   const projectName = await promptForProjectName(defaults, promptModule, warn);
   const githubRepositoryLookup = inspectPersonalGitHubRepository(projectName);
@@ -357,7 +357,7 @@ const promptForConfig = async (
     message: "Include CLI entry point?",
   });
   const includeZod =
-    includeZodFromCli ||
+    includeZodFromCli ??
     (await promptModule.confirm({
       default: defaultConfig.includeZod,
       message: "Include Zod?",

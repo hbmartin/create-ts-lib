@@ -31,7 +31,6 @@ describe("parseCliArguments", () => {
       help: false,
       version: false,
       yes: true,
-      zod: false,
     });
   });
 
@@ -56,7 +55,6 @@ describe("parseCliArguments", () => {
       help: false,
       version: false,
       yes: false,
-      zod: false,
     });
   });
 
@@ -69,7 +67,6 @@ describe("parseCliArguments", () => {
       lintFormatTooling: "biome",
       version: false,
       yes: false,
-      zod: false,
     });
   });
 
@@ -82,7 +79,6 @@ describe("parseCliArguments", () => {
       lintFormatTooling: "biome",
       version: false,
       yes: false,
-      zod: false,
     });
   });
 

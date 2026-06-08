@@ -22,7 +22,7 @@ export interface CliArguments {
   lintFormatTooling?: LintFormatTooling;
   version: boolean;
   yes: boolean;
-  zod: boolean;
+  zod?: boolean;
 }
 
 export interface DetectedDefaults {
@@ -58,7 +58,6 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     help: false,
     version: false,
     yes: false,
-    zod: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
