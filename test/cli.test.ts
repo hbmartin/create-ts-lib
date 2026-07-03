@@ -1305,6 +1305,7 @@ describe("cli entrypoint", () => {
     expect(modified.exitCode).toBeUndefined();
     expect(modified.stdout).toContain("skip    semgrep.yml");
     expect(modified.stdout).toContain("pass --force to overwrite");
+    expect(modified.stdout).toContain("No safe updates to apply; 1 modified file(s) were skipped.");
 
     const dryRun = await runCli(["update", targetDirectory, "--dry-run", "--force"]);
     expect(dryRun.exitCode).toBeUndefined();

@@ -48,7 +48,12 @@ export const runUpdateWorkflow = async (
   }
 
   if (pendingEntries.length === 0) {
-    process.stdout.write(`${green("done")} Everything is up to date.\n`);
+    const skippedCount = plan.entries.filter((entry) => entry.status === "skip-modified").length;
+    process.stdout.write(
+      skippedCount > 0
+        ? `${green("done")} No safe updates to apply; ${skippedCount} modified file(s) were skipped.\n`
+        : `${green("done")} Everything is up to date.\n`,
+    );
     return;
   }
 
