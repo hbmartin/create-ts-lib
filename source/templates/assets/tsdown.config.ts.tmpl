@@ -1,0 +1,11 @@
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  dts: true,
+  entry: [{{TSDOWN_ENTRIES}}],
+  // Emit .js/.d.ts (not .mjs/.d.mts) to match the package.json exports.
+  fixedExtension: false,
+  format: "esm",
+  outDir: "dist",
+  platform: "node",
+});

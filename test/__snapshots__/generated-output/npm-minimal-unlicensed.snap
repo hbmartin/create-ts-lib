@@ -12,7 +12,9 @@ coverage
 .env
 .env.*
 !.env.example
-.vscode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea
 package-lock.json
 yarn.lock
@@ -39,6 +41,23 @@ executable: false
   "env": {
     "builtin": true
   }
+}
+
+===== .vscode/extensions.json =====
+executable: false
+
+{
+  "recommendations": ["oxc.oxc-vscode", "vitest.explorer"]
+}
+
+===== .vscode/settings.json =====
+executable: false
+
+{
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "oxc.enable": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
 }
 
 ===== AGENTS.md =====
@@ -635,3 +654,48 @@ describe("formatValue", () => {
     expect(formatValue(Symbol("test"))).toBe("");
   });
 });
+
+===== .create-ts-lib.json =====
+executable: false
+
+{
+  "config": {
+    "author": "",
+    "bundler": "tsc",
+    "description": "",
+    "githubRepoUrl": "",
+    "includeCli": false,
+    "includeCodecov": false,
+    "includeJsr": false,
+    "includeSecurityWorkflows": false,
+    "includeZod": false,
+    "license": "UNLICENSED",
+    "lintFormatTooling": "oxlint-oxfmt",
+    "packageManager": "npm",
+    "projectName": "npm-minimal"
+  },
+  "files": {
+    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
+    ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
+    ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
+    ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
+    "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
+    ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
+    "lefthook.yml": "83d5774a9434f63d0870112d321754cb668ef0abde42491b5b717b440168c8af",
+    "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
+    "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
+    "package.json": "ffa2d7a086799319a3a555745933a7f17b9b996994f8aee760dfb6a28ef7d653",
+    "README.md": "497b7313d7ce56483931e8d5f2921b4958edfbe20f426910a2b2f283f4a4639e",
+    "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
+    "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
+    "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
+    "LICENSE": "a8c546ba4629db7673e8b867675ce6439a0b558d198565e14518ebf3432d7c6c",
+    "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",
+    "source/types/index.ts": "58728d9a8282e8a9bdfd78efbb33ff5e5795594bf699c303f0edb56cbba45617",
+    "source/utils/formatting.ts": "d21aef6bf37d6e8ce22ed57a3ac54be5e7469ebb5b985486813f2ca6b441bf9f",
+    "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54"
+  },
+  "generator": "@hbmartin/create-ts-lib",
+  "version": "<generator-version>"
+}

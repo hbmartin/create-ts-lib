@@ -26,6 +26,7 @@ import {
 } from "../source/templates/files.js";
 import {
   generatedPackageDependencies,
+  generatedPackageDevDependencies,
   githubActionRefs,
   pnpmVersion,
   semgrepVersion,
@@ -33,10 +34,13 @@ import {
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
+  bundler: "tsc",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeJsr: false,
+  includeSecurityWorkflows: false,
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
@@ -96,8 +100,10 @@ interface GeneratedPackageJson {
   resolutions?: Record<string, string>;
   scripts: {
     attw: string;
+    build: string;
     check: string;
     "deps:lint": string;
+    dev: string;
     format: string;
     lint: string;
     prepublishOnly: string;
@@ -107,6 +113,7 @@ interface GeneratedPackageJson {
     "size:report": string;
     test: string;
     "test:coverage": string;
+    typecheck: string;
     "types:lint": string;
     "verify:artifacts": string;
     "verify:package": string;
@@ -154,6 +161,7 @@ describe("renderTemplate", () => {
       ACTION_PNPM_SETUP: githubActionRefs.pnpmSetup,
       ACTION_SETUP_NODE: githubActionRefs.setupNode,
       ACTION_SETUP_UV: githubActionRefs.setupUv,
+      JSR_PUBLISH_STEP: "",
       PNPM_VERSION: pnpmVersion,
     });
 
@@ -738,6 +746,172 @@ describe("buildProjectFiles", () => {
     expect(() => parseGeneratedJson(files, "tsconfig.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.build.json")).not.toThrow();
     expect(() => parseGeneratedJsonc(biomeFiles, "biome.jsonc")).not.toThrow();
+  });
+
+  it("emits tsdown build tooling when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      bundler: "tsdown",
+      includeCli: true,
+    });
+    const filePaths = files.map((file) => file.path);
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const tsdownConfig = findGeneratedFile(files, "tsdown.config.ts");
+
+    expect(filePaths).toContain("tsdown.config.ts");
+    expect(filePaths).not.toContain("tsconfig.build.json");
+    expect(packageJson.scripts.build).toBe("tsdown");
+    expect(packageJson.scripts.dev).toBe("tsdown --watch");
+    expect(packageJson.scripts.typecheck).toBe("tsc --noEmit");
+    expect(packageJson.devDependencies["tsdown"]).toBe(generatedPackageDevDependencies.tsdown);
+    expect(tsdownConfig.content).toContain('entry: ["./source/index.ts", "./source/cli.ts"]');
+    expect(tsdownConfig.content).toContain("dts: true");
+  });
+
+  it("emits tsc build tooling by default without a tsdown dependency", () => {
+    const files = buildProjectFiles(baseConfig);
+    const filePaths = files.map((file) => file.path);
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+
+    expect(filePaths).toContain("tsconfig.build.json");
+    expect(filePaths).not.toContain("tsdown.config.ts");
+    expect(packageJson.scripts.build).toBe("tsc -p tsconfig.build.json");
+    expect(packageJson.devDependencies).not.toHaveProperty("tsdown");
+  });
+
+  it("emits JSR manifest, publish script, badge, and release step when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeJsr: true,
+      projectName: "@scope/example-lib",
+    });
+    const jsrJson = parseGeneratedJson<{ exports: string; name: string }>(files, "jsr.json");
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const readme = findGeneratedFile(files, "README.md");
+    const releaseWorkflow = findGeneratedFile(files, ".github/workflows/release.yml");
+
+    expect(jsrJson.name).toBe("@scope/example-lib");
+    expect(jsrJson.exports).toBe("./source/index.ts");
+    expect(packageJson.scripts["jsr:publish"]).toBe("pnpm dlx jsr publish");
+    expect(readme.content).toContain("jsr.io/badges/@scope/example-lib");
+    expect(releaseWorkflow.content).toContain("Publish to JSR");
+    expect(releaseWorkflow.content).toContain("pnpm dlx jsr publish");
+  });
+
+  it("omits JSR artifacts by default", () => {
+    const files = buildProjectFiles(baseConfig);
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
+    const releaseWorkflow = findGeneratedFile(files, ".github/workflows/release.yml");
+
+    expect(files.map((file) => file.path)).not.toContain("jsr.json");
+    expect(packageJson.scripts).not.toHaveProperty("jsr:publish");
+    expect(releaseWorkflow.content).not.toContain("jsr publish");
+  });
+
+  it("emits SHA-pinned CodeQL and Scorecard workflows when selected", () => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeSecurityWorkflows: true,
+    });
+    const codeql = findGeneratedFile(files, ".github/workflows/codeql.yml");
+    const scorecard = findGeneratedFile(files, ".github/workflows/scorecard.yml");
+
+    expect(codeql.content).toContain(githubActionRefs.codeqlInit);
+    expect(codeql.content).toContain(githubActionRefs.codeqlAnalyze);
+    expect(codeql.content).toContain("languages: javascript-typescript");
+    expect(scorecard.content).toContain(githubActionRefs.scorecard);
+    expect(scorecard.content).toContain(githubActionRefs.codeqlUploadSarif);
+    expect(scorecard.content).toContain("persist-credentials: false");
+  });
+
+  it.each<[string, ScaffoldConfig]>([
+    ["by default", baseConfig],
+    [
+      "without a GitHub repo URL",
+      { ...baseConfig, githubRepoUrl: "", includeSecurityWorkflows: true },
+    ],
+    ["for npm projects", { ...baseConfig, includeSecurityWorkflows: true, packageManager: "npm" }],
+  ])("omits security workflows %s", (_label, config) => {
+    const filePaths = buildProjectFiles(config).map((file) => file.path);
+
+    expect(filePaths).not.toContain(".github/workflows/codeql.yml");
+    expect(filePaths).not.toContain(".github/workflows/scorecard.yml");
+  });
+
+  it("emits a Renovate config whenever a repository URL is provided", () => {
+    const withRepo = buildProjectFiles({ ...baseConfig, packageManager: "npm" });
+    const withoutRepo = buildProjectFiles({ ...baseConfig, githubRepoUrl: "" });
+    const renovate = findGeneratedFile(withRepo, "renovate.json");
+
+    expect(renovate.content).toContain("config:recommended");
+    expect(renovate.content).toContain("pinDigests");
+    expect(withoutRepo.map((file) => file.path)).not.toContain("renovate.json");
+  });
+
+  it("emits VS Code workspace settings matching the lint tooling", () => {
+    const oxcFiles = buildProjectFiles(baseConfig);
+    const biomeFiles = buildProjectFiles({ ...baseConfig, lintFormatTooling: "biome" });
+    const oxcExtensions = parseGeneratedJson<{ recommendations: string[] }>(
+      oxcFiles,
+      ".vscode/extensions.json",
+    );
+    const oxcSettings = parseGeneratedJson<Record<string, unknown>>(
+      oxcFiles,
+      ".vscode/settings.json",
+    );
+    const biomeExtensions = parseGeneratedJson<{ recommendations: string[] }>(
+      biomeFiles,
+      ".vscode/extensions.json",
+    );
+    const biomeSettings = parseGeneratedJson<Record<string, unknown>>(
+      biomeFiles,
+      ".vscode/settings.json",
+    );
+    const gitignore = findGeneratedFile(oxcFiles, ".gitignore");
+
+    expect(oxcExtensions.recommendations).toEqual(["oxc.oxc-vscode", "vitest.explorer"]);
+    expect(oxcSettings["editor.defaultFormatter"]).toBe("oxc.oxc-vscode");
+    expect(oxcSettings["editor.formatOnSave"]).toBe(true);
+    expect(biomeExtensions.recommendations).toEqual(["biomejs.biome", "vitest.explorer"]);
+    expect(biomeSettings["editor.defaultFormatter"]).toBe("biomejs.biome");
+    expect(gitignore.content).toContain("!.vscode/settings.json");
+    expect(gitignore.content).toContain("!.vscode/extensions.json");
+  });
+
+  it("records scaffold state with a hash for every generated file", () => {
+    const files = buildProjectFiles(baseConfig);
+    const stateFile = findGeneratedFile(files, ".create-ts-lib.json");
+    const state = JSON.parse(stateFile.content) as {
+      config: ScaffoldConfig;
+      files: Record<string, string>;
+      generator: string;
+      version: string;
+    };
+
+    expect(state.generator).toBe(generatorPackageJson.name);
+    expect(state.version).toBe(generatorPackageJson.version);
+    expect(state.config).toEqual(baseConfig);
+    for (const file of files) {
+      if (file.path === ".create-ts-lib.json") {
+        continue;
+      }
+
+      expect(state.files[file.path]).toMatch(/^[0-9a-f]{64}$/u);
+    }
+    expect(state.files).not.toHaveProperty(".create-ts-lib.json");
+  });
+
+  it("documents npm trusted publishing when release workflows are generated", () => {
+    const withWorkflows = findGeneratedFile(buildProjectFiles(baseConfig), "README.md");
+    const withoutWorkflows = findGeneratedFile(
+      buildProjectFiles({ ...baseConfig, githubRepoUrl: "" }),
+      "README.md",
+    );
+
+    expect(withWorkflows.content).toContain("## Releasing");
+    expect(withWorkflows.content).toContain("https://docs.npmjs.com/trusted-publishers");
+    expect(withWorkflows.content).toContain("`hbmartin/example-lib`");
+    expect(withoutWorkflows.content).not.toContain("## Releasing");
   });
 
   it.each<LicenseName>(["MIT", "ISC", "Apache-2.0", "UNLICENSED"])(

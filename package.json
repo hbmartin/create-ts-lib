@@ -47,7 +47,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "types:lint": "attw --pack . --profile esm-only",
-    "verify:artifacts": "node -e \"for (const file of ['dist/index.js','dist/index.d.ts','dist/cli.js','dist/cli.d.ts','dist/templates/assets/github/release.yml.tmpl','dist/templates/assets/scripts/security-lint.mjs.tmpl']) require('node:fs').statSync(file)\"",
+    "verify:artifacts": "node scripts/verify-artifacts.mjs",
     "verify:package": "npm publish --dry-run --ignore-scripts"
   },
   "dependencies": {

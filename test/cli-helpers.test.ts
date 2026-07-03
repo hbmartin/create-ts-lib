@@ -22,70 +22,145 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const baseParsedArguments = {
+  dryRun: false,
+  force: false,
+  help: false,
+  skipGit: false,
+  skipInstall: false,
+  update: false,
+  version: false,
+  yes: false,
+};
+
 describe("parseCliArguments", () => {
   it("parses directory, yes, dry-run, and force flags", () => {
     expect(parseCliArguments(["my-lib", "--yes", "--dry-run", "--force"])).toEqual({
+      ...baseParsedArguments,
       directoryArgument: "my-lib",
       dryRun: true,
       force: true,
-      help: false,
-      version: false,
       yes: true,
     });
   });
 
   it("parses Zod opt-in", () => {
     expect(parseCliArguments(["my-lib", "--zod"])).toEqual({
+      ...baseParsedArguments,
       directoryArgument: "my-lib",
-      dryRun: false,
-      force: false,
-      help: false,
-      version: false,
-      yes: false,
       zod: true,
     });
   });
 
   it("parses Codecov opt-out", () => {
     expect(parseCliArguments(["my-lib", "--no-codecov"])).toEqual({
+      ...baseParsedArguments,
       codecov: false,
       directoryArgument: "my-lib",
-      dryRun: false,
-      force: false,
-      help: false,
-      version: false,
-      yes: false,
     });
   });
 
   it("parses lint and format tooling selection", () => {
     expect(parseCliArguments(["my-lib", "--lint-format", "biome"])).toEqual({
+      ...baseParsedArguments,
       directoryArgument: "my-lib",
-      dryRun: false,
-      force: false,
-      help: false,
       lintFormatTooling: "biome",
-      version: false,
-      yes: false,
     });
   });
 
   it("parses lint and format tooling selection with equals syntax", () => {
     expect(parseCliArguments(["my-lib", "--lint-format=biome"])).toEqual({
+      ...baseParsedArguments,
       directoryArgument: "my-lib",
-      dryRun: false,
-      force: false,
-      help: false,
       lintFormatTooling: "biome",
-      version: false,
-      yes: false,
     });
+  });
+
+  it("parses non-interactive value options", () => {
+    expect(
+      parseCliArguments([
+        "my-dir",
+        "--name",
+        "@scope/my-lib",
+        "--description",
+        "A very useful library",
+        "--author=Ada Lovelace <ada@example.com>",
+        "--license",
+        "MIT",
+        "--package-manager",
+        "npm",
+        "--repo-url",
+        "git@github.com:hbmartin/my-lib.git",
+        "--bundler",
+        "tsdown",
+      ]),
+    ).toEqual({
+      ...baseParsedArguments,
+      author: "Ada Lovelace <ada@example.com>",
+      bundler: "tsdown",
+      description: "A very useful library",
+      directoryArgument: "my-dir",
+      license: "MIT",
+      packageManager: "npm",
+      projectName: "@scope/my-lib",
+      repoUrl: "https://github.com/hbmartin/my-lib",
+    });
+  });
+
+  it("parses feature toggles in both directions", () => {
+    expect(
+      parseCliArguments(["--cli", "--codecov", "--jsr", "--security-workflows", "--no-zod"]),
+    ).toEqual({
+      ...baseParsedArguments,
+      cli: true,
+      codecov: true,
+      jsr: true,
+      securityWorkflows: true,
+      zod: false,
+    });
+    expect(parseCliArguments(["--no-cli", "--no-jsr", "--no-security-workflows"])).toEqual({
+      ...baseParsedArguments,
+      cli: false,
+      jsr: false,
+      securityWorkflows: false,
+    });
+  });
+
+  it("parses skip flags", () => {
+    expect(parseCliArguments(["my-lib", "--skip-install", "--skip-git"])).toEqual({
+      ...baseParsedArguments,
+      directoryArgument: "my-lib",
+      skipGit: true,
+      skipInstall: true,
+    });
+  });
+
+  it("parses the update command with an optional directory", () => {
+    expect(parseCliArguments(["update"])).toEqual({
+      ...baseParsedArguments,
+      update: true,
+    });
+    expect(parseCliArguments(["update", "my-lib", "--dry-run"])).toEqual({
+      ...baseParsedArguments,
+      directoryArgument: "my-lib",
+      dryRun: true,
+      update: true,
+    });
+  });
+
+  it.each([
+    ["--license", "GPL-3.0", "Invalid --license value"],
+    ["--package-manager", "bun", "Invalid --package-manager value"],
+    ["--bundler", "webpack", "Invalid --bundler value"],
+  ])("rejects invalid %s values", (option, value, expectedError) => {
+    expect(() => parseCliArguments([option, value])).toThrow(expectedError);
   });
 
   it("rejects unknown options and extra positional arguments", () => {
     expect(() => parseCliArguments(["--bad"])).toThrow("Unknown option");
     expect(() => parseCliArguments(["--lint-format"])).toThrow("Missing value");
     expect(() => parseCliArguments(["--lint-format="])).toThrow("Missing value");
+    expect(() => parseCliArguments(["--name"])).toThrow("Missing value");
     expect(() => parseCliArguments(["--lint-format", "eslint"])).toThrow(
       "Invalid --lint-format value",
     );
@@ -93,6 +168,7 @@ describe("parseCliArguments", () => {
       "Invalid --lint-format value",
     );
     expect(() => parseCliArguments(["one", "two"])).toThrow("Unexpected extra argument");
+    expect(() => parseCliArguments(["update", "one", "two"])).toThrow("Unexpected extra argument");
   });
 });
 

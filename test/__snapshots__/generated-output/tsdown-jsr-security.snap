@@ -73,7 +73,6 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
 - Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. Linting is handled by Oxlint, and formatting is handled by Oxfmt.
-- Use Zod for external input validation and anywhere runtime validation is needed.
 
 ## Code Changes
 
@@ -439,7 +438,7 @@ exitWithResult(uvxResult);
 executable: false
 
 {
-  "name": "@hbmartin/validated-cli",
+  "name": "@hbmartin/full-featured-lib",
   "version": "0.1.0",
   "description": "A generated TypeScript library",
   "homepage": "https://github.com/hbmartin/generated-lib#readme",
@@ -453,7 +452,7 @@ executable: false
     "url": "git+https://github.com/hbmartin/generated-lib.git"
   },
   "bin": {
-    "validated-cli": "dist/cli.js"
+    "full-featured-lib": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -467,13 +466,14 @@ executable: false
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsdown",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
     "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
-    "dev": "tsc --watch",
+    "dev": "tsdown --watch",
     "format": "oxfmt . --write",
     "lint": "oxlint --deny-warnings . && oxfmt --check .",
     "attw": "attw --pack . --profile esm-only",
+    "jsr:publish": "pnpm dlx jsr publish",
     "prepare": "lefthook install",
     "prepublishOnly": "pnpm run check && pnpm run build && pnpm run verify:artifacts && pnpm run publint && pnpm run types:lint",
     "publint": "publint --pack pnpm",
@@ -488,8 +488,7 @@ executable: false
     "verify:package": "npm publish --dry-run --ignore-scripts"
   },
   "dependencies": {
-    "meow": "^14.1.0",
-    "zod": "^4.4.3"
+    "meow": "^14.1.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
@@ -501,6 +500,7 @@ executable: false
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "publint": "^0.3.21",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
@@ -517,10 +517,11 @@ executable: false
 ===== README.md =====
 executable: false
 
-# `@hbmartin/validated-cli`
+# `@hbmartin/full-featured-lib`
 
-[![npm version](https://img.shields.io/npm/v/@hbmartin/validated-cli.svg)](https://www.npmjs.com/package/@hbmartin/validated-cli)
+[![npm version](https://img.shields.io/npm/v/@hbmartin/full-featured-lib.svg)](https://www.npmjs.com/package/@hbmartin/full-featured-lib)
 [![CI](https://github.com/hbmartin/generated-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/hbmartin/generated-lib/actions/workflows/ci.yml)
+[![JSR](https://jsr.io/badges/@hbmartin/full-featured-lib)](https://jsr.io/@hbmartin/full-featured-lib)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A generated TypeScript library
@@ -528,13 +529,13 @@ A generated TypeScript library
 ## Install
 
 ```bash
-pnpm add @hbmartin/validated-cli
+pnpm add @hbmartin/full-featured-lib
 ```
 
 ## Usage
 
 ```ts
-import { formatValue } from "@hbmartin/validated-cli";
+import { formatValue } from "@hbmartin/full-featured-lib";
 
 const output = formatValue({ ready: true });
 ```
@@ -542,7 +543,7 @@ const output = formatValue({ ready: true });
 ## CLI
 
 ```bash
-validated-cli --help
+full-featured-lib --help
 ```
 
 ## Development
@@ -573,6 +574,10 @@ of a long-lived token. Before the first release, add a trusted publisher on
 npmjs.com for `hbmartin/generated-lib` pointing at the `release.yml` GitHub Actions
 workflow.
 
+The release workflow also publishes to [JSR](https://jsr.io). Link the GitHub
+repository on your package's JSR settings page so the workflow's OIDC token is
+accepted, or run `pnpm run jsr:publish` locally.
+
 ## License
 
 [MIT](LICENSE) © Harold Martin.
@@ -599,17 +604,20 @@ executable: false
   "include": ["source"]
 }
 
-===== tsconfig.build.json =====
+===== tsdown.config.ts =====
 executable: false
 
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "declaration": true,
-    "declarationMap": true,
-    "rootDir": "source"
-  }
-}
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  dts: true,
+  entry: ["./source/index.ts", "./source/cli.ts"],
+  // Emit .js/.d.ts (not .mjs/.d.mts) to match the package.json exports.
+  fixedExtension: false,
+  format: "esm",
+  outDir: "dist",
+  platform: "node",
+});
 
 ===== vitest.config.ts =====
 executable: false
@@ -726,7 +734,7 @@ import meow from "meow";
 meow(
   `
   Usage
-    $ validated-cli <input>
+    $ full-featured-lib <input>
 
   Options
     --help     Show help
@@ -756,13 +764,32 @@ describe("cli", () => {
     await import("../source/cli.js");
 
     expect(meow).toHaveBeenCalledWith(
-      expect.stringContaining("$ validated-cli <input>"),
+      expect.stringContaining("$ full-featured-lib <input>"),
       expect.objectContaining({
         importMeta: expect.anything(),
       }),
     );
   });
 });
+
+===== jsr.json =====
+executable: false
+
+{
+  "name": "@hbmartin/full-featured-lib",
+  "version": "0.1.0",
+  "exports": "./source/index.ts",
+  "publish": {
+    "include": [
+      "source/**/*.ts",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": [
+      "**/*.test.ts"
+    ]
+  }
+}
 
 ===== renovate.json =====
 executable: false
@@ -911,6 +938,74 @@ jobs:
 
           echo "Publishing with tag: $TAG"
           npm publish --tag "$TAG" --access public --provenance
+      - name: Publish to JSR
+        run: pnpm dlx jsr publish
+
+===== .github/workflows/codeql.yml =====
+executable: false
+
+name: codeql
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "29 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+
+===== .github/workflows/scorecard.yml =====
+executable: false
+
+name: scorecard
+
+on:
+  branch_protection_rule:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          publish_results: true
+          results_file: scorecard.sarif
+          results_format: sarif
+      - uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: scorecard.sarif
 
 ===== .create-ts-lib.json =====
 executable: false
@@ -918,18 +1013,18 @@ executable: false
 {
   "config": {
     "author": "Harold Martin <harold@example.com>",
-    "bundler": "tsc",
+    "bundler": "tsdown",
     "description": "A generated TypeScript library",
     "githubRepoUrl": "https://github.com/hbmartin/generated-lib",
     "includeCli": true,
     "includeCodecov": true,
-    "includeJsr": false,
-    "includeSecurityWorkflows": false,
-    "includeZod": true,
+    "includeJsr": true,
+    "includeSecurityWorkflows": true,
+    "includeZod": false,
     "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
     "packageManager": "pnpm",
-    "projectName": "@hbmartin/validated-cli"
+    "projectName": "@hbmartin/full-featured-lib"
   },
   "files": {
     ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
@@ -937,27 +1032,30 @@ executable: false
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
-    "AGENTS.md": "46e89082132f81e26d733815b6aef77f08a6428d27f0dea6ee4aa92e761f4404",
+    "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
     "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
-    "package.json": "4a462265e885e824dd52eac7e931c8e7ad3db1bfd736afd80ccd64e3a7eb3432",
-    "README.md": "0e178421ab2c44a7fe073b94ffd0d7dfcecdd82aa4990599e12ac66ab142bd1f",
+    "package.json": "fbbdae1b4948b04a96031dc912d8e9639c4fb82ad9375e82ae023a9182ed08ec",
+    "README.md": "3c45aa8a114d0f4bf2d0e2735056543178e1f8bc62e9a3ae5c291e54c75e8b03",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
-    "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
+    "tsdown.config.ts": "1cae332dc06229d1f6ff705df7295a890dcc6100709fd2f51ebfdd4763910412",
     "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
     "LICENSE": "061464f1fe53e4a3f832eceb1e6f6c15d23f36f89b16dc016ff8a6e377e630eb",
     "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",
     "source/types/index.ts": "58728d9a8282e8a9bdfd78efbb33ff5e5795594bf699c303f0edb56cbba45617",
     "source/utils/formatting.ts": "d21aef6bf37d6e8ce22ed57a3ac54be5e7469ebb5b985486813f2ca6b441bf9f",
     "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54",
-    "source/cli.ts": "9440c0c627df4329f3162643fbe6121aea8f9ccb5901f40fcbc7790364475fb3",
-    "test/cli.test.ts": "fa6f11f1f26f6073c3597272ea0da8484a5f8facac1bbf7b0afa885c33b106a4",
+    "source/cli.ts": "5899e10edfac2ebf04dd1c24d0f09ce390335816ff5550eee8b2413cd999203c",
+    "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
+    "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
     ".github/workflows/ci.yml": "09970db4a9c629faa4d4c0bff726b5406deb9aedddc9b96744c7dc48ee6ef1e3",
-    ".github/workflows/release.yml": "fa6cd16483808198cad7444d9459b52d599ac5034b95d071a710b955069ce7ac"
+    ".github/workflows/release.yml": "1ab18797df0a64d6cf6647d0901f57eff726c05feb4a708b83a0bb3bad7055e7",
+    ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
+    ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
   },
   "generator": "@hbmartin/create-ts-lib",
   "version": "<generator-version>"

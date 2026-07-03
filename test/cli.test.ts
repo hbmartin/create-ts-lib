@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -54,6 +54,7 @@ interface RunCliOptions {
   };
   scaffoldProject?: ReturnType<typeof vi.fn>;
   stdoutIsTTY?: boolean;
+  xdgConfigHome?: string;
 }
 
 afterEach(() => {
@@ -80,8 +81,10 @@ describe("cli entrypoint", () => {
     expect(result.exitCode).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("pnpm create @hbmartin/ts-lib my-lib");
-    expect(result.stdout).toContain("--no-codecov");
-    expect(result.stdout).toContain("--zod");
+    expect(result.stdout).toContain("--[no-]codecov");
+    expect(result.stdout).toContain("--[no-]zod");
+    expect(result.stdout).toContain("--skip-install");
+    expect(result.stdout).toContain("create-ts-lib update [directory]");
   });
 
   it("prints an error and help for invalid arguments", async () => {
@@ -244,6 +247,10 @@ describe("cli entrypoint", () => {
           return "biome";
         }
 
+        if (message === "Build tool") {
+          return "tsdown";
+        }
+
         return "pnpm";
       }),
     };
@@ -255,12 +262,14 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Author: Prompt Author <prompt@example.com>");
     expect(result.stdout).toContain("License: Apache-2.0");
     expect(result.stdout).toContain("Lint/format: Biome");
+    expect(result.stdout).toContain("Build tool: tsdown");
     expect(result.stdout).toContain("Package manager: pnpm");
     expect(result.stdout).toContain("CLI entry: yes");
     expect(result.stdout).toContain("Zod: no");
+    expect(result.stdout).toContain("JSR: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.confirm).toHaveBeenCalledTimes(3);
-    expect(promptModule.select).toHaveBeenCalledTimes(3);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(4);
   });
 
   it("uses an existing personal GitHub repository as the URL prompt default", async () => {
@@ -666,7 +675,7 @@ describe("cli entrypoint", () => {
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
     expect(promptModule.input).toHaveBeenCalledTimes(5);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("lets interactive users keep an existing npm package name", async () => {
@@ -730,7 +739,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: react");
     expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("warns and continues when interactive npm availability cannot be checked", async () => {
@@ -1061,6 +1070,263 @@ describe("cli entrypoint", () => {
       expect.objectContaining({ force: true }),
     );
   });
+
+  it("applies non-interactive value flags in --yes mode", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(
+      [
+        "demo-dir",
+        "--yes",
+        "--name",
+        "@scope/demo-lib",
+        "--description",
+        "Configured description",
+        "--author",
+        "Ada Lovelace <ada@example.com>",
+        "--license",
+        "MIT",
+        "--package-manager",
+        "npm",
+        "--bundler",
+        "tsdown",
+        "--jsr",
+        "--security-workflows",
+        "--cli",
+      ],
+      { scaffoldProject },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Project: @scope/demo-lib");
+    expect(result.stdout).toContain("Build tool: tsdown");
+    expect(result.stdout).toContain("JSR: yes");
+    expect(result.stdout).toContain("Security workflows: yes");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        author: "Ada Lovelace <ada@example.com>",
+        bundler: "tsdown",
+        description: "Configured description",
+        includeCli: true,
+        includeJsr: true,
+        includeSecurityWorkflows: true,
+        license: "MIT",
+        packageManager: "npm",
+        projectName: "@scope/demo-lib",
+      }),
+      expect.objectContaining({ targetDirectory: expect.stringContaining("demo-dir") }),
+    );
+  });
+
+  it("skips prompts for values provided as flags in interactive mode", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+    const inspectPersonalGitHubRepository = vi.fn();
+    const promptModule = {
+      confirm: vi.fn(async () => false),
+      input: vi.fn(async ({ message }: PromptInputOptions) => {
+        throw new Error(`Unexpected input prompt: ${message}`);
+      }),
+      select: vi.fn(async ({ message }: PromptSelectOptions) => {
+        throw new Error(`Unexpected select prompt: ${message}`);
+      }),
+    };
+
+    const result = await runCli(
+      [
+        "flag-lib",
+        "--name",
+        "flag-lib",
+        "--description",
+        "All from flags",
+        "--author",
+        "Ada <ada@example.com>",
+        "--license",
+        "ISC",
+        "--lint-format",
+        "biome",
+        "--bundler",
+        "tsc",
+        "--package-manager",
+        "pnpm",
+        "--repo-url",
+        "git@github.com:hbmartin/flag-lib.git",
+      ],
+      { inspectPersonalGitHubRepository, promptModule, scaffoldProject },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(promptModule.input).not.toHaveBeenCalled();
+    expect(promptModule.select).not.toHaveBeenCalled();
+    // Feature confirms still run because no toggle flags were provided.
+    expect(promptModule.confirm).toHaveBeenCalledTimes(5);
+    expect(inspectPersonalGitHubRepository).not.toHaveBeenCalled();
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        author: "Ada <ada@example.com>",
+        description: "All from flags",
+        githubRepoUrl: "https://github.com/hbmartin/flag-lib",
+        license: "ISC",
+        lintFormatTooling: "biome",
+        projectName: "flag-lib",
+      }),
+      expect.objectContaining({
+        gitRemoteOriginUrl: "https://github.com/hbmartin/flag-lib",
+      }),
+    );
+  });
+
+  it("configures a git remote in --yes mode when --repo-url is explicit", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    await runCli(["demo-lib", "--yes", "--repo-url", "https://github.com/hbmartin/explicit-lib"], {
+      scaffoldProject,
+    });
+
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubRepoUrl: "https://github.com/hbmartin/explicit-lib",
+      }),
+      expect.objectContaining({
+        gitRemoteOriginUrl: "https://github.com/hbmartin/explicit-lib",
+      }),
+    );
+  });
+
+  it("passes skip flags to the scaffold operation and adjusts next steps", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--skip-install", "--skip-git"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("  git init\n");
+    expect(result.stdout).toContain("  pnpm install\n");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ skipGit: true, skipInstall: true }),
+    );
+  });
+
+  it("prints the npm trusted publishing next step for pnpm GitHub projects", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], { scaffoldProject });
+
+    expect(result.stdout).toContain(
+      "Enable npm trusted publishing for the release workflow: https://docs.npmjs.com/trusted-publishers",
+    );
+  });
+
+  it("uses personal defaults from the user config file in --yes mode", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    await mkdir(join(configDirectory, "create-ts-lib"));
+    await writeFile(
+      join(configDirectory, "create-ts-lib", "config.json"),
+      JSON.stringify({
+        author: "Config Author <config@example.com>",
+        includeCodecov: false,
+        license: "MIT",
+        lintFormatTooling: "biome",
+      }),
+      "utf8",
+    );
+
+    const result = await runCli(["demo-lib", "--yes", "--license", "ISC"], {
+      scaffoldProject,
+      xdgConfigHome: configDirectory,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        author: "Config Author <config@example.com>",
+        includeCodecov: false,
+        // CLI flags win over the config file.
+        license: "ISC",
+        lintFormatTooling: "biome",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("warns and ignores an invalid user config file", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    await mkdir(join(configDirectory, "create-ts-lib"));
+    await writeFile(join(configDirectory, "create-ts-lib", "config.json"), "not json", "utf8");
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      scaffoldProject,
+      xdgConfigHome: configDirectory,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stderr).toContain("not valid JSON");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ license: "Apache-2.0" }),
+      expect.any(Object),
+    );
+  });
+
+  it("runs the update command against a scaffolded project", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-update-"));
+    const targetDirectory = join(tempDirectory, "update-lib");
+    vi.doUnmock("../source/scaffold.js");
+    vi.resetModules();
+    const { scaffoldProject } = await import("../source/scaffold.js");
+    await scaffoldProject(
+      {
+        author: "Harold Martin <harold@example.com>",
+        bundler: "tsc",
+        description: "A test library",
+        githubRepoUrl: "",
+        includeCli: false,
+        includeCodecov: false,
+        includeJsr: false,
+        includeSecurityWorkflows: false,
+        includeZod: false,
+        license: "MIT",
+        lintFormatTooling: "oxlint-oxfmt",
+        packageManager: "pnpm",
+        projectName: "update-lib",
+      },
+      { postScaffold: false, targetDirectory },
+    );
+
+    const upToDate = await runCli(["update", targetDirectory, "--yes"]);
+    expect(upToDate.exitCode).toBeUndefined();
+    expect(upToDate.stdout).toContain("Update plan for update-lib");
+    expect(upToDate.stdout).toContain("Everything is up to date.");
+
+    await writeFile(join(targetDirectory, "semgrep.yml"), "rules: []\n", "utf8");
+    const modified = await runCli(["update", targetDirectory, "--yes"]);
+    expect(modified.exitCode).toBeUndefined();
+    expect(modified.stdout).toContain("skip    semgrep.yml");
+    expect(modified.stdout).toContain("pass --force to overwrite");
+    expect(modified.stdout).toContain("No safe updates to apply; 1 modified file(s) were skipped.");
+
+    const dryRun = await runCli(["update", targetDirectory, "--dry-run", "--force"]);
+    expect(dryRun.exitCode).toBeUndefined();
+    expect(dryRun.stdout).toContain("Dry run: 1 file(s) would be written.");
+
+    const forced = await runCli(["update", targetDirectory, "--yes", "--force"]);
+    expect(forced.exitCode).toBeUndefined();
+    expect(forced.stdout).toContain("Updated 1 file(s).");
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toContain(
+      "no-child-process-exec",
+    );
+  });
+
+  it("reports an error when update runs outside a scaffolded project", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-no-state-"));
+
+    const result = await runCli(["update", tempDirectory]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("No .create-ts-lib.json found");
+  });
 });
 
 interface BuildGitHubPromptModuleOptions {
@@ -1122,6 +1388,10 @@ const buildGitHubPromptModule = ({
       return "oxlint-oxfmt";
     }
 
+    if (message === "Build tool") {
+      return "tsc";
+    }
+
     return packageManager;
   }),
 });
@@ -1129,6 +1399,7 @@ const buildGitHubPromptModule = ({
 const ciEnvironmentVariable = "CI";
 const forceColorEnvironmentVariable = "FORCE_COLOR";
 const noColorEnvironmentVariable = "NO_COLOR";
+const xdgConfigHomeEnvironmentVariable = "XDG_CONFIG_HOME";
 
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
@@ -1231,10 +1502,15 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   const originalCi = process.env[ciEnvironmentVariable];
   const originalForceColor = process.env[forceColorEnvironmentVariable];
   const originalNoColor = process.env[noColorEnvironmentVariable];
+  const originalXdgConfigHome = process.env[xdgConfigHomeEnvironmentVariable];
   const originalStdoutIsTTY = process.stdout.isTTY;
   delete process.env[ciEnvironmentVariable];
   delete process.env[forceColorEnvironmentVariable];
   process.env[noColorEnvironmentVariable] = "1";
+  // Point user-config loading at an isolated directory so developer machines
+  // with a real ~/.config/create-ts-lib/config.json do not affect tests.
+  process.env[xdgConfigHomeEnvironmentVariable] =
+    options.xdgConfigHome ?? (await mkdtemp(join(tmpdir(), "create-ts-lib-xdg-")));
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,
@@ -1259,6 +1535,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
     restoreEnvironmentVariable(ciEnvironmentVariable, originalCi);
     restoreEnvironmentVariable(forceColorEnvironmentVariable, originalForceColor);
     restoreEnvironmentVariable(noColorEnvironmentVariable, originalNoColor);
+    restoreEnvironmentVariable(xdgConfigHomeEnvironmentVariable, originalXdgConfigHome);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   }

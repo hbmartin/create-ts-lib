@@ -34,6 +34,15 @@
     },
     {
       "customType": "regex",
+      "description": "Track the template-only tsdown dependency emitted into generated package.json files.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": ["tsdown:\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "tsdown",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
       "description": "Track pinned TypeScript native-preview probes in CI workflows.",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/",

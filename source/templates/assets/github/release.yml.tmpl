@@ -69,4 +69,4 @@ jobs:
           fi
 
           echo "Publishing with tag: $TAG"
-          npm publish --tag "$TAG" --access public --provenance
+          npm publish --tag "$TAG" --access public --provenance{{JSR_PUBLISH_STEP}}
