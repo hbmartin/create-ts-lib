@@ -104,18 +104,3 @@ export const extractAuthorName = (author: string): string => {
 
   return trimmedAuthor || "Unknown Author";
 };
-
-/**
- * Files that carry generated tooling configuration and are safe to re-sync
- * with `create-ts-lib update`. Content files (source, tests, docs, package
- * metadata) are excluded because users own them after scaffolding.
- */
-export const isToolingFilePath = (path: string): boolean =>
-  !(
-    path.startsWith("source/") ||
-    path.startsWith("test/") ||
-    path === "README.md" ||
-    path === "LICENSE" ||
-    path === "package.json" ||
-    path === "AGENTS.md"
-  );

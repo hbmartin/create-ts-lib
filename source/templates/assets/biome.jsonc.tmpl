@@ -3,45 +3,42 @@
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true,
+    "useIgnoreFile": true
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": [
-      "**",
-      "!dist",
-      "!coverage",
-      "!.cache",
-      "!node_modules"
-    ],
+    "includes": ["**", "!dist", "!coverage", "!.cache", "!node_modules"]
   },
   "formatter": {
     "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "complexity": {
         "noArguments": "error",
         "noBannedTypes": "error",
         "noExcessiveCognitiveComplexity": {
           "level": "error",
           "options": {
-            "maxAllowedComplexity": 16,
-          },
+            "maxAllowedComplexity": 16
+          }
         },
         "noExcessiveLinesPerFunction": {
           "level": "error",
           "options": {
-            "maxLines": 120,
-          },
+            "maxLines": 120
+          }
         },
         "noForEach": "error",
         "noUselessCatch": "error",
         "useArrowFunction": "error",
         "useOptionalChain": "error",
-        "useRegexLiterals": "error",
+        "useRegexLiterals": "error"
       },
       "correctness": {
         "noNodejsModules": "error",
@@ -50,27 +47,25 @@
         "noUnusedFunctionParameters": "error",
         "noUnusedImports": {
           "fix": "safe",
-          "level": "error",
+          "level": "error"
         },
         "noUnusedVariables": "error",
-        "useJsonImportAttributes": "error",
+        "useJsonImportAttributes": "error"
       },
       "nursery": {
         "noFloatingPromises": "error",
         "noMisusedPromises": "error",
-        "noShadow": "error",
-        "noUnnecessaryConditions": "error",
-        "useExhaustiveSwitchCases": "error",
+        "useExhaustiveSwitchCases": "error"
       },
       "performance": {
         "noAccumulatingSpread": "error",
         "noDelete": "error",
         "noNamespaceImport": "error",
-        "useTopLevelRegex": "error",
+        "useTopLevelRegex": "error"
       },
       "security": {
         "noGlobalEval": "error",
-        "noSecrets": "error",
+        "noSecrets": "error"
       },
       "style": {
         "noDefaultExport": "error",
@@ -84,28 +79,30 @@
           "level": "error",
           "options": {
             "requireAscii": true,
-            "filenameCases": ["kebab-case"],
-          },
+            "filenameCases": ["kebab-case"]
+          }
         },
         "useImportType": "error",
         "useNodejsImportProtocol": "error",
         "useTemplate": "error",
-        "useThrowNewError": "error",
+        "useThrowNewError": "error"
       },
       "suspicious": {
         "noConsole": "error",
         "noExplicitAny": "error",
+        "noShadow": "error",
         "noSkippedTests": "error",
-      },
-    },
+        "noUnnecessaryConditions": "error"
+      }
+    }
   },
   "assist": {
     "enabled": true,
     "actions": {
       "source": {
-        "organizeImports": "on",
-      },
-    },
+        "organizeImports": "on"
+      }
+    }
   },
   "overrides": [
     {
@@ -114,40 +111,40 @@
         "rules": {
           "complexity": {
             "noExcessiveCognitiveComplexity": "off",
-            "noExcessiveLinesPerFunction": "off",
+            "noExcessiveLinesPerFunction": "off"
           },
           "correctness": {
             "noNodejsModules": "off",
-            "noProcessGlobal": "off",
+            "noProcessGlobal": "off"
           },
           "performance": {
             "noDelete": "off",
             "noNamespaceImport": "off",
-            "useTopLevelRegex": "off",
+            "useTopLevelRegex": "off"
           },
           "security": {
-            "noSecrets": "off",
+            "noSecrets": "off"
           },
           "style": {
-            "noProcessEnv": "off",
+            "noProcessEnv": "off"
           },
           "suspicious": {
             "noConsole": "off",
             "noExplicitAny": "off",
-            "useAwait": "off",
-          },
-        },
-      },
+            "useAwait": "off"
+          }
+        }
+      }
     },
     {
       "includes": ["vitest.config.ts", "tsdown.config.ts"],
       "linter": {
         "rules": {
           "style": {
-            "noDefaultExport": "off",
-          },
-        },
-      },
+            "noDefaultExport": "off"
+          }
+        }
+      }
     },
     {
       "includes": ["scripts/**/*.mjs"],
@@ -155,13 +152,13 @@
         "rules": {
           "correctness": {
             "noNodejsModules": "off",
-            "noProcessGlobal": "off",
+            "noProcessGlobal": "off"
           },
           "style": {
-            "noProcessEnv": "off",
-          },
-        },
-      },
-    },
-{{CLI_OVERRIDE}}  ],
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    }{{CLI_OVERRIDE}}
+  ]
 }

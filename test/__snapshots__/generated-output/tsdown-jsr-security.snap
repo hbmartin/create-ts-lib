@@ -47,10 +47,7 @@ executable: false
 executable: false
 
 {
-  "recommendations": [
-    "oxc.oxc-vscode",
-    "vitest.explorer"
-  ]
+  "recommendations": ["oxc.oxc-vscode", "vitest.explorer"]
 }
 
 ===== .vscode/settings.json =====
@@ -615,6 +612,8 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   dts: true,
   entry: ["./source/index.ts", "./source/cli.ts"],
+  // Emit .js/.d.ts (not .mjs/.d.mts) to match the package.json exports.
+  fixedExtension: false,
   format: "esm",
   outDir: "dist",
   platform: "node",
@@ -1031,7 +1030,7 @@ executable: false
     ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
     ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
-    ".vscode/extensions.json": "211eb66049fedf03ef0781ec97a0c0d62a2fe6f1e08dde5e9c9ad7881b205ee9",
+    ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
@@ -1042,7 +1041,7 @@ executable: false
     "README.md": "3c45aa8a114d0f4bf2d0e2735056543178e1f8bc62e9a3ae5c291e54c75e8b03",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
-    "tsdown.config.ts": "1d467ea537af8e2f70b867a6bd749febf0c0272efc84c0348fc2682bd40cbd11",
+    "tsdown.config.ts": "1cae332dc06229d1f6ff705df7295a890dcc6100709fd2f51ebfdd4763910412",
     "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
     "LICENSE": "061464f1fe53e4a3f832eceb1e6f6c15d23f36f89b16dc016ff8a6e377e630eb",
     "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",

@@ -58,13 +58,28 @@ jobs:
           verbose: true
 
   generated-project-smoke:
-    name: Smoke test generated project (Node ${{ matrix.node-version }}, CLI ${{ matrix.include-cli }})
+    name: Smoke test generated project (Node ${{ matrix.node-version }}, CLI ${{ matrix.include-cli }}, ${{ matrix.lint-format }}, ${{ matrix.bundler }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         node-version: ["22", "24"]
         include-cli: [false, true]
+        lint-format: ["oxlint-oxfmt"]
+        bundler: ["tsc"]
+        include:
+          - node-version: "24"
+            include-cli: false
+            lint-format: "biome"
+            bundler: "tsc"
+          - node-version: "24"
+            include-cli: true
+            lint-format: "biome"
+            bundler: "tsc"
+          - node-version: "24"
+            include-cli: true
+            lint-format: "oxlint-oxfmt"
+            bundler: "tsdown"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -87,7 +102,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Smoke test generated project
         env:
-          SMOKE_DIR: ${{ runner.temp }}/e2e-node-${{ matrix.node-version }}-cli-${{ matrix.include-cli }}
+          SMOKE_BUNDLER: ${{ matrix.bundler }}
+          SMOKE_DIR: ${{ runner.temp }}/e2e-node-${{ matrix.node-version }}-cli-${{ matrix.include-cli }}-${{ matrix.lint-format }}-${{ matrix.bundler }}
           SMOKE_INCLUDE_CLI: ${{ matrix.include-cli }}
+          SMOKE_LINT_FORMAT: ${{ matrix.lint-format }}
           SMOKE_PACKAGE_MANAGER: pnpm
         run: pnpm run smoke:scaffold

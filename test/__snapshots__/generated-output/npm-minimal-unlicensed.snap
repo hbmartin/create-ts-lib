@@ -47,10 +47,7 @@ executable: false
 executable: false
 
 {
-  "recommendations": [
-    "oxc.oxc-vscode",
-    "vitest.explorer"
-  ]
+  "recommendations": ["oxc.oxc-vscode", "vitest.explorer"]
 }
 
 ===== .vscode/settings.json =====
@@ -681,7 +678,7 @@ executable: false
     ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
     ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
-    ".vscode/extensions.json": "211eb66049fedf03ef0781ec97a0c0d62a2fe6f1e08dde5e9c9ad7881b205ee9",
+    ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",

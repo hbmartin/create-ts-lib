@@ -8,6 +8,8 @@ import { tsgoProbeCommand } from "../dist/templates/files.js";
 
 const packageManagers = new Set(["pnpm"]);
 const includeCliValues = new Set(["true", "false", "all"]);
+const lintFormatValues = new Set(["oxlint-oxfmt", "biome"]);
+const bundlerValues = new Set(["tsc", "tsdown"]);
 const [tsgoProbeExecutable, ...tsgoProbeArgs] = tsgoProbeCommand.trim().split(/\s+/u);
 
 const log = (message) => {
@@ -30,6 +32,16 @@ const parsePackageManagerEnv = (name) => {
 
   if (!packageManagers.has(value)) {
     throw new Error(`${name} must be one of: ${[...packageManagers].join(", ")}`);
+  }
+
+  return value;
+};
+
+const parseChoiceEnv = (name, choices, defaultValue) => {
+  const value = getOptionalEnv(name, defaultValue);
+
+  if (!choices.has(value)) {
+    throw new Error(`${name} must be one of: ${[...choices].join(", ")}`);
   }
 
   return value;
@@ -96,6 +108,8 @@ const targetDirectoryForVariant = (rootDirectory, variants, includeCli) => {
 
 const includeCliVariants = parseIncludeCliEnv("SMOKE_INCLUDE_CLI");
 const packageManager = parsePackageManagerEnv("SMOKE_PACKAGE_MANAGER");
+const lintFormatTooling = parseChoiceEnv("SMOKE_LINT_FORMAT", lintFormatValues, "oxlint-oxfmt");
+const bundler = parseChoiceEnv("SMOKE_BUNDLER", bundlerValues, "tsc");
 const configuredSmokeDirectory = process.env.SMOKE_DIR;
 const baseDirectory =
   configuredSmokeDirectory || (await mkdtemp(join(tmpdir(), "create-ts-lib-smoke-")));
@@ -114,13 +128,16 @@ try {
     await scaffoldProject(
       {
         author: "Smoke Test <smoke@example.com>",
+        bundler,
         description: "Generated project smoke test",
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
         includeCli,
         includeCodecov: false,
+        includeJsr: false,
+        includeSecurityWorkflows: false,
         includeZod: false,
         license: "MIT",
-        lintFormatTooling: "oxlint-oxfmt",
+        lintFormatTooling,
         packageManager,
         projectName,
       },

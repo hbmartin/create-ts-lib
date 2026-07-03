@@ -29,9 +29,13 @@ const vsCodeTooling = {
 
 export const buildVsCodeFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   const tooling = vsCodeTooling[config.lintFormatTooling];
-  const extensions = {
-    recommendations: [tooling.extensionId, "vitest.explorer"],
-  };
+  const recommendations = [tooling.extensionId, "vitest.explorer"];
+  // Short arrays stay on one line so Biome-formatted projects pass their own
+  // format check without rewriting these files.
+  const extensionsContent = `{
+  "recommendations": ${JSON.stringify(recommendations).replaceAll('","', '", "')}
+}
+`;
   const settings = {
     "editor.defaultFormatter": tooling.formatterId,
     "editor.formatOnSave": true,
@@ -41,7 +45,7 @@ export const buildVsCodeFiles = (config: ScaffoldConfig): GeneratedFile[] => {
 
   return [
     {
-      content: `${JSON.stringify(extensions, null, 2)}\n`,
+      content: extensionsContent,
       path: ".vscode/extensions.json",
     },
     {

@@ -239,6 +239,45 @@ describe("scaffoldProject post-scaffold progress", () => {
     expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
   });
 
+  it("skips git setup while still installing when skipGit is set", async () => {
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const targetDirectory = await createTempTarget("create-ts-lib-skip-git-");
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+      progress,
+      skipGit: true,
+      targetDirectory,
+    });
+
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(progress.info).toHaveBeenCalledWith("Skipping git setup (--skip-git).");
+    expect(progress.succeed).toHaveBeenCalledWith("Dependencies installed");
+    expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
+  });
+
+  it("skips install, build, and test while still preparing git when skipInstall is set", async () => {
+    mockGitRepositoryCheckSuccess();
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const targetDirectory = await createTempTarget("create-ts-lib-skip-install-");
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(baseConfig, {
+      progress,
+      skipInstall: true,
+      targetDirectory,
+    });
+
+    expect(progress.succeed).toHaveBeenCalledWith("Git repository ready");
+    expect(progress.info).toHaveBeenCalledWith(
+      "Skipping dependency install, build, and test (--skip-install).",
+    );
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
   it("skips git remote origin when post-scaffold setup is disabled", async () => {
     const targetDirectory = await createTempTarget("create-ts-lib-no-post-");
     const { scaffoldProject } = await import("../source/scaffold.js");
