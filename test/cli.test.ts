@@ -80,8 +80,10 @@ describe("cli entrypoint", () => {
     expect(result.exitCode).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("pnpm create @hbmartin/ts-lib my-lib");
-    expect(result.stdout).toContain("--no-codecov");
-    expect(result.stdout).toContain("--zod");
+    expect(result.stdout).toContain("--[no-]codecov");
+    expect(result.stdout).toContain("--[no-]zod");
+    expect(result.stdout).toContain("--skip-install");
+    expect(result.stdout).toContain("create-ts-lib update [directory]");
   });
 
   it("prints an error and help for invalid arguments", async () => {
@@ -244,6 +246,10 @@ describe("cli entrypoint", () => {
           return "biome";
         }
 
+        if (message === "Build tool") {
+          return "tsdown";
+        }
+
         return "pnpm";
       }),
     };
@@ -255,12 +261,14 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Author: Prompt Author <prompt@example.com>");
     expect(result.stdout).toContain("License: Apache-2.0");
     expect(result.stdout).toContain("Lint/format: Biome");
+    expect(result.stdout).toContain("Build tool: tsdown");
     expect(result.stdout).toContain("Package manager: pnpm");
     expect(result.stdout).toContain("CLI entry: yes");
     expect(result.stdout).toContain("Zod: no");
+    expect(result.stdout).toContain("JSR: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.confirm).toHaveBeenCalledTimes(3);
-    expect(promptModule.select).toHaveBeenCalledTimes(3);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(4);
   });
 
   it("uses an existing personal GitHub repository as the URL prompt default", async () => {
@@ -666,7 +674,7 @@ describe("cli entrypoint", () => {
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
     expect(promptModule.input).toHaveBeenCalledTimes(5);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("lets interactive users keep an existing npm package name", async () => {
@@ -730,7 +738,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: react");
     expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("warns and continues when interactive npm availability cannot be checked", async () => {
@@ -1122,6 +1130,10 @@ const buildGitHubPromptModule = ({
       return "oxlint-oxfmt";
     }
 
+    if (message === "Build tool") {
+      return "tsc";
+    }
+
     return packageManager;
   }),
 });
@@ -1129,6 +1141,7 @@ const buildGitHubPromptModule = ({
 const ciEnvironmentVariable = "CI";
 const forceColorEnvironmentVariable = "FORCE_COLOR";
 const noColorEnvironmentVariable = "NO_COLOR";
+const xdgConfigHomeEnvironmentVariable = "XDG_CONFIG_HOME";
 
 const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliResult> => {
   vi.resetModules();
@@ -1231,10 +1244,16 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   const originalCi = process.env[ciEnvironmentVariable];
   const originalForceColor = process.env[forceColorEnvironmentVariable];
   const originalNoColor = process.env[noColorEnvironmentVariable];
+  const originalXdgConfigHome = process.env[xdgConfigHomeEnvironmentVariable];
   const originalStdoutIsTTY = process.stdout.isTTY;
   delete process.env[ciEnvironmentVariable];
   delete process.env[forceColorEnvironmentVariable];
   process.env[noColorEnvironmentVariable] = "1";
+  // Point user-config loading at an isolated directory so developer machines
+  // with a real ~/.config/create-ts-lib/config.json do not affect tests.
+  process.env[xdgConfigHomeEnvironmentVariable] = await mkdtemp(
+    join(tmpdir(), "create-ts-lib-xdg-"),
+  );
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,
@@ -1259,6 +1278,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
     restoreEnvironmentVariable(ciEnvironmentVariable, originalCi);
     restoreEnvironmentVariable(forceColorEnvironmentVariable, originalForceColor);
     restoreEnvironmentVariable(noColorEnvironmentVariable, originalNoColor);
+    restoreEnvironmentVariable(xdgConfigHomeEnvironmentVariable, originalXdgConfigHome);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   }

@@ -1,65 +1,81 @@
 #!/usr/bin/env node
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
+import process from "node:process";
 
-import ora, { type Ora } from "ora";
-import { cyan, green, red, yellow } from "yoctocolors";
+import { red, yellow } from "yoctocolors";
 
 import packageJson from "../package.json" with { type: "json" };
 
 import {
   type CliArguments,
-  type DetectedDefaults,
   deriveDirectoryName,
   detectDefaults,
   parseCliArguments,
   type WarningSink,
 } from "./cli-helpers.js";
 import {
-  createGitHubRepository,
-  type GitHubRepositoryLookupResult,
-  type GitHubRepositoryVisibility,
-  inspectPersonalGitHubRepository,
-} from "./github-cli.js";
-import { formatLintFormatTooling, type LintFormatTooling } from "./lint-format-tooling.js";
-import { parseGitHubRepositoryUrl } from "./name-helpers.js";
+  createProgressReporter,
+  printDryRunDetails,
+  printNextSteps,
+  printPostScaffoldRecovery,
+  printSummary,
+} from "./cli-output.js";
 import {
-  checkNpmPackageNameAvailability,
-  type NpmPackageNameAvailabilityUnknown,
-} from "./npm-registry.js";
-import { assertValidPackageName, validatePackageName } from "./package-name.js";
-import { loadPromptModule, type PromptModule } from "./prompts.js";
-import { PostScaffoldSetupError, type ScaffoldProgress, scaffoldProject } from "./scaffold.js";
+  type PendingGitHubRepositoryCreation,
+  promptForConfig,
+  warnForNpmPackageNameAvailability,
+} from "./cli-prompts.js";
+import { runUpdateWorkflow } from "./cli-update.js";
+import { formatGitHubRepositoryCreateWarning } from "./cli-warnings.js";
+import { createGitHubRepository } from "./github-cli.js";
+import { assertValidPackageName } from "./package-name.js";
+import { loadPromptModule } from "./prompts.js";
+import { PostScaffoldSetupError, scaffoldProject } from "./scaffold.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
-import {
-  buildProjectFiles,
-  defaultScaffoldConfig,
-  type LicenseName,
-  type PackageManager,
-  type ScaffoldConfig,
-} from "./templates/files.js";
+import { defaultScaffoldConfig, type ScaffoldConfig } from "./templates/files.js";
+import { stripUndefinedOverrides } from "./templates/scaffold-config.js";
+import { loadUserConfig } from "./user-config.js";
 
 const helpText = `create-ts-lib
 
 Usage:
-  create-ts-lib [directory] [--yes] [--dry-run] [--force] [--lint-format <tooling>] [--no-codecov] [--zod]
+  create-ts-lib [directory] [options]
+  create-ts-lib update [directory] [--dry-run] [--force] [--yes]
 
 Options:
   --yes, -y                 Use detected/default answers without prompting
   --dry-run                 Print the scaffold plan without writing files
   --force                   Allow writing into a non-empty target directory
+  --name <name>             Package name (defaults to the directory name)
+  --description <text>      Package description
+  --author <author>         Package author, e.g. "Ada <ada@example.com>"
+  --license <license>       Choose Apache-2.0, MIT, ISC, or UNLICENSED
+  --repo-url <url>          GitHub repository URL for generated metadata
+  --package-manager <pm>    Choose pnpm, npm, or yarn
   --lint-format <tooling>   Choose oxlint-oxfmt or biome
-  --no-codecov              Omit the Codecov upload step from generated CI
-  --zod                     Include Zod in the generated project
+  --bundler <bundler>       Choose tsc or tsdown
+  --[no-]codecov            Include or omit Codecov upload in generated CI
+  --[no-]zod                Include or omit Zod in the generated project
+  --[no-]jsr                Include or omit JSR publishing support
+  --[no-]security-workflows Include or omit CodeQL and Scorecard workflows
+  --skip-git                Skip git init and git remote setup
+  --skip-install            Skip dependency install, build, and test
   --help, -h                Show help
   --version, -v             Show version
+
+The update command re-renders generated tooling files in an existing project
+and applies template improvements, skipping files you have modified.
+
+Personal defaults are read from $XDG_CONFIG_HOME/create-ts-lib/config.json
+(usually ~/.config/create-ts-lib/config.json).
 
 Examples:
   pnpm create @hbmartin/ts-lib my-lib
   npm create @hbmartin/ts-lib my-lib
   npx @hbmartin/create-ts-lib my-lib
+  npx @hbmartin/create-ts-lib my-lib --yes --license MIT --no-codecov
+  npx @hbmartin/create-ts-lib update my-lib --dry-run
 `;
-
-const defaultConfig = defaultScaffoldConfig();
 
 const main = async (): Promise<void> => {
   const warn: WarningSink = (message) => {
@@ -89,36 +105,52 @@ const main = async (): Promise<void> => {
   }
 
   try {
-    await runScaffoldWorkflow(cliArguments, warn);
+    await (cliArguments.update
+      ? runUpdateWorkflow(cliArguments, warn)
+      : runScaffoldWorkflow(cliArguments, warn));
   } catch (error) {
     handleCliError(error);
   }
 };
 
+const buildProvidedOverrides = (cliArguments: CliArguments): Partial<ScaffoldConfig> =>
+  stripUndefinedOverrides({
+    author: cliArguments.author,
+    bundler: cliArguments.bundler,
+    description: cliArguments.description,
+    githubRepoUrl: cliArguments.repoUrl,
+    includeCli: cliArguments.cli,
+    includeCodecov: cliArguments.codecov,
+    includeJsr: cliArguments.jsr,
+    includeSecurityWorkflows: cliArguments.securityWorkflows,
+    includeZod: cliArguments.zod,
+    license: cliArguments.license,
+    lintFormatTooling: cliArguments.lintFormatTooling,
+    packageManager: cliArguments.packageManager,
+    projectName: cliArguments.projectName,
+  });
+
 const runScaffoldWorkflow = async (
   cliArguments: CliArguments,
   warn: WarningSink,
 ): Promise<void> => {
+  const userConfig = await loadUserConfig(warn);
   const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
+  const promptDefaults = defaultScaffoldConfig({
+    ...userConfig,
+    author: userConfig.author ?? defaults.author,
+    githubRepoUrl: defaults.githubRepoUrl,
+    projectName: defaults.projectName,
+  });
+  const provided = buildProvidedOverrides(cliArguments);
   const configResult = cliArguments.yes
-    ? {
-        config: defaultScaffoldConfig({
-          author: defaults.author,
-          githubRepoUrl: defaults.githubRepoUrl,
-          includeCodecov: cliArguments.codecov,
-          includeZod: cliArguments.zod,
-          lintFormatTooling: cliArguments.lintFormatTooling,
-          projectName: defaults.projectName,
-        }),
-      }
-    : await promptForConfig(
-        defaults,
-        await loadPromptModule(warn),
+    ? { config: defaultScaffoldConfig({ ...promptDefaults, ...provided }) }
+    : await promptForConfig({
+        defaults: promptDefaults,
+        promptModule: await loadPromptModule(warn),
+        provided,
         warn,
-        cliArguments.lintFormatTooling,
-        cliArguments.codecov,
-        cliArguments.zod,
-      );
+      });
   const { config, githubRepositoryCreation } = configResult;
   assertValidPackageName(config.projectName);
   if (cliArguments.yes) {
@@ -146,9 +178,15 @@ const runScaffoldWorkflow = async (
     force: cliArguments.force,
     ...(gitRemoteOriginUrl === undefined ? {} : { gitRemoteOriginUrl }),
     progress: createProgressReporter(),
+    skipGit: cliArguments.skipGit,
+    skipInstall: cliArguments.skipInstall,
     targetDirectory,
   });
-  printNextSteps(config, targetDirectory, gitRemoteOriginUrl !== undefined);
+  printNextSteps(config, targetDirectory, {
+    includeGitHubPublishSteps: gitRemoteOriginUrl !== undefined,
+    skipGit: cliArguments.skipGit,
+    skipInstall: cliArguments.skipInstall,
+  });
 };
 
 const handleCliError = (error: unknown): void => {
@@ -163,17 +201,6 @@ const handleCliError = (error: unknown): void => {
     `${red("error")} ${error instanceof Error ? error.message : "Scaffolding failed"}\n`,
   );
   process.exitCode = 1;
-};
-
-const printDryRunDetails = (
-  config: ScaffoldConfig,
-  githubRepositoryCreation: PendingGitHubRepositoryCreation | undefined,
-): void => {
-  if (githubRepositoryCreation) {
-    printDryRunGitHubCreation(githubRepositoryCreation);
-  }
-
-  printDryRunFiles(config);
 };
 
 const createGitHubRepositoryIfNeeded = async (
@@ -201,459 +228,16 @@ const getGitRemoteOriginUrl = (
   cliArguments: CliArguments,
   config: ScaffoldConfig,
 ): string | undefined => {
-  if (cliArguments.yes || config.githubRepoUrl.length === 0) {
+  if (config.githubRepoUrl.length === 0) {
+    return undefined;
+  }
+
+  // --yes historically skips remote setup unless the repo URL was passed explicitly.
+  if (cliArguments.yes && cliArguments.repoUrl === undefined) {
     return undefined;
   }
 
   return config.githubRepoUrl;
-};
-
-const printNextSteps = (
-  config: ScaffoldConfig,
-  targetDirectory: string,
-  includeGitHubPublishSteps: boolean,
-): void => {
-  const runPrefix = getPackageManagerRunPrefix(config.packageManager);
-  const githubPublishSteps = includeGitHubPublishSteps
-    ? `
-Publish to GitHub:
-  git add .
-  git commit -m "Initial scaffold"
-  git push -u origin HEAD
-`
-    : "";
-  const codecovSetupStep = buildCodecovSetupStep(config);
-
-  process.stdout.write(`Created ${config.projectName}
-
-Next steps:
-  cd ${basename(targetDirectory)}
-  ${runPrefix} dev
-  ${runPrefix} lint
-  ${runPrefix} test
-${githubPublishSteps}${codecovSetupStep}`);
-};
-
-const buildCodecovSetupStep = (config: ScaffoldConfig): string => {
-  if (!config.includeCodecov || config.packageManager !== "pnpm") {
-    return "";
-  }
-
-  const repository = parseGitHubRepositoryUrl(config.githubRepoUrl);
-  if (repository === undefined) {
-    return "";
-  }
-
-  return `
-Set up Codecov: https://app.codecov.io/gh/${repository.owner}/${repository.repo}/new
-`;
-};
-
-const printPostScaffoldRecovery = (error: PostScaffoldSetupError): void => {
-  process.stderr.write(
-    `${yellow("recovery")} Project files were created at ${error.targetDirectory}, but setup did not finish.\n`,
-  );
-  process.stderr.write("Run these commands to retry the failed setup steps:\n");
-  process.stderr.write(`  cd ${formatShellArgument(error.targetDirectory)}\n`);
-
-  for (const command of buildPostScaffoldRecoveryCommands(error)) {
-    process.stderr.write(`  ${command}\n`);
-  }
-};
-
-const buildPostScaffoldRecoveryCommands = (error: PostScaffoldSetupError): string[] => {
-  const runPrefix = getPackageManagerRunPrefix(error.packageManager);
-  const installCommand = `${error.packageManager} install`;
-  const buildCommand = `${runPrefix} build`;
-  const testCommand = `${runPrefix} test`;
-
-  switch (error.step) {
-    case "git":
-      return ["git init", installCommand, buildCommand, testCommand];
-    case "install":
-      return [installCommand, buildCommand, testCommand];
-    case "build":
-      return [buildCommand, testCommand];
-    case "test":
-      return [testCommand];
-  }
-};
-
-const getPackageManagerRunPrefix = (packageManager: PackageManager): string =>
-  packageManager === "pnpm" ? "pnpm run" : `${packageManager} run`;
-
-const safeShellArgumentRegex = /^[\w./:@%+=,-]+$/;
-
-const formatShellArgument = (value: string): string =>
-  safeShellArgumentRegex.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
-
-interface PromptedConfig {
-  config: ScaffoldConfig;
-  githubRepositoryCreation?: PendingGitHubRepositoryCreation;
-}
-
-interface PendingGitHubRepositoryCreation {
-  owner: string;
-  repositoryName: string;
-  url: string;
-  visibility: GitHubRepositoryVisibility;
-}
-
-const promptForConfig = async (
-  defaults: DetectedDefaults,
-  promptModule: PromptModule,
-  warn: WarningSink,
-  providedLintFormatTooling: LintFormatTooling | undefined,
-  includeCodecovFromCli: boolean | undefined,
-  includeZodFromCli: boolean | undefined,
-): Promise<PromptedConfig> => {
-  const projectName = await promptForProjectName(defaults, promptModule, warn);
-  const githubRepositoryLookup = inspectPersonalGitHubRepository(projectName);
-  const description = await promptModule.input({
-    default: "",
-    message: "Description",
-  });
-  const author = await promptModule.input({
-    default: defaults.author,
-    message: "Author",
-  });
-  const license = await promptModule.select<LicenseName>({
-    choices: [
-      { name: "Apache-2.0", value: "Apache-2.0" },
-      { name: "MIT", value: "MIT" },
-      { name: "ISC", value: "ISC" },
-      { name: "UNLICENSED", value: "UNLICENSED" },
-    ],
-    default: defaultConfig.license,
-    message: "License",
-  });
-  const lintFormatTooling =
-    providedLintFormatTooling ??
-    (await promptModule.select<LintFormatTooling>({
-      choices: [
-        { name: "Oxlint + Oxfmt", value: "oxlint-oxfmt" },
-        { name: "Biome", value: "biome" },
-      ],
-      default: defaultConfig.lintFormatTooling,
-      message: "Lint and format tooling",
-    }));
-  const githubRepositoryPrompt = await promptForGitHubRepository(
-    await githubRepositoryLookup,
-    defaults.githubRepoUrl,
-    promptModule,
-    warn,
-  );
-  const githubRepositoryAnswer = await promptForGitHubRepoUrl(githubRepositoryPrompt, promptModule);
-  const includeCodecov =
-    includeCodecovFromCli ??
-    (await promptModule.confirm({
-      default: defaultConfig.includeCodecov,
-      message: "Include Codecov?",
-    }));
-  const includeCli = await promptModule.confirm({
-    default: defaultConfig.includeCli,
-    message: "Include CLI entry point?",
-  });
-  const includeZod =
-    includeZodFromCli ??
-    (await promptModule.confirm({
-      default: defaultConfig.includeZod,
-      message: "Include Zod?",
-    }));
-  const packageManager = await promptModule.select<PackageManager>({
-    choices: [
-      { name: "pnpm", value: "pnpm" },
-      { name: "npm", value: "npm" },
-      { name: "yarn", value: "yarn" },
-    ],
-    default: defaultConfig.packageManager,
-    message: "Package manager",
-  });
-
-  return {
-    config: {
-      author,
-      description,
-      githubRepoUrl: githubRepositoryAnswer.url,
-      includeCli,
-      includeCodecov,
-      includeZod,
-      license,
-      lintFormatTooling,
-      packageManager,
-      projectName,
-    },
-    ...(githubRepositoryAnswer.creation
-      ? { githubRepositoryCreation: githubRepositoryAnswer.creation }
-      : {}),
-  };
-};
-
-type ExistingPackageNameDecision = "rename" | "use-anyway";
-type MissingGitHubRepositoryDecision = "create-private" | "create-public" | "manual";
-
-type GitHubRepositoryPrompt =
-  | {
-      defaultUrl: string;
-      kind: "found";
-    }
-  | {
-      creation: PendingGitHubRepositoryCreation;
-      kind: "create";
-    }
-  | {
-      defaultUrl?: string;
-      kind: "manual";
-    };
-
-interface GitHubRepoUrlAnswer {
-  creation?: PendingGitHubRepositoryCreation;
-  url: string;
-}
-
-const promptForProjectName = async (
-  defaults: DetectedDefaults,
-  promptModule: PromptModule,
-  warn: WarningSink,
-): Promise<string> => {
-  let defaultProjectName: string | undefined = defaults.projectName;
-
-  for (;;) {
-    const projectName = await promptModule.input({
-      ...(defaultProjectName === undefined ? {} : { default: defaultProjectName }),
-      message: "Project name",
-      validate: validateProjectNameForPrompt,
-    });
-    const availability = await checkNpmPackageNameAvailability(projectName);
-
-    if (availability.status === "available") {
-      return projectName;
-    }
-
-    if (availability.status === "unknown") {
-      warn(formatNpmAvailabilityUnknownWarning(availability));
-      return projectName;
-    }
-
-    warn(formatNpmPackageNameExistsWarning(projectName));
-    const decision = await promptModule.select<ExistingPackageNameDecision>({
-      choices: [
-        { name: "Rename", value: "rename" },
-        { name: "Use anyway", value: "use-anyway" },
-      ],
-      default: "rename",
-      message: "Package name already exists on npm",
-    });
-
-    if (decision === "use-anyway") {
-      return projectName;
-    }
-
-    defaultProjectName = undefined;
-  }
-};
-
-const validateProjectNameForPrompt = (projectName: string): true | string => {
-  const validation = validatePackageName(projectName);
-
-  return validation.valid ? true : validation.errors.join(" ");
-};
-
-const promptForGitHubRepository = async (
-  lookup: GitHubRepositoryLookupResult,
-  defaultGitHubRepoUrl: string,
-  promptModule: PromptModule,
-  warn: WarningSink,
-): Promise<GitHubRepositoryPrompt> => {
-  if (lookup.status === "found") {
-    return {
-      defaultUrl: lookup.url,
-      kind: "found",
-    };
-  }
-
-  if (lookup.status === "unavailable") {
-    warn(formatGitHubRepositoryLookupWarning(lookup));
-    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
-  }
-
-  const decision = await promptModule.select<MissingGitHubRepositoryDecision>({
-    choices: [
-      {
-        name: `Create public GitHub repo ${lookup.owner}/${lookup.repositoryName}`,
-        value: "create-public",
-      },
-      {
-        name: `Create private GitHub repo ${lookup.owner}/${lookup.repositoryName}`,
-        value: "create-private",
-      },
-      { name: "Enter GitHub repo URL manually", value: "manual" },
-    ],
-    default: "create-public",
-    message: "No matching GitHub repo was found",
-  });
-
-  if (decision === "manual") {
-    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
-  }
-
-  return {
-    creation: {
-      owner: lookup.owner,
-      repositoryName: lookup.repositoryName,
-      url: lookup.predictedUrl,
-      visibility: decision === "create-private" ? "private" : "public",
-    },
-    kind: "create",
-  };
-};
-
-const buildManualGitHubRepositoryPrompt = (defaultUrl: string): GitHubRepositoryPrompt => ({
-  ...(defaultUrl.length > 0 ? { defaultUrl } : {}),
-  kind: "manual",
-});
-
-const promptForGitHubRepoUrl = async (
-  githubRepositoryPrompt: GitHubRepositoryPrompt,
-  promptModule: PromptModule,
-): Promise<GitHubRepoUrlAnswer> => {
-  if (githubRepositoryPrompt.kind === "create") {
-    return {
-      creation: githubRepositoryPrompt.creation,
-      url: githubRepositoryPrompt.creation.url,
-    };
-  }
-
-  const { defaultUrl } = githubRepositoryPrompt;
-  const url = await promptModule.input({
-    ...(defaultUrl === undefined ? {} : { default: defaultUrl }),
-    message: "GitHub repo URL",
-  });
-
-  return { url };
-};
-
-const warnForNpmPackageNameAvailability = async (
-  packageName: string,
-  warn: WarningSink,
-): Promise<void> => {
-  const availability = await checkNpmPackageNameAvailability(packageName);
-
-  if (availability.status === "exists") {
-    warn(formatNpmPackageNameExistsWarning(packageName));
-    return;
-  }
-
-  if (availability.status === "unknown") {
-    warn(formatNpmAvailabilityUnknownWarning(availability));
-  }
-};
-
-const formatNpmPackageNameExistsWarning = (packageName: string): string =>
-  `Package name "${packageName}" already exists on npm.`;
-
-const formatNpmAvailabilityUnknownWarning = (
-  availability: NpmPackageNameAvailabilityUnknown,
-): string => {
-  const detail =
-    availability.statusCode === undefined
-      ? availability.error
-      : `npm registry returned HTTP ${availability.statusCode}`;
-
-  return `Could not check npm availability for "${availability.packageName}"; continuing. ${detail}.`;
-};
-
-const formatGitHubRepositoryLookupWarning = (
-  lookup: Extract<GitHubRepositoryLookupResult, { status: "unavailable" }>,
-): string =>
-  `Could not inspect GitHub repositories with gh; continuing with manual URL entry. ${lookup.reason}.`;
-
-const formatGitHubRepositoryCreateWarning = (
-  createResult: Extract<Awaited<ReturnType<typeof createGitHubRepository>>, { status: "failed" }>,
-): string =>
-  `Could not create GitHub repo "${createResult.owner}/${createResult.repositoryName}" with gh; continuing with ${createResult.url}. ${createResult.reason}.`;
-
-const printSummary = (
-  config: ScaffoldConfig,
-  targetDirectory: string,
-  dryRun: boolean,
-  githubRepositoryCreation: PendingGitHubRepositoryCreation | undefined,
-): void => {
-  const rows = [
-    ["Project", config.projectName],
-    ["Target", targetDirectory],
-    ["Description", config.description || "(empty)"],
-    ["Author", config.author || "(empty)"],
-    ["License", config.license],
-    ["Lint/format", formatLintFormatTooling(config.lintFormatTooling)],
-    ["Package manager", config.packageManager],
-    ["GitHub repo", config.githubRepoUrl || "(none)"],
-    ["Codecov", config.includeCodecov ? "yes" : "no"],
-    ["CLI entry", config.includeCli ? "yes" : "no"],
-    ["Zod", config.includeZod ? "yes" : "no"],
-  ];
-
-  process.stdout.write(`${dryRun ? cyan("Dry run") : cyan("Scaffold summary")}\n`);
-  for (const [label, value] of rows) {
-    process.stdout.write(`  ${label}: ${value}\n`);
-  }
-  if (!dryRun && githubRepositoryCreation) {
-    process.stdout.write(
-      `  GitHub repo action: will create ${githubRepositoryCreation.visibility} repo ${githubRepositoryCreation.owner}/${githubRepositoryCreation.repositoryName}\n`,
-    );
-  }
-  process.stdout.write("\n");
-};
-
-const printDryRunGitHubCreation = (creation: PendingGitHubRepositoryCreation): void => {
-  process.stdout.write(
-    `${cyan("info")} GitHub repo creation skipped by --dry-run; would create ${creation.visibility} repo ${creation.owner}/${creation.repositoryName}.\n`,
-  );
-};
-
-const printDryRunFiles = (config: ScaffoldConfig): void => {
-  process.stdout.write("Files to create:\n");
-  for (const file of buildProjectFiles(config)) {
-    process.stdout.write(`  ${file.path}\n`);
-  }
-};
-
-const createProgressReporter = (): ScaffoldProgress => {
-  const { CI: continuousIntegration } = process.env;
-  const useSpinner = Boolean(process.stdout.isTTY) && continuousIntegration !== "true";
-  let spinner: Ora | undefined;
-
-  return {
-    fail: (message) => {
-      if (spinner) {
-        spinner.fail(message);
-        spinner = undefined;
-        return;
-      }
-
-      process.stdout.write(`${red("failed")} ${message}\n`);
-    },
-    info: (message) => {
-      process.stdout.write(`${cyan("info")} ${message}\n`);
-    },
-    start: (message) => {
-      if (useSpinner) {
-        spinner = ora(message).start();
-        return;
-      }
-
-      process.stdout.write(`${cyan("start")} ${message}\n`);
-    },
-    succeed: (message) => {
-      if (spinner) {
-        spinner.succeed(message);
-        spinner = undefined;
-        return;
-      }
-
-      process.stdout.write(`${green("done")} ${message}\n`);
-    },
-  };
 };
 
 await main();

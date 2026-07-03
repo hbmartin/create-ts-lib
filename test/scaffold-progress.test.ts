@@ -36,10 +36,13 @@ vi.mock("node:child_process", () => ({
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
+  bundler: "tsc",
   description: "A test library",
   githubRepoUrl: "",
   includeCli: false,
   includeCodecov: true,
+  includeJsr: false,
+  includeSecurityWorkflows: false,
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",

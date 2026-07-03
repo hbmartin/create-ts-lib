@@ -1,0 +1,9 @@
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  dts: true,
+  entry: [{{TSDOWN_ENTRIES}}],
+  format: "esm",
+  outDir: "dist",
+  platform: "node",
+});

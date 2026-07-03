@@ -22,6 +22,8 @@ export interface ScaffoldOptions {
   gitRemoteOriginUrl?: string;
   postScaffold?: boolean;
   progress?: ScaffoldProgress;
+  skipGit?: boolean;
+  skipInstall?: boolean;
   targetDirectory: string;
 }
 
@@ -74,26 +76,36 @@ export const scaffoldProject = async (
   }
 
   if (options.postScaffold !== false) {
-    await runPostScaffoldStep(
-      {
-        packageManager: config.packageManager,
-        progress: options.progress,
-        startMessage: "Preparing git repository",
-        step: "git",
-        successMessage: "Git repository ready",
-        targetDirectory,
-      },
-      async () => {
-        await initializeGitRepositoryIfNeeded(targetDirectory);
-        if (options.gitRemoteOriginUrl && options.gitRemoteOriginUrl.length > 0) {
-          await addGitRemoteOriginIfPossible(
-            targetDirectory,
-            options.gitRemoteOriginUrl,
-            options.progress,
-          );
-        }
-      },
-    );
+    if (options.skipGit === true) {
+      options.progress?.info("Skipping git setup (--skip-git).");
+    } else {
+      await runPostScaffoldStep(
+        {
+          packageManager: config.packageManager,
+          progress: options.progress,
+          startMessage: "Preparing git repository",
+          step: "git",
+          successMessage: "Git repository ready",
+          targetDirectory,
+        },
+        async () => {
+          await initializeGitRepositoryIfNeeded(targetDirectory);
+          if (options.gitRemoteOriginUrl && options.gitRemoteOriginUrl.length > 0) {
+            await addGitRemoteOriginIfPossible(
+              targetDirectory,
+              options.gitRemoteOriginUrl,
+              options.progress,
+            );
+          }
+        },
+      );
+    }
+
+    if (options.skipInstall === true) {
+      options.progress?.info("Skipping dependency install, build, and test (--skip-install).");
+      return;
+    }
+
     await runPostScaffoldStep(
       {
         packageManager: config.packageManager,

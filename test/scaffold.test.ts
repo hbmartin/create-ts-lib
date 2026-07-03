@@ -33,10 +33,13 @@ import {
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
+  bundler: "tsc",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeJsr: false,
+  includeSecurityWorkflows: false,
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
@@ -154,6 +157,7 @@ describe("renderTemplate", () => {
       ACTION_PNPM_SETUP: githubActionRefs.pnpmSetup,
       ACTION_SETUP_NODE: githubActionRefs.setupNode,
       ACTION_SETUP_UV: githubActionRefs.setupUv,
+      JSR_PUBLISH_STEP: "",
       PNPM_VERSION: pnpmVersion,
     });
 

@@ -166,7 +166,7 @@ executable: false
 pre-commit:
   commands:
     lint:
-      run: npm run lint
+      run: pnpm run lint
 
 ===== semgrep.yml =====
 executable: false
@@ -441,15 +441,27 @@ exitWithResult(uvxResult);
 executable: false
 
 {
-  "name": "npm-minimal",
+  "name": "@hbmartin/full-featured-lib",
   "version": "0.1.0",
-  "description": "",
-  "license": "UNLICENSED",
-  "author": "",
+  "description": "A generated TypeScript library",
+  "homepage": "https://github.com/hbmartin/generated-lib#readme",
+  "bugs": {
+    "url": "https://github.com/hbmartin/generated-lib/issues"
+  },
+  "license": "MIT",
+  "author": "Harold Martin <harold@example.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hbmartin/generated-lib.git"
+  },
+  "bin": {
+    "full-featured-lib": "dist/cli.js"
+  },
   "files": [
     "dist"
   ],
   "type": "module",
+  "packageManager": "pnpm@11.5.2",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -457,27 +469,30 @@ executable: false
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "check": "npm run lint && npm run typecheck && npm run deps:lint && npm run security:lint && npm run test:coverage",
+    "build": "tsdown",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
     "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
-    "dev": "tsc --watch",
+    "dev": "tsdown --watch",
     "format": "oxfmt . --write",
     "lint": "oxlint --deny-warnings . && oxfmt --check .",
     "attw": "attw --pack . --profile esm-only",
+    "jsr:publish": "pnpm dlx jsr publish",
     "prepare": "lefthook install",
-    "prepublishOnly": "npm run check && npm run build && npm run verify:artifacts && npm run publint && npm run types:lint",
-    "publint": "publint --pack npm",
-    "release:check": "npm run prepublishOnly && npm run verify:package",
+    "prepublishOnly": "pnpm run check && pnpm run build && pnpm run verify:artifacts && pnpm run publint && pnpm run types:lint",
+    "publint": "publint --pack pnpm",
+    "release:check": "pnpm run prepublishOnly && pnpm run verify:package",
     "security:lint": "node scripts/security-lint.mjs",
     "size:report": "npm pack --dry-run --json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "types:lint": "attw --pack . --profile esm-only",
-    "verify:artifacts": "node -e \"for (const file of ['dist/index.js','dist/index.d.ts']) require('node:fs').statSync(file)\"",
+    "verify:artifacts": "node -e \"for (const file of ['dist/index.js','dist/index.d.ts','dist/cli.js','dist/cli.d.ts']) require('node:fs').statSync(file)\"",
     "verify:package": "npm publish --dry-run --ignore-scripts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "meow": "^14.1.0"
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
     "@sindresorhus/tsconfig": "^8.1.0",
@@ -488,11 +503,14 @@ executable: false
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "publint": "^0.3.21",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
-  "overrides": {
-    "@types/node": "^25.9.2"
+  "pnpm": {
+    "overrides": {
+      "@types/node": "^25.9.2"
+    }
   },
   "engines": {
     "node": ">=22"
@@ -502,25 +520,33 @@ executable: false
 ===== README.md =====
 executable: false
 
-# `npm-minimal`
+# `@hbmartin/full-featured-lib`
 
-[![npm version](https://img.shields.io/npm/v/npm-minimal.svg)](https://www.npmjs.com/package/npm-minimal)
-[![License: UNLICENSED](https://img.shields.io/badge/license-UNLICENSED-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@hbmartin/full-featured-lib.svg)](https://www.npmjs.com/package/@hbmartin/full-featured-lib)
+[![CI](https://github.com/hbmartin/generated-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/hbmartin/generated-lib/actions/workflows/ci.yml)
+[![JSR](https://jsr.io/badges/@hbmartin/full-featured-lib)](https://jsr.io/@hbmartin/full-featured-lib)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A TypeScript library.
+A generated TypeScript library
 
 ## Install
 
 ```bash
-npm install npm-minimal
+pnpm add @hbmartin/full-featured-lib
 ```
 
 ## Usage
 
 ```ts
-import { formatValue } from "npm-minimal";
+import { formatValue } from "@hbmartin/full-featured-lib";
 
 const output = formatValue({ ready: true });
+```
+
+## CLI
+
+```bash
+full-featured-lib --help
 ```
 
 ## Development
@@ -529,19 +555,44 @@ Lint, format, type-check, dependency and security policy checks, and tests are
 wired into a single command:
 
 ```bash
-npm run check         # lint + dep/security checks + typecheck + coverage
-npm run test          # run tests
-npm run build         # build to dist/
-npm run release:check # package validation + publish dry run
+pnpm run check         # lint + dep/security checks + typecheck + coverage
+pnpm run test          # run tests
+pnpm run build         # build to dist/
+pnpm run release:check # package validation + publish dry run
 ```
 
-`npm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan.
+`pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan.
 
 See [`AGENTS.md`](AGENTS.md) for the conventions this project follows.
 
+## Releasing
+
+Publishing is automated: bump the version with `pnpm version`, push, and
+publish a GitHub release. The release workflow validates the package and runs
+`npm publish` with [provenance](https://docs.npmjs.com/generating-provenance-statements).
+
+The workflow authenticates with npm
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) instead
+of a long-lived token. Before the first release, add a trusted publisher on
+npmjs.com for `hbmartin/generated-lib` pointing at the `release.yml` GitHub Actions
+workflow.
+
+The release workflow also publishes to [JSR](https://jsr.io). Link the GitHub
+repository on your package's JSR settings page so the workflow's OIDC token is
+accepted, or run `pnpm run jsr:publish` locally.
+
 ## License
 
-[UNLICENSED](LICENSE) © Unknown Author.
+[MIT](LICENSE) © Harold Martin.
+
+===== pnpm-workspace.yaml =====
+executable: false
+
+packages:
+  - "."
+
+allowBuilds:
+  lefthook: true
 
 ===== tsconfig.json =====
 executable: false
@@ -556,17 +607,18 @@ executable: false
   "include": ["source"]
 }
 
-===== tsconfig.build.json =====
+===== tsdown.config.ts =====
 executable: false
 
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "declaration": true,
-    "declarationMap": true,
-    "rootDir": "source"
-  }
-}
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  dts: true,
+  entry: ["./source/index.ts", "./source/cli.ts"],
+  format: "esm",
+  outDir: "dist",
+  platform: "node",
+});
 
 ===== vitest.config.ts =====
 executable: false
@@ -595,11 +647,27 @@ export default defineConfig({
 ===== LICENSE =====
 executable: false
 
-UNLICENSED
+MIT License
 
-Copyright (c) 2026 Unknown Author
+Copyright (c) 2026 Harold Martin
 
-All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===== source/index.ts =====
 executable: false
@@ -658,24 +726,306 @@ describe("formatValue", () => {
   });
 });
 
+===== source/cli.ts =====
+executable: true
+
+#!/usr/bin/env node
+import meow from "meow";
+
+meow(
+  `
+  Usage
+    $ full-featured-lib <input>
+
+  Options
+    --help     Show help
+    --version  Show version
+  `,
+  { importMeta: import.meta },
+);
+
+===== test/cli.test.ts =====
+executable: false
+
+import { describe, expect, it, vi } from "vitest";
+
+const { meow } = vi.hoisted(() => ({
+  meow: vi.fn(() => ({
+    flags: {},
+    input: [],
+  })),
+}));
+
+vi.mock("meow", () => ({
+  default: meow,
+}));
+
+describe("cli", () => {
+  it("configures the CLI help text", async () => {
+    await import("../source/cli.js");
+
+    expect(meow).toHaveBeenCalledWith(
+      expect.stringContaining("$ full-featured-lib <input>"),
+      expect.objectContaining({
+        importMeta: expect.anything(),
+      }),
+    );
+  });
+});
+
+===== jsr.json =====
+executable: false
+
+{
+  "name": "@hbmartin/full-featured-lib",
+  "version": "0.1.0",
+  "exports": "./source/index.ts",
+  "publish": {
+    "include": [
+      "source/**/*.ts",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": [
+      "**/*.test.ts"
+    ]
+  }
+}
+
+===== renovate.json =====
+executable: false
+
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Keep GitHub Actions pinned and updated deliberately.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ]
+}
+
+===== .github/workflows/ci.yml =====
+executable: false
+
+name: ci
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24"]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11.5.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod
+      - run: pnpm run check
+        env:
+          SECURITY_LINT_FORCE_UVX: "1"
+      - name: TypeScript 7 compatibility probe
+        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit
+      - run: pnpm run build
+      - run: pnpm run publint
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '24'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+===== .github/workflows/release.yml =====
+executable: false
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11.5.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Upgrade npm to latest
+        run: |
+          npm -v
+          npm config set prefix ~/.local
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          npm install -g npm@latest
+          hash -r
+          npm -v
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release checks
+        run: pnpm run release:check
+        env:
+          SECURITY_LINT_FORCE_UVX: "1"
+
+      - name: Report bundle size
+        run: pnpm run size:report
+
+      - name: Publish to npm
+        run: |
+          TAG="latest"
+          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+            TAG="next"
+          fi
+
+          echo "Publishing with tag: $TAG"
+          npm publish --tag "$TAG" --access public --provenance
+      - name: Publish to JSR
+        run: pnpm dlx jsr publish
+
+===== .github/workflows/codeql.yml =====
+executable: false
+
+name: codeql
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "29 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+
+===== .github/workflows/scorecard.yml =====
+executable: false
+
+name: scorecard
+
+on:
+  branch_protection_rule:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          publish_results: true
+          results_file: scorecard.sarif
+          results_format: sarif
+      - uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: scorecard.sarif
+
 ===== .create-ts-lib.json =====
 executable: false
 
 {
   "config": {
-    "author": "",
-    "bundler": "tsc",
-    "description": "",
-    "githubRepoUrl": "",
-    "includeCli": false,
-    "includeCodecov": false,
-    "includeJsr": false,
-    "includeSecurityWorkflows": false,
+    "author": "Harold Martin <harold@example.com>",
+    "bundler": "tsdown",
+    "description": "A generated TypeScript library",
+    "githubRepoUrl": "https://github.com/hbmartin/generated-lib",
+    "includeCli": true,
+    "includeCodecov": true,
+    "includeJsr": true,
+    "includeSecurityWorkflows": true,
     "includeZod": false,
-    "license": "UNLICENSED",
+    "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
-    "packageManager": "npm",
-    "projectName": "npm-minimal"
+    "packageManager": "pnpm",
+    "projectName": "@hbmartin/full-featured-lib"
   },
   "files": {
     ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
@@ -685,19 +1035,28 @@ executable: false
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
-    "lefthook.yml": "83d5774a9434f63d0870112d321754cb668ef0abde42491b5b717b440168c8af",
+    "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
     "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
-    "package.json": "ffa2d7a086799319a3a555745933a7f17b9b996994f8aee760dfb6a28ef7d653",
-    "README.md": "497b7313d7ce56483931e8d5f2921b4958edfbe20f426910a2b2f283f4a4639e",
+    "package.json": "fbbdae1b4948b04a96031dc912d8e9639c4fb82ad9375e82ae023a9182ed08ec",
+    "README.md": "3c45aa8a114d0f4bf2d0e2735056543178e1f8bc62e9a3ae5c291e54c75e8b03",
+    "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
-    "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
+    "tsdown.config.ts": "1d467ea537af8e2f70b867a6bd749febf0c0272efc84c0348fc2682bd40cbd11",
     "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
-    "LICENSE": "a8c546ba4629db7673e8b867675ce6439a0b558d198565e14518ebf3432d7c6c",
+    "LICENSE": "061464f1fe53e4a3f832eceb1e6f6c15d23f36f89b16dc016ff8a6e377e630eb",
     "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",
     "source/types/index.ts": "58728d9a8282e8a9bdfd78efbb33ff5e5795594bf699c303f0edb56cbba45617",
     "source/utils/formatting.ts": "d21aef6bf37d6e8ce22ed57a3ac54be5e7469ebb5b985486813f2ca6b441bf9f",
-    "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54"
+    "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54",
+    "source/cli.ts": "5899e10edfac2ebf04dd1c24d0f09ce390335816ff5550eee8b2413cd999203c",
+    "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
+    "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
+    "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
+    ".github/workflows/ci.yml": "09970db4a9c629faa4d4c0bff726b5406deb9aedddc9b96744c7dc48ee6ef1e3",
+    ".github/workflows/release.yml": "1ab18797df0a64d6cf6647d0901f57eff726c05feb4a708b83a0bb3bad7055e7",
+    ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
+    ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
   },
   "generator": "@hbmartin/create-ts-lib",
   "version": "<generator-version>"

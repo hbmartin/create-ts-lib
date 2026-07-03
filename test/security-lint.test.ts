@@ -12,12 +12,16 @@ const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const securityLintScript = join(repositoryRoot, "scripts/security-lint.mjs");
 const semgrepConfigPath = join(repositoryRoot, "semgrep.yml");
 const semgrepArguments = ["scan", "--config", "semgrep.yml", "--error", "source", "test"];
+// Metrics and the version check are disabled so the scan stays fast and
+// hermetic in restricted-network environments.
 const semgrepScanArguments = [
   "scan",
   "--config",
   "semgrep.yml",
   "--json",
   "--quiet",
+  "--metrics=off",
+  "--disable-version-check",
   "source",
   "test",
 ];
@@ -32,10 +36,13 @@ interface SemgrepScanOutput {
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
+  bundler: "tsc",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeJsr: false,
+  includeSecurityWorkflows: false,
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",

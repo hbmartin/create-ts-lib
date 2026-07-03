@@ -162,12 +162,16 @@
         "scripts/**/*.mjs",
         "source/cli.ts",
         "source/cli-helpers.ts",
+        "source/cli-output.ts",
+        "source/cli-update.ts",
         "source/github-cli.ts",
         "source/path-comparison.ts",
         "source/prompts.ts",
         "source/scaffold.ts",
         "source/target-directory.ts",
         "source/templates/**/*.ts",
+        "source/update.ts",
+        "source/user-config.ts",
       ],
       "linter": {
         "rules": {

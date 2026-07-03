@@ -12,7 +12,9 @@ coverage
 .env
 .env.*
 !.env.example
-.vscode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea
 package-lock.json
 yarn.lock
@@ -39,6 +41,26 @@ executable: false
   "env": {
     "builtin": true
   }
+}
+
+===== .vscode/extensions.json =====
+executable: false
+
+{
+  "recommendations": [
+    "oxc.oxc-vscode",
+    "vitest.explorer"
+  ]
+}
+
+===== .vscode/settings.json =====
+executable: false
+
+{
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "oxc.enable": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
 }
 
 ===== AGENTS.md =====
@@ -542,6 +564,18 @@ pnpm run release:check # package validation + publish dry run
 
 See [`AGENTS.md`](AGENTS.md) for the conventions this project follows.
 
+## Releasing
+
+Publishing is automated: bump the version with `pnpm version`, push, and
+publish a GitHub release. The release workflow validates the package and runs
+`npm publish` with [provenance](https://docs.npmjs.com/generating-provenance-statements).
+
+The workflow authenticates with npm
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) instead
+of a long-lived token. Before the first release, add a trusted publisher on
+npmjs.com for `hbmartin/generated-lib` pointing at the `release.yml` GitHub Actions
+workflow.
+
 ## License
 
 [MIT](LICENSE) © Harold Martin.
@@ -733,6 +767,22 @@ describe("cli", () => {
   });
 });
 
+===== renovate.json =====
+executable: false
+
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Keep GitHub Actions pinned and updated deliberately.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ]
+}
+
 ===== .github/workflows/ci.yml =====
 executable: false
 
@@ -864,3 +914,54 @@ jobs:
 
           echo "Publishing with tag: $TAG"
           npm publish --tag "$TAG" --access public --provenance
+
+===== .create-ts-lib.json =====
+executable: false
+
+{
+  "config": {
+    "author": "Harold Martin <harold@example.com>",
+    "bundler": "tsc",
+    "description": "A generated TypeScript library",
+    "githubRepoUrl": "https://github.com/hbmartin/generated-lib",
+    "includeCli": true,
+    "includeCodecov": true,
+    "includeJsr": false,
+    "includeSecurityWorkflows": false,
+    "includeZod": true,
+    "license": "MIT",
+    "lintFormatTooling": "oxlint-oxfmt",
+    "packageManager": "pnpm",
+    "projectName": "@hbmartin/validated-cli"
+  },
+  "files": {
+    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
+    ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
+    ".vscode/extensions.json": "211eb66049fedf03ef0781ec97a0c0d62a2fe6f1e08dde5e9c9ad7881b205ee9",
+    ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
+    "AGENTS.md": "46e89082132f81e26d733815b6aef77f08a6428d27f0dea6ee4aa92e761f4404",
+    ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
+    "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
+    "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
+    "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
+    "package.json": "4a462265e885e824dd52eac7e931c8e7ad3db1bfd736afd80ccd64e3a7eb3432",
+    "README.md": "0e178421ab2c44a7fe073b94ffd0d7dfcecdd82aa4990599e12ac66ab142bd1f",
+    "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
+    "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
+    "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
+    "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
+    "LICENSE": "061464f1fe53e4a3f832eceb1e6f6c15d23f36f89b16dc016ff8a6e377e630eb",
+    "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",
+    "source/types/index.ts": "58728d9a8282e8a9bdfd78efbb33ff5e5795594bf699c303f0edb56cbba45617",
+    "source/utils/formatting.ts": "d21aef6bf37d6e8ce22ed57a3ac54be5e7469ebb5b985486813f2ca6b441bf9f",
+    "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54",
+    "source/cli.ts": "9440c0c627df4329f3162643fbe6121aea8f9ccb5901f40fcbc7790364475fb3",
+    "test/cli.test.ts": "fa6f11f1f26f6073c3597272ea0da8484a5f8facac1bbf7b0afa885c33b106a4",
+    "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
+    ".github/workflows/ci.yml": "09970db4a9c629faa4d4c0bff726b5406deb9aedddc9b96744c7dc48ee6ef1e3",
+    ".github/workflows/release.yml": "fa6cd16483808198cad7444d9459b52d599ac5034b95d071a710b955069ce7ac"
+  },
+  "generator": "@hbmartin/create-ts-lib",
+  "version": "<generator-version>"
+}
