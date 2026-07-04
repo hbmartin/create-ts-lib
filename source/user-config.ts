@@ -6,6 +6,7 @@ import process from "node:process";
 import { z } from "zod";
 
 import type { WarningSink } from "./cli-helpers.js";
+import { formatErrorMessage, isFileNotFoundError } from "./filesystem-errors.js";
 import { lintFormatToolingSchema } from "./lint-format-tooling.js";
 import { bundlerSchema, licenseNameSchema, packageManagerSchema } from "./templates/state.js";
 
@@ -47,7 +48,14 @@ export const loadUserConfig = async (
   let raw: string;
   try {
     raw = await readFile(configPath, "utf8");
-  } catch {
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return {};
+    }
+
+    warn(
+      `Ignoring user config at ${configPath}; could not read file: ${formatErrorMessage(error)}.`,
+    );
     return {};
   }
 

@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import process from "node:process";
 
 import ora, { type Ora } from "ora";
@@ -106,7 +105,7 @@ Enable npm trusted publishing for the release workflow: https://docs.npmjs.com/t
   process.stdout.write(`Created ${config.projectName}
 
 Next steps:
-  cd ${basename(targetDirectory)}
+  cd ${formatShellArgument(targetDirectory)}
 ${skippedSetupSteps}  ${runPrefix} dev
   ${runPrefix} lint
   ${runPrefix} test

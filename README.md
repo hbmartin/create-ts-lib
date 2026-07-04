@@ -221,7 +221,7 @@ The generator asks for:
 | Include CodeQL and Scorecard workflows? | `no`                                             | Adds SHA-pinned `codeql.yml` and `scorecard.yml` for pnpm + GitHub projects; automation can pass `--security-workflows` |
 | Include CLI entry point?                | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage; automation can pass `--cli` or `--no-cli`                        |
 | Include Zod?                            | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`               |
-| Also publish to JSR?                    | `no`                                             | Adds `jsr.json`, a `jsr:publish` script, and a JSR step in the release workflow; automation can pass `--jsr`            |
+| Also publish to JSR?                    | `no`                                             | Adds `jsr.json`, pinned `jsr` tooling, a `jsr:publish` script, and a JSR release step; automation can pass `--jsr`      |
 | Package manager                         | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                                                     |
 
 Defaults come from your [personal defaults file](#personal-defaults) when one
@@ -312,8 +312,8 @@ Generated packages include:
 - a Renovate config whenever a GitHub repo URL is provided
 - Lefthook with a lint-only `pre-commit` hook
 - optional `zod` runtime dependency when selected
-- optional JSR publishing (`jsr.json`, a `jsr:publish` script, and a release
-  workflow step) when selected
+- optional JSR publishing (`jsr.json`, pinned `jsr` tooling, a `jsr:publish`
+  script, and a release workflow step) when selected
 - `meow` and CLI coverage only when CLI support is enabled, including a CLI test
   mock with default `flags` and `input`
 - `@arethetypeswrong/cli` and `publint` release checks

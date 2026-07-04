@@ -45,19 +45,19 @@ artifacts (`dist/index.js`, `dist/index.d.ts`) are the same either way, so
 
 ## Policy checks
 
-| Path                        | Purpose                                                                                                                                                               |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dependency-cruiser.cjs`   | Architecture rules: no circular deps, no unresolvable imports, no `source/` → `test/` imports, no dev-dependency imports from `source/`.                              |
-| `semgrep.yml`               | Security rules: no `eval`-like execution, no `child_process` `exec`/`execSync`, no `shell: true`, no weak crypto hashes, no `Math.random` in security-sensitive code. |
-| `scripts/security-lint.mjs` | Wrapper that prefers `semgrep` on PATH and falls back to a pinned `uvx semgrep` run.                                                                                  |
+| Path                        | Purpose                                                                                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.dependency-cruiser.cjs`   | Architecture rules: no circular deps, no unresolvable imports, no `source/` → `test/` imports, no dev-dependency imports from `source/`.                                                              |
+| `semgrep.yml`               | Security rules: no `eval`-like execution, no `child_process` `exec`/`execSync`, no `shell: true`, no transient JSR CLI execution, no weak crypto hashes, no `Math.random` in security-sensitive code. |
+| `scripts/security-lint.mjs` | Wrapper that prefers `semgrep` on PATH and falls back to a pinned `uvx semgrep` run.                                                                                                                  |
 
 ## Packaging and publishing
 
-| Path                    | Purpose                                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `package.json`          | ESM-only `exports`, `files: ["dist"]`, engines pin, and a full script suite (see below).                       |
-| `jsr.json` _(optional)_ | [JSR](https://jsr.io) manifest publishing the TypeScript source directly; pairs with the `jsr:publish` script. |
-| `LICENSE`               | Rendered from your license choice with your name and the current year.                                         |
+| Path                    | Purpose                                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`          | ESM-only `exports`, `files: ["dist"]`, engines pin, and a full script suite (see below).                                                      |
+| `jsr.json` _(optional)_ | [JSR](https://jsr.io) manifest publishing the TypeScript source directly; pairs with the pinned `jsr` devDependency and `jsr:publish` script. |
+| `LICENSE`               | Rendered from your license choice with your name and the current year.                                                                        |
 
 Key scripts:
 

@@ -35,7 +35,7 @@ export const buildReleaseWorkflow = (config: ScaffoldConfig): string => {
   const jsrPublishStep = config.includeJsr
     ? `
       - name: Publish to JSR
-        run: pnpm dlx jsr publish`
+        run: pnpm run jsr:publish`
     : "";
 
   return renderTemplate("github/release.yml.tmpl", {

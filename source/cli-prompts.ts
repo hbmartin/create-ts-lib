@@ -311,7 +311,7 @@ const promptForGitHubRepository = async (
 
   if (lookup.status === "unavailable") {
     warn(formatGitHubRepositoryLookupWarning(lookup));
-    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
+    return buildManualGitHubRepositoryPrompt("");
   }
 
   const decision = await promptModule.select<MissingGitHubRepositoryDecision>({

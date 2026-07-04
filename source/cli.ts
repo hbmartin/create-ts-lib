@@ -183,7 +183,7 @@ const runScaffoldWorkflow = async (
     targetDirectory,
   });
   printNextSteps(config, targetDirectory, {
-    includeGitHubPublishSteps: gitRemoteOriginUrl !== undefined,
+    includeGitHubPublishSteps: !cliArguments.skipGit && gitRemoteOriginUrl !== undefined,
     skipGit: cliArguments.skipGit,
     skipInstall: cliArguments.skipInstall,
   });

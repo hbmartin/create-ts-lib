@@ -490,6 +490,13 @@ rules:
               metavariable: $PROCESS
               regex: ^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$
 
+  - id: no-unpinned-jsr-cli
+    message: Avoid transient JSR CLI execution. Add jsr as a devDependency and run the local binary.
+    severity: ERROR
+    languages:
+      - generic
+    pattern-regex: '(pnpm\s+dlx|yarn\s+dlx|npx)\s+jsr\b'
+
   - id: no-weak-crypto-hash
     message: Avoid weak cryptographic hashes. Use SHA-256 or stronger for security-sensitive hashing.
     severity: ERROR
@@ -1089,7 +1096,7 @@ executable: false
     "AGENTS.md": "26a38a929cce1867a4babb2f01a030f524ade17e7a4d7c0f9701017204eb7a4d",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
-    "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
+    "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
     "package.json": "583da302c2278e4315874a7b2d3691a75e0ba9b1d02132d177ce745573868a65",
     "README.md": "1d34a954068fef78a4b98b76f4941d3aa4e51f4c1925c1b549cbc0e81c7c7548",

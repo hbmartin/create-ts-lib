@@ -255,6 +255,7 @@ describe("scaffoldProject post-scaffold progress", () => {
     expect(execFileMock).not.toHaveBeenCalled();
     expect(progress.info).toHaveBeenCalledWith("Skipping git setup (--skip-git).");
     expect(progress.succeed).toHaveBeenCalledWith("Dependencies installed");
+    expect(progress.succeed).toHaveBeenCalledWith("Generated project built");
     expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
   });
 

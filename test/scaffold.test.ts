@@ -83,7 +83,10 @@ interface GeneratedPackageJson {
   dependencies: Record<string, string> & {
     zod?: string;
   };
-  devDependencies: Record<string, string>;
+  devDependencies: Record<string, string> & {
+    jsr?: string;
+    tsdown?: string;
+  };
   exports: {
     ".": Record<string, string>;
   };
@@ -166,6 +169,16 @@ describe("renderTemplate", () => {
     });
 
     expect(releaseWorkflow).toContain("ref: $" + "{{ github.event.release.tag_name }}");
+  });
+
+  it("renders replacement values with dollar tokens literally", () => {
+    const agents = renderTemplate("agents.md.tmpl", {
+      LINT_FORMAT_GUIDANCE: "literal $& value",
+      SEMGREP_VERSION: semgrepVersion,
+      ZOD_GUIDANCE: "",
+    });
+
+    expect(agents).toContain("literal $& value");
   });
 });
 
@@ -653,6 +666,7 @@ describe("buildProjectFiles", () => {
 
   it.each([
     ["SSH", "git@github.com:hbmartin/example-lib.git"],
+    ["https trailing slash", "https://github.com/hbmartin/example-lib/"],
     ["git+https", "git+https://github.com/hbmartin/example-lib.git"],
     ["git+ssh", "git+ssh://git@github.com/hbmartin/example-lib.git"],
     ["ssh", "ssh://git@github.com/hbmartin/example-lib.git"],
@@ -763,7 +777,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts.build).toBe("tsdown");
     expect(packageJson.scripts.dev).toBe("tsdown --watch");
     expect(packageJson.scripts.typecheck).toBe("tsc --noEmit");
-    expect(packageJson.devDependencies["tsdown"]).toBe(generatedPackageDevDependencies.tsdown);
+    expect(packageJson.devDependencies.tsdown).toBe(generatedPackageDevDependencies.tsdown);
     expect(tsdownConfig.content).toContain('entry: ["./source/index.ts", "./source/cli.ts"]');
     expect(tsdownConfig.content).toContain("dts: true");
   });
@@ -792,10 +806,11 @@ describe("buildProjectFiles", () => {
 
     expect(jsrJson.name).toBe("@scope/example-lib");
     expect(jsrJson.exports).toBe("./source/index.ts");
-    expect(packageJson.scripts["jsr:publish"]).toBe("pnpm dlx jsr publish");
+    expect(packageJson.scripts["jsr:publish"]).toBe("jsr publish");
+    expect(packageJson.devDependencies.jsr).toBe(generatedPackageDevDependencies.jsr);
     expect(readme.content).toContain("jsr.io/badges/@scope/example-lib");
     expect(releaseWorkflow.content).toContain("Publish to JSR");
-    expect(releaseWorkflow.content).toContain("pnpm dlx jsr publish");
+    expect(releaseWorkflow.content).toContain("pnpm run jsr:publish");
   });
 
   it("omits JSR artifacts by default", () => {
