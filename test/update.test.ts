@@ -78,6 +78,16 @@ describe("readScaffoldState", () => {
     );
   });
 
+  it("reports missing state when a path component is a regular file", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-notdir-"));
+    const targetDirectory = join(tempDirectory, "not-a-directory");
+    await writeFile(targetDirectory, "plain file\n", "utf8");
+
+    await expect(readScaffoldState(targetDirectory)).rejects.toThrow(
+      `No ${stateFileName} found in ${targetDirectory}`,
+    );
+  });
+
   it("does not report unreadable state paths as missing state files", async () => {
     const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-directory-"));
     await mkdir(join(tempDirectory, stateFileName));

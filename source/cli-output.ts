@@ -162,8 +162,18 @@ export const getPackageManagerRunPrefix = (packageManager: PackageManager): stri
 
 const safeShellArgumentRegex = /^[\w./:@%+=,-]+$/;
 
-export const formatShellArgument = (value: string): string =>
-  safeShellArgumentRegex.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+export const formatShellArgument = (
+  value: string,
+  platform: NodeJS.Platform = process.platform,
+): string => {
+  if (safeShellArgumentRegex.test(value)) {
+    return value;
+  }
+
+  // cmd.exe treats single quotes as literal characters; double quotes work in
+  // both cmd.exe and PowerShell, and `"` cannot appear in Windows paths.
+  return platform === "win32" ? `"${value}"` : `'${value.replaceAll("'", "'\\''")}'`;
+};
 
 export const createProgressReporter = (): ScaffoldProgress => {
   const { CI: continuousIntegration } = process.env;
