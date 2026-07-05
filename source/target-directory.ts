@@ -1,5 +1,7 @@
 import { readdir } from "node:fs/promises";
 
+import { isErrorWithCode } from "./filesystem-errors.js";
+
 export const assertTargetDirectoryIsSafe = async (
   targetDirectory: string,
   force: boolean,
@@ -12,13 +14,12 @@ export const assertTargetDirectoryIsSafe = async (
       );
     }
   } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
+    // Only a missing directory is safe; anything else (including a regular
+    // file occupying the target path) must surface.
+    if (isErrorWithCode(error, "ENOENT")) {
       return;
     }
 
     throw error;
   }
 };
-
-const isNodeError = (error: unknown): error is NodeJS.ErrnoException =>
-  error instanceof Error && "code" in error;

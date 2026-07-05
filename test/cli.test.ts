@@ -441,9 +441,10 @@ describe("cli entrypoint", () => {
         status: "missing",
       }),
     );
+    // Manual entry never pre-fills the detected remote URL, so no
+    // expectedGithubRepoUrlDefault applies here.
     const promptModule = buildGitHubPromptModule({
       description: "Manual library",
-      expectedGithubRepoUrlDefault: "https://github.com/hbmartin/create-ts-lib",
       githubRepoUrl: "https://github.com/hbmartin/manual-lib",
       missingRepositoryChoice: "manual",
       projectName: "manual-lib",
@@ -850,7 +851,12 @@ describe("cli entrypoint", () => {
 
     expect(result.exitCode).toBeUndefined();
     expect(result.stdout).toContain("Created demo-lib");
-    expect(result.stdout).toContain(`cd ${process.cwd()}/demo-lib`);
+    // The emitted path is shell-escaped, so quote the expectation the same way
+    // in case the checkout lives under a path that needs quoting. Imported
+    // lazily: loading cli-output.js before runCli caches yoctocolors without
+    // the harness's NO_COLOR environment.
+    const { formatShellArgument } = await import("../source/cli-output.js");
+    expect(result.stdout).toContain(`cd ${formatShellArgument(join(process.cwd(), "demo-lib"))}`);
     expect(result.stdout).toContain("pnpm run lint");
     expect(result.stdout).toContain(
       "Set up Codecov: https://app.codecov.io/gh/hbmartin/create-ts-lib/new",

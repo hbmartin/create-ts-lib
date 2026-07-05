@@ -77,26 +77,18 @@ const cliToggleFlags = new Map<string, { key: CliToggleFlag; value: boolean }>([
   ["--zod", { key: "zod", value: true }],
 ]);
 
-const updateUnsupportedValueOptions = [
-  ["author", "--author"],
-  ["bundler", "--bundler"],
-  ["cli", "--[no-]cli"],
-  ["codecov", "--[no-]codecov"],
-  ["description", "--description"],
-  ["jsr", "--[no-]jsr"],
-  ["license", "--license"],
-  ["lintFormatTooling", "--lint-format"],
-  ["packageManager", "--package-manager"],
-  ["projectName", "--name"],
-  ["repoUrl", "--repo-url"],
-  ["securityWorkflows", "--[no-]security-workflows"],
-  ["zod", "--[no-]zod"],
-] as const satisfies [keyof CliArguments, string][];
-
-const updateUnsupportedBooleanOptions = [
-  ["skipGit", "--skip-git"],
-  ["skipInstall", "--skip-install"],
-] as const satisfies [keyof CliArguments, string][];
+/**
+ * Boolean flags that `update` accepts. Toggle and value options are always
+ * scaffold-only, so a new option added to the parsing maps is rejected for
+ * `update` unless it is explicitly allowed here.
+ */
+const updateCompatibleFlags = new Set<CliBooleanFlag>([
+  "dryRun",
+  "force",
+  "help",
+  "version",
+  "yes",
+]);
 
 interface CliValueOptionConfig {
   apply(parsed: CliArguments, value: string, optionName: string): void;
@@ -199,6 +191,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     yes: false,
   };
   const positionals: string[] = [];
+  const scaffoldOnlyOptions: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] ?? "";
@@ -206,11 +199,14 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     const toggle = cliToggleFlags.get(argument);
     if (toggle) {
       parsed[toggle.key] = toggle.value;
+      scaffoldOnlyOptions.push(argument);
       continue;
     }
 
     const consumed = applyValueOption(parsed, args, index, argument);
     if (consumed > 0) {
+      const equalsIndex = argument.indexOf("=");
+      scaffoldOnlyOptions.push(equalsIndex >= 0 ? argument.slice(0, equalsIndex) : argument);
       index += consumed - 1;
       continue;
     }
@@ -218,6 +214,9 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     const flag = cliFlagAliases.get(argument);
     if (flag) {
       parsed[flag] = true;
+      if (!updateCompatibleFlags.has(flag)) {
+        scaffoldOnlyOptions.push(argument);
+      }
       continue;
     }
 
@@ -229,26 +228,15 @@ export const parseCliArguments = (args: string[]): CliArguments => {
   }
 
   applyPositionals(parsed, positionals);
-  validateUpdateArguments(parsed);
+  validateUpdateArguments(parsed, scaffoldOnlyOptions);
 
   return parsed;
 };
 
-const validateUpdateArguments = (parsed: CliArguments): void => {
-  if (!parsed.update) {
-    return;
-  }
-
-  for (const [key, optionName] of updateUnsupportedValueOptions) {
-    if (parsed[key] !== undefined) {
-      throw new Error(`Option ${optionName} cannot be used with update.`);
-    }
-  }
-
-  for (const [key, optionName] of updateUnsupportedBooleanOptions) {
-    if (parsed[key] === true) {
-      throw new Error(`Option ${optionName} cannot be used with update.`);
-    }
+const validateUpdateArguments = (parsed: CliArguments, scaffoldOnlyOptions: string[]): void => {
+  const [firstScaffoldOnlyOption] = scaffoldOnlyOptions;
+  if (parsed.update && firstScaffoldOnlyOption !== undefined) {
+    throw new Error(`Option ${firstScaffoldOnlyOption} cannot be used with update.`);
   }
 };
 

@@ -27,6 +27,7 @@ import {
 } from "./cli-prompts.js";
 import { runUpdateWorkflow } from "./cli-update.js";
 import { formatGitHubRepositoryCreateWarning } from "./cli-warnings.js";
+import { formatErrorMessage } from "./filesystem-errors.js";
 import { createGitHubRepository } from "./github-cli.js";
 import { assertValidPackageName } from "./package-name.js";
 import { loadPromptModule } from "./prompts.js";
@@ -86,9 +87,7 @@ const main = async (): Promise<void> => {
   try {
     cliArguments = parseCliArguments(process.argv.slice(2));
   } catch (error) {
-    process.stderr.write(
-      `${red("error")} ${error instanceof Error ? error.message : "Invalid arguments"}\n\n`,
-    );
+    process.stderr.write(`${red("error")} ${formatErrorMessage(error, "Invalid arguments")}\n\n`);
     process.stderr.write(helpText);
     process.exitCode = 1;
     return;
@@ -183,7 +182,7 @@ const runScaffoldWorkflow = async (
     targetDirectory,
   });
   printNextSteps(config, targetDirectory, {
-    includeGitHubPublishSteps: !cliArguments.skipGit && gitRemoteOriginUrl !== undefined,
+    includeGitHubPublishSteps: gitRemoteOriginUrl !== undefined,
     skipGit: cliArguments.skipGit,
     skipInstall: cliArguments.skipInstall,
   });
@@ -197,9 +196,7 @@ const handleCliError = (error: unknown): void => {
     return;
   }
 
-  process.stderr.write(
-    `${red("error")} ${error instanceof Error ? error.message : "Scaffolding failed"}\n`,
-  );
+  process.stderr.write(`${red("error")} ${formatErrorMessage(error, "Scaffolding failed")}\n`);
   process.exitCode = 1;
 };
 
@@ -228,6 +225,11 @@ const getGitRemoteOriginUrl = (
   cliArguments: CliArguments,
   config: ScaffoldConfig,
 ): string | undefined => {
+  // --skip-git skips all git setup, so no remote applies anywhere downstream.
+  if (cliArguments.skipGit) {
+    return undefined;
+  }
+
   if (config.githubRepoUrl.length === 0) {
     return undefined;
   }

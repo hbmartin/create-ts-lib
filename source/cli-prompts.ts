@@ -67,7 +67,6 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
   const githubRepositoryAnswer = await resolveGitHubRepository(
     provided,
     githubRepositoryLookup,
-    defaults,
     promptModule,
     warn,
   );
@@ -218,7 +217,9 @@ type GitHubRepositoryPrompt =
       kind: "create";
     }
   | {
-      defaultUrl?: string;
+      // Manual entry deliberately has no default: the detected git remote is
+      // never verified against GitHub, so pre-filling it could silently carry
+      // a stale URL forward.
       kind: "manual";
     };
 
@@ -230,7 +231,6 @@ interface GitHubRepoUrlAnswer {
 const resolveGitHubRepository = async (
   provided: ScaffoldConfigOverrides,
   githubRepositoryLookup: Promise<GitHubRepositoryLookupResult> | undefined,
-  defaults: ScaffoldConfig,
   promptModule: PromptModule,
   warn: WarningSink,
 ): Promise<GitHubRepoUrlAnswer> => {
@@ -240,7 +240,6 @@ const resolveGitHubRepository = async (
 
   const githubRepositoryPrompt = await promptForGitHubRepository(
     await githubRepositoryLookup,
-    defaults.githubRepoUrl,
     promptModule,
     warn,
   );
@@ -298,7 +297,6 @@ const validateProjectNameForPrompt = (projectName: string): true | string => {
 
 const promptForGitHubRepository = async (
   lookup: GitHubRepositoryLookupResult,
-  defaultGitHubRepoUrl: string,
   promptModule: PromptModule,
   warn: WarningSink,
 ): Promise<GitHubRepositoryPrompt> => {
@@ -311,7 +309,7 @@ const promptForGitHubRepository = async (
 
   if (lookup.status === "unavailable") {
     warn(formatGitHubRepositoryLookupWarning(lookup));
-    return buildManualGitHubRepositoryPrompt("");
+    return { kind: "manual" };
   }
 
   const decision = await promptModule.select<MissingGitHubRepositoryDecision>({
@@ -331,7 +329,7 @@ const promptForGitHubRepository = async (
   });
 
   if (decision === "manual") {
-    return buildManualGitHubRepositoryPrompt(defaultGitHubRepoUrl);
+    return { kind: "manual" };
   }
 
   return {
@@ -345,11 +343,6 @@ const promptForGitHubRepository = async (
   };
 };
 
-const buildManualGitHubRepositoryPrompt = (defaultUrl: string): GitHubRepositoryPrompt => ({
-  ...(defaultUrl.length > 0 ? { defaultUrl } : {}),
-  kind: "manual",
-});
-
 const promptForGitHubRepoUrl = async (
   githubRepositoryPrompt: GitHubRepositoryPrompt,
   promptModule: PromptModule,
@@ -361,9 +354,10 @@ const promptForGitHubRepoUrl = async (
     };
   }
 
-  const { defaultUrl } = githubRepositoryPrompt;
   const url = await promptModule.input({
-    ...(defaultUrl === undefined ? {} : { default: defaultUrl }),
+    ...(githubRepositoryPrompt.kind === "found"
+      ? { default: githubRepositoryPrompt.defaultUrl }
+      : {}),
     message: "GitHub repo URL",
   });
 

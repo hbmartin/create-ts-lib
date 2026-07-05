@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 
 import { z } from "zod";
 
+import { isErrorWithCode } from "./filesystem-errors.js";
 import { stripPackageScope } from "./name-helpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -305,12 +306,6 @@ const stripControlCharacter = (character: string): string => {
 
 const isWhitespaceControlCharacter = (charCode: number): boolean =>
   charCode === 9 || charCode === 10 || charCode === 13;
-
-const isErrorWithCode = (error: unknown, code: number | string): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  "code" in error &&
-  (error as { code?: unknown }).code === code;
 
 const isErrorWithOutput = (error: unknown): error is Error & { stderr: string; stdout: string } =>
   error instanceof Error &&

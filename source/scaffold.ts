@@ -3,6 +3,7 @@ import { access, chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { formatErrorMessage } from "./filesystem-errors.js";
 import { assertValidPackageName } from "./package-name.js";
 import { equalResolvedPaths } from "./path-comparison.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
@@ -42,7 +43,7 @@ export class PostScaffoldSetupError extends Error {
   readonly targetDirectory: string;
 
   constructor(options: PostScaffoldSetupErrorOptions) {
-    super(getErrorMessage(options.cause, "Post-scaffold setup failed"), {
+    super(formatErrorMessage(options.cause, "Post-scaffold setup failed"), {
       cause: options.cause,
     });
     this.name = "PostScaffoldSetupError";
@@ -189,7 +190,7 @@ const addGitRemoteOriginIfPossible = async (
     await execFileAsync("git", ["remote", "add", "origin", remoteUrl], { cwd });
   } catch (error) {
     progress?.info(
-      `Could not add git remote origin; continuing. ${getErrorMessage(error, "git remote add failed")}`,
+      `Could not add git remote origin; continuing. ${formatErrorMessage(error, "git remote add failed")}`,
     );
   }
 };
@@ -251,8 +252,5 @@ const runPostScaffoldStep = async (
     });
   }
 };
-
-const getErrorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error ? error.message : fallback;
 
 const getExecFileStdout = (result: { stdout: string }): string => result.stdout;
