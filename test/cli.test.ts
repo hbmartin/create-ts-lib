@@ -554,7 +554,7 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).not.toHaveBeenCalled();
   });
 
-  it("uses the detected git remote default when gh lookup is unavailable", async () => {
+  it("prompts without a default when gh lookup is unavailable", async () => {
     const createGitHubRepository = vi.fn();
     const inspectPersonalGitHubRepository = vi.fn(
       async (): Promise<GitHubRepositoryLookupResult> => ({
@@ -565,7 +565,6 @@ describe("cli entrypoint", () => {
     );
     const promptModule = buildGitHubPromptModule({
       description: "Manual library",
-      expectedGithubRepoUrlDefault: "https://github.com/hbmartin/create-ts-lib",
       githubRepoUrl: "https://github.com/hbmartin/manual-lib",
       projectName: "manual-lib",
     });
@@ -851,7 +850,7 @@ describe("cli entrypoint", () => {
 
     expect(result.exitCode).toBeUndefined();
     expect(result.stdout).toContain("Created demo-lib");
-    expect(result.stdout).toContain("cd demo-lib");
+    expect(result.stdout).toContain(`cd ${process.cwd()}/demo-lib`);
     expect(result.stdout).toContain("pnpm run lint");
     expect(result.stdout).toContain(
       "Set up Codecov: https://app.codecov.io/gh/hbmartin/create-ts-lib/new",
@@ -1205,6 +1204,34 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ skipGit: true, skipInstall: true }),
+    );
+  });
+
+  it("prints a full escaped cd target and omits publish steps when git is skipped", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-spaced-"));
+    const targetDirectory = join(tempDirectory, "nested path", "demo lib");
+
+    const result = await runCli(
+      [
+        targetDirectory,
+        "--yes",
+        "--name",
+        "demo-lib",
+        "--repo-url",
+        "https://github.com/hbmartin/demo-lib",
+        "--skip-git",
+      ],
+      { scaffoldProject },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain(`cd '${targetDirectory}'`);
+    expect(result.stdout).toContain("  git init\n");
+    expect(result.stdout).not.toContain("git push -u origin HEAD");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ skipGit: true }),
     );
   });
 

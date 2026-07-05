@@ -77,6 +77,27 @@ const cliToggleFlags = new Map<string, { key: CliToggleFlag; value: boolean }>([
   ["--zod", { key: "zod", value: true }],
 ]);
 
+const updateUnsupportedValueOptions = [
+  ["author", "--author"],
+  ["bundler", "--bundler"],
+  ["cli", "--[no-]cli"],
+  ["codecov", "--[no-]codecov"],
+  ["description", "--description"],
+  ["jsr", "--[no-]jsr"],
+  ["license", "--license"],
+  ["lintFormatTooling", "--lint-format"],
+  ["packageManager", "--package-manager"],
+  ["projectName", "--name"],
+  ["repoUrl", "--repo-url"],
+  ["securityWorkflows", "--[no-]security-workflows"],
+  ["zod", "--[no-]zod"],
+] as const satisfies [keyof CliArguments, string][];
+
+const updateUnsupportedBooleanOptions = [
+  ["skipGit", "--skip-git"],
+  ["skipInstall", "--skip-install"],
+] as const satisfies [keyof CliArguments, string][];
+
 interface CliValueOptionConfig {
   apply(parsed: CliArguments, value: string, optionName: string): void;
 }
@@ -208,8 +229,27 @@ export const parseCliArguments = (args: string[]): CliArguments => {
   }
 
   applyPositionals(parsed, positionals);
+  validateUpdateArguments(parsed);
 
   return parsed;
+};
+
+const validateUpdateArguments = (parsed: CliArguments): void => {
+  if (!parsed.update) {
+    return;
+  }
+
+  for (const [key, optionName] of updateUnsupportedValueOptions) {
+    if (parsed[key] !== undefined) {
+      throw new Error(`Option ${optionName} cannot be used with update.`);
+    }
+  }
+
+  for (const [key, optionName] of updateUnsupportedBooleanOptions) {
+    if (parsed[key] === true) {
+      throw new Error(`Option ${optionName} cannot be used with update.`);
+    }
+  }
 };
 
 const applyPositionals = (parsed: CliArguments, positionals: string[]): void => {

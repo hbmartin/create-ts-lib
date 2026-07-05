@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
+import { isFileNotFoundError } from "./filesystem-errors.js";
 import { buildProjectFiles } from "./templates/files.js";
 import type { GeneratedFile } from "./templates/scaffold-config.js";
 import {
@@ -54,7 +55,11 @@ const readStateFileContent = async (
 ): Promise<string> => {
   try {
     return await readFile(statePath, "utf8");
-  } catch {
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      throw error;
+    }
+
     throw new Error(
       `No ${stateFileName} found in ${targetDirectory}. ` +
         `The update command only works in projects whose scaffold wrote ${stateFileName}.`,
@@ -108,7 +113,11 @@ const classifyFile = async (
   let diskContent: string;
   try {
     diskContent = await readFile(join(resolve(targetDirectory), file.path), "utf8");
-  } catch {
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      throw error;
+    }
+
     return "create";
   }
 

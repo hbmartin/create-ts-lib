@@ -41,12 +41,6 @@ const repositoryFields = (githubRepoUrl: string): RepositoryMetadata | undefined
   };
 };
 
-const packageManagerDlxCommand = {
-  npm: "npx",
-  pnpm: "pnpm dlx",
-  yarn: "yarn dlx",
-} satisfies Record<PackageManager, string>;
-
 const buildBundlerScripts = (config: ScaffoldConfig): { build: string; dev: string } =>
   config.bundler === "tsdown"
     ? { build: "tsdown", dev: "tsdown --watch" }
@@ -101,9 +95,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       format: lintFormatScripts.format,
       lint: lintFormatScripts.lint,
       attw: "attw --pack . --profile esm-only",
-      ...(config.includeJsr
-        ? { "jsr:publish": `${packageManagerDlxCommand[config.packageManager]} jsr publish` }
-        : {}),
+      ...(config.includeJsr ? { "jsr:publish": "jsr publish" } : {}),
       prepare: "lefthook install",
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
       publint: `publint --pack ${config.packageManager}`,
@@ -127,6 +119,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       "@types/node": generatedPackageDevDependencies["@types/node"],
       "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
       "dependency-cruiser": generatedPackageDevDependencies["dependency-cruiser"],
+      ...(config.includeJsr ? { jsr: generatedPackageDevDependencies.jsr } : {}),
       lefthook: generatedPackageDevDependencies.lefthook,
       ...buildLintFormatDevDependencies(config.lintFormatTooling),
       publint: generatedPackageDevDependencies.publint,

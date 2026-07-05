@@ -325,6 +325,13 @@ rules:
               metavariable: $PROCESS
               regex: ^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$
 
+  - id: no-unpinned-jsr-cli
+    message: Avoid transient JSR CLI execution. Add jsr as a devDependency and run the local binary.
+    severity: ERROR
+    languages:
+      - generic
+    pattern-regex: '(pnpm\s+dlx|yarn\s+dlx|npx)\s+jsr\b'
+
   - id: no-weak-crypto-hash
     message: Avoid weak cryptographic hashes. Use SHA-256 or stronger for security-sensitive hashing.
     severity: ERROR
@@ -473,7 +480,7 @@ executable: false
     "format": "oxfmt . --write",
     "lint": "oxlint --deny-warnings . && oxfmt --check .",
     "attw": "attw --pack . --profile esm-only",
-    "jsr:publish": "pnpm dlx jsr publish",
+    "jsr:publish": "jsr publish",
     "prepare": "lefthook install",
     "prepublishOnly": "pnpm run check && pnpm run build && pnpm run verify:artifacts && pnpm run publint && pnpm run types:lint",
     "publint": "publint --pack pnpm",
@@ -496,6 +503,7 @@ executable: false
     "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "^4.1.8",
     "dependency-cruiser": "^17.4.3",
+    "jsr": "^0.14.3",
     "lefthook": "^2.1.9",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
@@ -939,7 +947,7 @@ jobs:
           echo "Publishing with tag: $TAG"
           npm publish --tag "$TAG" --access public --provenance
       - name: Publish to JSR
-        run: pnpm dlx jsr publish
+        run: pnpm run jsr:publish
 
 ===== .github/workflows/codeql.yml =====
 executable: false
@@ -1035,9 +1043,9 @@ executable: false
     "AGENTS.md": "92d8f7c0d13ad6b109bca92b5ff84bfba13ef5331749fc2ba1bf531adf4a2a88",
     ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
-    "semgrep.yml": "873f44e91dbe8e6d8bc40c63bb13ca5d50a36375df19b0bccbc4b71d3e481800",
+    "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
-    "package.json": "fbbdae1b4948b04a96031dc912d8e9639c4fb82ad9375e82ae023a9182ed08ec",
+    "package.json": "fe2b17956af9627af2caa3260585f2a99d13477b6dbc4be70d6bf333c72bb3e7",
     "README.md": "3c45aa8a114d0f4bf2d0e2735056543178e1f8bc62e9a3ae5c291e54c75e8b03",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
@@ -1053,7 +1061,7 @@ executable: false
     "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
     ".github/workflows/ci.yml": "09970db4a9c629faa4d4c0bff726b5406deb9aedddc9b96744c7dc48ee6ef1e3",
-    ".github/workflows/release.yml": "1ab18797df0a64d6cf6647d0901f57eff726c05feb4a708b83a0bb3bad7055e7",
+    ".github/workflows/release.yml": "51fda8ee05f6c67edeeee41decd06c522e33eb875cf28cfc096105f64f922971",
     ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
     ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
   },

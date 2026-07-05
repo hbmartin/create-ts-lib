@@ -1,4 +1,5 @@
 const gitSuffixRegex = /\.git\/?$/u;
+const trailingSlashRegex = /\/$/u;
 const githubRepositoryUrlRegex =
   /^https:\/\/github\.com\/(?<owner>[^/\s?#]+)\/(?<repo>[^/\s?#]+)\/?$/u;
 const packageScopeRegex = /^@[^/]+\//u;
@@ -13,6 +14,8 @@ const githubRemotePrefixes = [
 
 export const stripGitSuffix = (input: string): string => input.replace(gitSuffixRegex, "");
 
+const stripTrailingSlash = (input: string): string => input.replace(trailingSlashRegex, "");
+
 export const normalizeGitHubUrl = (input: string): string => {
   if (input.length === 0) {
     return "";
@@ -20,7 +23,7 @@ export const normalizeGitHubUrl = (input: string): string => {
 
   for (const [prefix, normalizedPrefix] of githubRemotePrefixes) {
     if (input.startsWith(prefix)) {
-      return `${normalizedPrefix}${stripGitSuffix(input.slice(prefix.length))}`;
+      return `${normalizedPrefix}${stripTrailingSlash(stripGitSuffix(input.slice(prefix.length)))}`;
     }
   }
 

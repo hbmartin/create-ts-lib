@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -78,6 +78,21 @@ describe("readScaffoldState", () => {
     );
   });
 
+  it("does not report unreadable state paths as missing state files", async () => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-directory-"));
+    await mkdir(join(tempDirectory, stateFileName));
+
+    let thrownError: unknown;
+    try {
+      await readScaffoldState(tempDirectory);
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(Error);
+    expect((thrownError as Error).message).not.toContain(`No ${stateFileName} found`);
+  });
+
   it("rejects state files that are not valid JSON", async () => {
     const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-bad-json-"));
     await writeFile(join(tempDirectory, stateFileName), "not json\n", "utf8");
@@ -129,6 +144,22 @@ describe("planUpdate", () => {
     expect(findEntry(plan.entries, "lefthook.yml").status).toBe("create");
     expect(findEntry(plan.entries, "tsconfig.json").status).toBe("update");
     expect(findEntry(plan.entries, "package.json").status).toBe("up-to-date");
+  });
+
+  it("does not classify unreadable generated paths as creatable", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await rm(join(targetDirectory, "package.json"));
+    await mkdir(join(targetDirectory, "package.json"));
+    const state = await readScaffoldState(targetDirectory);
+
+    let thrownError: unknown;
+    try {
+      await planUpdate(targetDirectory, state);
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(Error);
   });
 });
 

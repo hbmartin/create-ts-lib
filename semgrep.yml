@@ -155,6 +155,13 @@ rules:
               metavariable: $PROCESS
               regex: ^(spawn|spawnSync|execFile|execFileSync|execa|execaSync|execaCommand|execaCommandSync)$
 
+  - id: no-unpinned-jsr-cli
+    message: Avoid transient JSR CLI execution. Add jsr as a devDependency and run the local binary.
+    severity: ERROR
+    languages:
+      - generic
+    pattern-regex: '(pnpm\s+dlx|yarn\s+dlx|npx)\s+jsr\b'
+
   - id: no-weak-crypto-hash
     message: Avoid weak cryptographic hashes. Use SHA-256 or stronger for security-sensitive hashing.
     severity: ERROR

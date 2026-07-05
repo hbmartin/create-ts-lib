@@ -12,7 +12,7 @@ export const renderTemplate = (
   let content = readTemplate(relativePath);
 
   for (const [key, value] of Object.entries(replacements)) {
-    content = content.replaceAll(`{{${key}}}`, value);
+    content = content.replaceAll(`{{${key}}}`, () => value);
   }
 
   const unresolvedPlaceholders = Array.from(

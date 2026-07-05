@@ -41,6 +41,19 @@ describe("loadUserConfig", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("warns and ignores config paths that cannot be read", async () => {
+    const warnings: string[] = [];
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-user-config-"));
+    const configPath = join(tempDirectory, "config.json");
+    await mkdir(configPath);
+
+    await expect(loadUserConfig((message) => warnings.push(message), configPath)).resolves.toEqual(
+      {},
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("could not read file");
+  });
+
   it("loads and validates personal defaults", async () => {
     const warnings: string[] = [];
     const configPath = await writeUserConfig(

@@ -53,6 +53,7 @@ export const generatedPackageDevDependencies = {
   "@types/node": readDependencySpecifier(devDependencies, "@types/node"),
   "@vitest/coverage-v8": readDependencySpecifier(devDependencies, "@vitest/coverage-v8"),
   "dependency-cruiser": readDependencySpecifier(devDependencies, "dependency-cruiser"),
+  jsr: readDependencySpecifier(devDependencies, "jsr"),
   lefthook: readDependencySpecifier(devDependencies, "lefthook"),
   oxfmt: readDependencySpecifier(devDependencies, "oxfmt"),
   oxlint: readDependencySpecifier(devDependencies, "oxlint"),

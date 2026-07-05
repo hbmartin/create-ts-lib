@@ -170,6 +170,17 @@ describe("parseCliArguments", () => {
     expect(() => parseCliArguments(["one", "two"])).toThrow("Unexpected extra argument");
     expect(() => parseCliArguments(["update", "one", "two"])).toThrow("Unexpected extra argument");
   });
+
+  it.each<[string[], string]>([
+    [["update", "--bundler", "tsdown"], "--bundler"],
+    [["update", "--repo-url", "https://github.com/hbmartin/example-lib"], "--repo-url"],
+    [["update", "--no-jsr"], "--[no-]jsr"],
+    [["update", "--skip-git"], "--skip-git"],
+  ])("rejects scaffold-only option %s for update", (args, optionName) => {
+    expect(() => parseCliArguments(args)).toThrow(
+      `Option ${optionName} cannot be used with update.`,
+    );
+  });
 });
 
 describe("shared name helpers", () => {
@@ -197,6 +208,7 @@ describe("normalizeGitHubUrl", () => {
     ["SSH shorthand", "git@github.com:hbmartin/example-lib.git"],
     ["HTTPS", "https://github.com/hbmartin/example-lib.git"],
     ["HTTPS with .git trailing slash", "https://github.com/hbmartin/example-lib.git/"],
+    ["HTTPS trailing slash", "https://github.com/hbmartin/example-lib/"],
     ["git+HTTPS", "git+https://github.com/hbmartin/example-lib.git"],
     ["git+SSH", "git+ssh://git@github.com/hbmartin/example-lib.git"],
     ["SSH URL", "ssh://git@github.com/hbmartin/example-lib.git"],
