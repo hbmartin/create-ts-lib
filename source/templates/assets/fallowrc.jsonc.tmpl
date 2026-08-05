@@ -21,7 +21,10 @@
     "unused-exports": "off",
     "unused-types": "off",
     "unused-dependencies": "off",
-    "unused-dev-dependencies": "off",
+    // Kept on: every scaffolded devDependency is executed by a script or wired
+    // into tsconfig/vitest, so an unused entry means something was added and
+    // never hooked up. Set to "warn" if that is too strict for your project.
+    "unused-dev-dependencies": "error",
     "unused-optional-dependencies": "off",
     "unused-enum-members": "off",
     "unused-class-members": "off",

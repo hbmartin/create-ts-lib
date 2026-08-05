@@ -114,7 +114,10 @@ executable: false
     "unused-exports": "off",
     "unused-types": "off",
     "unused-dependencies": "off",
-    "unused-dev-dependencies": "off",
+    // Kept on: every scaffolded devDependency is executed by a script or wired
+    // into tsconfig/vitest, so an unused entry means something was added and
+    // never hooked up. Set to "warn" if that is too strict for your project.
+    "unused-dev-dependencies": "error",
     "unused-optional-dependencies": "off",
     "unused-enum-members": "off",
     "unused-class-members": "off",
@@ -1018,7 +1021,7 @@ executable: false
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "AGENTS.md": "26c15158aa82921801660370057760bf5b6a41914c478aaeb00206ca853599c5",
-    ".fallowrc.jsonc": "ebeef7ee2906246fd5af4137ca929544054e8bfc8bc1361b3c655f54a99c704e",
+    ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",

@@ -343,7 +343,13 @@ describe("buildProjectFiles", () => {
     );
     const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
 
+    // Template-only pins: emitted into generated projects but never installed
+    // here, because the generator neither imports nor runs them.
     expect(generatorDevDependencies).not.toHaveProperty("meow");
+    expect(generatorDevDependencies).not.toHaveProperty("jsr");
+    expect(generatorDevDependencies).not.toHaveProperty("tsdown");
+    expect(generatedPackageDevDependencies.jsr).toMatch(/^\^/);
+    expect(generatedPackageDevDependencies.tsdown).toMatch(/^\^/);
     expect(generatedPackageDependencies).toMatchObject({
       meow: generatedPackageDependencies.meow,
       zod: readGeneratorSpecifier(generatorDependencies, "zod"),

@@ -7,6 +7,12 @@
       "description": "Keep GitHub Actions pinned and updated deliberately.",
       "matchManagers": ["github-actions"],
       "pinDigests": true
+    },
+    {
+      "description": "Generated projects target Node 22/24, so the @types/node they receive stays on the 24.x line. This scopes only the template pin; the generator's own @types/node in package.json still tracks latest.",
+      "matchFileNames": ["source/templates/generated-versions.ts"],
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<25"
     }
   ],
   "customManagers": [
@@ -29,6 +35,15 @@
       "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
       "matchStrings": ["meow:\\s*\"\\^(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "meow",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the template-only jsr dependency emitted into generated package.json files.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": ["jsr:\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "jsr",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     },

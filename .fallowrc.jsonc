@@ -25,7 +25,10 @@
     "unused-exports": "off",
     "unused-types": "off",
     "unused-dependencies": "off",
-    "unused-dev-dependencies": "off",
+    // Kept on: every devDependency here is either executed by a script or
+    // imported by tests. Template-only pins live in generated-versions.ts
+    // instead of being installed, so an unused entry is a real mistake.
+    "unused-dev-dependencies": "error",
     "unused-optional-dependencies": "off",
     "unused-enum-members": "off",
     "unused-class-members": "off",

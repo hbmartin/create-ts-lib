@@ -41,7 +41,10 @@ export const generatedPackageDependencies = {
 } as const satisfies Record<string, string>;
 
 const templateOnlyGeneratedPackageDevDependencies = {
-  // Used only in scaffolded projects; the generator does not import these at runtime.
+  // Used only in scaffolded projects; the generator neither imports nor runs
+  // these itself, so they are pinned here rather than installed as real
+  // devDependencies.
+  jsr: "^0.14.3",
   tsdown: "^0.22.14",
   // Generated projects declare `engines.node: ">=22"` and run CI on Node 22 and
   // 24, so their type definitions stay on the 24.x line instead of tracking
@@ -56,7 +59,6 @@ export const generatedPackageDevDependencies = {
   "@sindresorhus/tsconfig": readDependencySpecifier(devDependencies, "@sindresorhus/tsconfig"),
   "@vitest/coverage-v8": readDependencySpecifier(devDependencies, "@vitest/coverage-v8"),
   fallow: readDependencySpecifier(devDependencies, "fallow"),
-  jsr: readDependencySpecifier(devDependencies, "jsr"),
   lefthook: readDependencySpecifier(devDependencies, "lefthook"),
   oxfmt: readDependencySpecifier(devDependencies, "oxfmt"),
   oxlint: readDependencySpecifier(devDependencies, "oxlint"),
