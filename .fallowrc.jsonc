@@ -1,0 +1,48 @@
+{
+  // Architecture gate. This replaces the former dependency-cruiser config and
+  // deliberately enforces only the architecture rules it used to cover -- the
+  // dead-code, duplication, and complexity analyses fallow also offers stay off
+  // so `deps:lint` keeps the same narrow contract.
+  // Declared explicitly: the package entry points resolve into `dist/`, which is
+  // ignored below, so without this the source tree is unreachable and the
+  // boundary rules silently pass instead of failing.
+  "entry": ["source/index.ts", "source/cli.ts"],
+  "ignorePatterns": ["dist/**", "coverage/**"],
+  "rules": {
+    // no-circular
+    "circular-dependencies": "error",
+    // not-to-unresolvable
+    "unresolved-imports": "error",
+    // no-undeclared-packages
+    "unlisted-dependencies": "error",
+    // source-not-to-dev-dependencies
+    "dev-dependencies-in-production": "error",
+    // source-not-to-test
+    "boundary-violation": "error",
+
+    // Not part of the architecture gate.
+    "unused-files": "off",
+    "unused-exports": "off",
+    "unused-types": "off",
+    "unused-dependencies": "off",
+    "unused-dev-dependencies": "off",
+    "unused-optional-dependencies": "off",
+    "unused-enum-members": "off",
+    "unused-class-members": "off",
+    "duplicate-exports": "off",
+    "re-export-cycle": "off",
+    "type-only-dependencies": "off",
+    "test-only-dependencies": "off",
+    "stale-suppressions": "off"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "source", "patterns": ["source/**"] },
+      { "name": "test", "patterns": ["test/**"] }
+    ],
+    "rules": [
+      { "from": "source", "allow": [] },
+      { "from": "test", "allow": ["source"] }
+    ]
+  }
+}

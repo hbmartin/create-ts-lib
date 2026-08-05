@@ -31,7 +31,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
-    "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
+    "deps:lint": "fallow dead-code",
     "format": "oxfmt . --write",
     "lint": "biome check --error-on-warnings . && oxlint --deny-warnings . && oxfmt --check .",
     "prepack": "pnpm run build",
@@ -52,24 +52,25 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
-    "ora": "^9.4.0",
-    "yoctocolors": "^2.1.2",
+    "ora": "^9.4.1",
+    "yoctocolors": "^2.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.3",
-    "@biomejs/biome": "^2.4.16",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.5.7",
     "@sindresorhus/tsconfig": "^8.1.0",
     "@types/node": "^25.9.2",
-    "@vitest/coverage-v8": "^4.1.8",
-    "dependency-cruiser": "^17.4.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "fallow": "^3.14.0",
+    "jsonc-parser": "^3.3.1",
     "jsr": "^0.14.3",
-    "lefthook": "^2.1.9",
-    "oxfmt": "^0.53.0",
-    "oxlint": "^1.68.0",
-    "publint": "^0.3.21",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "lefthook": "^2.1.10",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
+    "publint": "^0.3.23",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=22"

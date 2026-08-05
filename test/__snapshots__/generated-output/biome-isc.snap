@@ -245,82 +245,61 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 - Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
-- Update dependency-cruiser and Semgrep checks when architecture or security expectations change.
+- Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
 
 ## Verification
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan. Install Semgrep directly or install uv if both commands are missing.
 
-===== .dependency-cruiser.cjs =====
+===== .fallowrc.jsonc =====
 executable: false
 
-/** @type {import("dependency-cruiser").IConfiguration} */
-module.exports = {
-  forbidden: [
-    {
-      name: "no-circular",
-      severity: "error",
-      from: {},
-      to: {
-        circular: true,
-      },
-    },
-    {
-      name: "not-to-unresolvable",
-      severity: "error",
-      from: {},
-      to: {
-        couldNotResolve: true,
-      },
-    },
-    {
-      name: "no-undeclared-packages",
-      severity: "error",
-      from: {},
-      to: {
-        dependencyTypes: ["npm-no-pkg", "npm-unknown"],
-      },
-    },
-    {
-      name: "source-not-to-test",
-      severity: "error",
-      from: {
-        path: "^source/",
-      },
-      to: {
-        path: "^test/",
-      },
-    },
-    {
-      name: "source-not-to-dev-dependencies",
-      severity: "error",
-      from: {
-        path: "^source/",
-      },
-      to: {
-        dependencyTypes: ["npm-dev"],
-        dependencyTypesNot: ["type-only"],
-        pathNot: ["^node_modules/@types/"],
-      },
-    },
-  ],
-  options: {
-    doNotFollow: {
-      path: ["node_modules"],
-    },
-    enhancedResolveOptions: {
-      conditionNames: ["import", "node", "types", "default"],
-      exportsFields: ["exports"],
-      mainFields: ["module", "main", "types", "typings"],
-    },
-    tsConfig: {
-      fileName: "tsconfig.json",
-    },
-    tsPreCompilationDeps: "specify",
+{
+  // Architecture gate for `deps:lint`. These five rules keep `source/` layered
+  // correctly: no import cycles, no unresolved or undeclared imports, no
+  // reaching into `test/`, and no devDependencies in shipped code. Fallow's
+  // dead-code, duplication, and complexity analyses are deliberately off so
+  // this stays a focused architecture check rather than a code-quality gate.
+  // Declared explicitly: the package entry points resolve into `dist/`, which is
+  // ignored below, so without this the source tree is unreachable and the
+  // boundary rules silently pass instead of failing.
+  "entry": ["source/index.ts", "source/cli.ts"],
+  "ignorePatterns": ["dist/**", "coverage/**"],
+  "rules": {
+    "circular-dependencies": "error",
+    "unresolved-imports": "error",
+    "unlisted-dependencies": "error",
+    "dev-dependencies-in-production": "error",
+    "boundary-violation": "error",
+
+    // Not part of the architecture gate.
+    "unused-files": "off",
+    "unused-exports": "off",
+    "unused-types": "off",
+    "unused-dependencies": "off",
+    "unused-dev-dependencies": "off",
+    "unused-optional-dependencies": "off",
+    "unused-enum-members": "off",
+    "unused-class-members": "off",
+    "duplicate-exports": "off",
+    "re-export-cycle": "off",
+    "type-only-dependencies": "off",
+    "test-only-dependencies": "off",
+    "stale-suppressions": "off"
   },
-};
+  "boundaries": {
+    "zones": [
+      { "name": "source", "patterns": ["source/**"] },
+      { "name": "test", "patterns": ["test/**"] }
+    ],
+    "rules": [
+      { "from": "source", "allow": [] },
+      { "from": "test", "allow": ["source"] }
+    ]
+  }
+}
 
 ===== lefthook.yml =====
 executable: false
@@ -549,7 +528,7 @@ executable: false
 
 import { spawnSync } from "node:child_process";
 
-const semgrepVersion = "1.165.0";
+const semgrepVersion = "1.172.0";
 const semgrepArguments = ["scan", "--config", "semgrep.yml", "--error", "source", "test"];
 const forceUvx = process.env.SECURITY_LINT_FORCE_UVX === "1";
 
@@ -640,7 +619,7 @@ executable: false
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
-    "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
+    "deps:lint": "fallow dead-code",
     "dev": "tsc --watch",
     "format": "biome format --write .",
     "lint": "biome check --error-on-warnings .",
@@ -662,20 +641,20 @@ executable: false
     "meow": "^14.1.0"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.3",
+    "@arethetypeswrong/cli": "^0.18.5",
     "@sindresorhus/tsconfig": "^8.1.0",
-    "@types/node": "^25.9.2",
-    "@vitest/coverage-v8": "^4.1.8",
-    "dependency-cruiser": "^17.4.3",
-    "lefthook": "^2.1.9",
-    "@biomejs/biome": "^2.4.16",
-    "publint": "^0.3.21",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "fallow": "^3.14.0",
+    "lefthook": "^2.1.10",
+    "@biomejs/biome": "^2.5.7",
+    "publint": "^0.3.23",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "pnpm": {
     "overrides": {
-      "@types/node": "^25.9.2"
+      "@types/node": "^24.13.3"
     }
   },
   "engines": {
@@ -726,7 +705,7 @@ pnpm run build         # build to dist/
 pnpm run release:check # package validation + publish dry run
 ```
 
-`pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.165.0` scan.
+`pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan.
 
 See [`AGENTS.md`](AGENTS.md) for the conventions this project follows.
 
@@ -987,8 +966,6 @@ jobs:
       - run: pnpm run check
         env:
           SECURITY_LINT_FORCE_UVX: "1"
-      - name: TypeScript 7 compatibility probe
-        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit
       - run: pnpm run build
       - run: pnpm run publint
 
@@ -1093,13 +1070,13 @@ executable: false
     "biome.jsonc": "ea517684bef315669884757f883a8296e958cc764eaece1d57e37623e103b1c7",
     ".vscode/extensions.json": "40af2f96f539e1173868ac6a11bf9984c4c5b4edaefbd7d6e1484df25198d376",
     ".vscode/settings.json": "7f49c0f31b67567382a2b8cb992e3802093493bcd3a68c1c28361a7eb38f51eb",
-    "AGENTS.md": "26a38a929cce1867a4babb2f01a030f524ade17e7a4d7c0f9701017204eb7a4d",
-    ".dependency-cruiser.cjs": "f029f4cf4b444eae31fd5351dfe364352c2617c02d366d08e5f6291f9becd96b",
+    "AGENTS.md": "b165cda5f59b2e9d6bda04ea8cc841e69c8ebd1cdff64a111400eecc9f41362f",
+    ".fallowrc.jsonc": "ebeef7ee2906246fd5af4137ca929544054e8bfc8bc1361b3c655f54a99c704e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
-    "scripts/security-lint.mjs": "946614560c9e752ec166b43d8436949adb7292d7a3afa9319aa08a773f141a32",
-    "package.json": "583da302c2278e4315874a7b2d3691a75e0ba9b1d02132d177ce745573868a65",
-    "README.md": "1d34a954068fef78a4b98b76f4941d3aa4e51f4c1925c1b549cbc0e81c7c7548",
+    "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
+    "package.json": "8aa8e3b803eba41fab0c400342403a36baa7c2e103dd9990d9c8c613a939d3c0",
+    "README.md": "e737ddcb2a12939f50271574bf9029b2e70525e2e59905f704444339b8becf1b",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
     "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
@@ -1112,7 +1089,7 @@ executable: false
     "source/cli.ts": "04c189205b0b59e57cf22a5f9e2a68c5e701c9a7c0db9c9981db22c5ef1b9d03",
     "test/cli.test.ts": "5d9ffab7e8ec1f65e49e3f532f552e9e154e4ae85ad414886a2cf68b85ba3bbf",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "29360d2e2f4c9fc57a87481ac54a514fbb7424d84f9cfa1218a64edb24499213",
+    ".github/workflows/ci.yml": "8ad87221f473fba975e7864620d3c9300ee1b49275120ea9b2a84adb869af0d6",
     ".github/workflows/release.yml": "fa6cd16483808198cad7444d9459b52d599ac5034b95d071a710b955069ce7ac"
   },
   "generator": "@hbmartin/create-ts-lib",

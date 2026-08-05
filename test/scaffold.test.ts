@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from "typescript";
+import { type ParseError, parse as parseJsoncText, printParseErrorCode } from "jsonc-parser";
 import { describe, expect, it } from "vitest";
 
 import generatorPackageJson from "../package.json" with { type: "json" };
@@ -22,7 +22,6 @@ import {
   renderTemplate,
   type ScaffoldConfig,
   type ScaffoldConfigOverrides,
-  tsgoProbeCommand,
 } from "../source/templates/files.js";
 import {
   generatedPackageDependencies,
@@ -140,6 +139,15 @@ interface GeneratedBiomeConfig {
   };
 }
 
+interface GeneratedFallowConfig {
+  entry: string[];
+  rules: Record<string, string>;
+  boundaries: {
+    zones: { name: string; patterns: string[] }[];
+    rules: { from: string; allow: string[] }[];
+  };
+}
+
 describe("renderTemplate", () => {
   it("throws when a standalone template placeholder remains unresolved", () => {
     let error: unknown;
@@ -210,12 +218,9 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain("pnpm run publint");
     expect(ciWorkflow?.content).toContain("pnpm run check");
     expect(ciWorkflow?.content).toContain("if: matrix.node-version == '24'");
-    expect(ciWorkflowContent).toContain("name: TypeScript 7 compatibility probe");
-    expect(ciWorkflowContent).toContain(tsgoProbeCommand);
+    expect(ciWorkflowContent).not.toContain("TypeScript 7 compatibility probe");
+    expect(ciWorkflowContent).not.toContain("tsgo");
     expect(ciWorkflowContent.indexOf("pnpm run check")).toBeLessThan(
-      ciWorkflowContent.indexOf(tsgoProbeCommand),
-    );
-    expect(ciWorkflowContent.indexOf(tsgoProbeCommand)).toBeLessThan(
       ciWorkflowContent.indexOf("pnpm run build"),
     );
     expect(ciWorkflow?.content).not.toContain("python3 -m pip");
@@ -336,10 +341,7 @@ describe("buildProjectFiles", () => {
       }),
       "package.json",
     );
-    const expectedNodeTypesVersion = readGeneratorSpecifier(
-      generatorDevDependencies,
-      "@types/node",
-    );
+    const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
 
     expect(generatorDevDependencies).not.toHaveProperty("meow");
     expect(generatedPackageDependencies).toMatchObject({
@@ -359,7 +361,7 @@ describe("buildProjectFiles", () => {
       "@arethetypeswrong/cli",
       "@sindresorhus/tsconfig",
       "@vitest/coverage-v8",
-      "dependency-cruiser",
+      "fallow",
       "lefthook",
       "oxfmt",
       "oxlint",
@@ -375,6 +377,9 @@ describe("buildProjectFiles", () => {
     expect(biomePackageJson.devDependencies["@biomejs/biome"]).toBe(
       readGeneratorSpecifier(generatorDevDependencies, "@biomejs/biome"),
     );
+    // Generated projects target Node 22/24, so their type definitions stay on
+    // the 24.x line independently of the generator's own @types/node major.
+    expect(expectedNodeTypesVersion).toMatch(/^\^24\./);
     expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
     expect(packageJson.pnpm?.overrides["@types/node"]).toBe(expectedNodeTypesVersion);
   });
@@ -389,10 +394,7 @@ describe("buildProjectFiles", () => {
         }),
         "package.json",
       );
-      const expectedNodeTypesVersion = readGeneratorSpecifier(
-        generatorDevDependencies,
-        "@types/node",
-      );
+      const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
 
       expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
 
@@ -420,7 +422,7 @@ describe("buildProjectFiles", () => {
     const files = buildProjectFiles(baseConfig);
     const filePaths = files.map((file) => file.path);
     const agents = findGeneratedFile(files, "AGENTS.md");
-    const dependencyCruiser = findGeneratedFile(files, ".dependency-cruiser.cjs");
+    const fallowConfig = parseGeneratedJsonc(files, ".fallowrc.jsonc") as GeneratedFallowConfig;
     const oxfmtConfig = parseGeneratedJson<GeneratedOxfmtConfig>(files, ".oxfmtrc.json");
     const oxlintConfig = parseGeneratedJson<GeneratedOxlintConfig>(files, ".oxlintrc.json");
     const packageJson = parseGeneratedJson<GeneratedPackageJson>(files, "package.json");
@@ -429,7 +431,7 @@ describe("buildProjectFiles", () => {
     const vitestConfig = findGeneratedFile(files, "vitest.config.ts");
 
     expect(filePaths).toContain("AGENTS.md");
-    expect(filePaths).toContain(".dependency-cruiser.cjs");
+    expect(filePaths).toContain(".fallowrc.jsonc");
     expect(filePaths).toContain("lefthook.yml");
     expect(filePaths).toContain(".oxfmtrc.json");
     expect(filePaths).toContain(".oxlintrc.json");
@@ -439,7 +441,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.devDependencies).toMatchObject({
       "@arethetypeswrong/cli": expect.any(String),
       "@vitest/coverage-v8": expect.any(String),
-      "dependency-cruiser": expect.any(String),
+      fallow: expect.any(String),
       lefthook: expect.any(String),
       oxfmt: expect.any(String),
       oxlint: expect.any(String),
@@ -464,9 +466,7 @@ describe("buildProjectFiles", () => {
     expect(packageJson.scripts.check).toBe(
       "pnpm run lint && pnpm run typecheck && pnpm run deps:lint && pnpm run security:lint && pnpm run test:coverage",
     );
-    expect(packageJson.scripts["deps:lint"]).toBe(
-      "depcruise --config .dependency-cruiser.cjs source test",
-    );
+    expect(packageJson.scripts["deps:lint"]).toBe("fallow dead-code");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run check");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run verify:artifacts");
     expect(packageJson.scripts.prepublishOnly).toContain("pnpm run types:lint");
@@ -497,8 +497,29 @@ describe("buildProjectFiles", () => {
     expect(agents.content).not.toContain("Use Zod");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
     expect(agents.content).toContain(`uvx semgrep@${semgrepVersion}`);
-    expect(dependencyCruiser.content).toContain("source-not-to-test");
-    expect(dependencyCruiser.content).toContain("source-not-to-dev-dependencies");
+    // The architecture gate that replaced dependency-cruiser: `source/` may not
+    // reach into `test/`, and the cycle/dependency rules stay hard errors.
+    expect(fallowConfig.rules["boundary-violation"]).toBe("error");
+    expect(fallowConfig.rules["circular-dependencies"]).toBe("error");
+    expect(fallowConfig.rules["dev-dependencies-in-production"]).toBe("error");
+    expect(fallowConfig.rules["unlisted-dependencies"]).toBe("error");
+    expect(fallowConfig.rules["unresolved-imports"]).toBe("error");
+    expect(fallowConfig.boundaries.rules).toEqual([
+      { from: "source", allow: [] },
+      { from: "test", allow: ["source"] },
+    ]);
+    // Entry points must be declared. The package entry resolves into the ignored
+    // `dist/`, so without these the source tree is unreachable and every
+    // boundary rule above passes vacuously.
+    expect(fallowConfig.entry).toEqual(["source/index.ts"]);
+    expect(
+      (
+        parseGeneratedJsonc(
+          buildProjectFiles({ ...baseConfig, includeCli: true }),
+          ".fallowrc.jsonc",
+        ) as GeneratedFallowConfig
+      ).entry,
+    ).toEqual(["source/index.ts", "source/cli.ts"]);
     expect(oxfmtConfig.ignorePatterns).toEqual([
       "*.json",
       "**/*.json",
@@ -760,6 +781,7 @@ describe("buildProjectFiles", () => {
     expect(() => parseGeneratedJson(files, "tsconfig.json")).not.toThrow();
     expect(() => parseGeneratedJson(files, "tsconfig.build.json")).not.toThrow();
     expect(() => parseGeneratedJsonc(biomeFiles, "biome.jsonc")).not.toThrow();
+    expect(() => parseGeneratedJsonc(files, ".fallowrc.jsonc")).not.toThrow();
   });
 
   it("emits tsdown build tooling when selected", () => {
@@ -1120,13 +1142,18 @@ const parseGeneratedJsonc = (files: ReturnType<typeof buildProjectFiles>, path: 
   parseJsonc(path, findGeneratedFile(files, path).content);
 
 const parseJsonc = (path: string, content: string): unknown => {
-  const parseResult = parseConfigFileTextToJson(path, content);
+  const errors: ParseError[] = [];
+  const parsed: unknown = parseJsoncText(content, errors, { allowTrailingComma: true });
 
-  if (parseResult.error) {
-    throw new Error(flattenDiagnosticMessageText(parseResult.error.messageText, "\n"));
+  if (errors.length > 0) {
+    const details = errors
+      .map((error) => `${printParseErrorCode(error.error)} at offset ${error.offset}`)
+      .join("\n");
+
+    throw new Error(`Failed to parse ${path} as JSONC:\n${details}`);
   }
 
-  return parseResult.config;
+  return parsed;
 };
 
 const expectNoReleasePleaseOrCommitlintArtifacts = (files: GeneratedFile[]): void => {

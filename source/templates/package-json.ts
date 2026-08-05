@@ -90,7 +90,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
     scripts: {
       build: bundlerScripts.build,
       check: `${pmConfig.runPrefix} lint && ${pmConfig.runPrefix} typecheck && ${pmConfig.runPrefix} deps:lint && ${pmConfig.runPrefix} security:lint && ${pmConfig.runPrefix} test:coverage`,
-      "deps:lint": "depcruise --config .dependency-cruiser.cjs source test",
+      "deps:lint": "fallow dead-code",
       dev: bundlerScripts.dev,
       format: lintFormatScripts.format,
       lint: lintFormatScripts.lint,
@@ -118,7 +118,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       "@sindresorhus/tsconfig": generatedPackageDevDependencies["@sindresorhus/tsconfig"],
       "@types/node": generatedPackageDevDependencies["@types/node"],
       "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
-      "dependency-cruiser": generatedPackageDevDependencies["dependency-cruiser"],
+      fallow: generatedPackageDevDependencies.fallow,
       ...(config.includeJsr ? { jsr: generatedPackageDevDependencies.jsr } : {}),
       lefthook: generatedPackageDevDependencies.lefthook,
       ...buildLintFormatDevDependencies(config.lintFormatTooling),

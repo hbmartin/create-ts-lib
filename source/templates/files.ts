@@ -22,7 +22,6 @@ import {
   buildScorecardWorkflow,
 } from "./workflows.js";
 
-export { tsgoProbeCommand } from "./generated-versions.js";
 export { renderTemplate } from "./render.js";
 export {
   type Bundler,
@@ -64,8 +63,12 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       path: "AGENTS.md",
     },
     {
-      content: renderTemplate("dependency-cruiser.cjs.tmpl"),
-      path: ".dependency-cruiser.cjs",
+      content: renderTemplate("fallowrc.jsonc.tmpl", {
+        ENTRY_POINTS: config.includeCli
+          ? '"source/index.ts", "source/cli.ts"'
+          : '"source/index.ts"',
+      }),
+      path: ".fallowrc.jsonc",
     },
     {
       content: renderTemplate("lefthook.yml.tmpl", {

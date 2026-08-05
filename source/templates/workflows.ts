@@ -1,4 +1,4 @@
-import { githubActionRefs, pnpmVersion, tsgoProbeCommand } from "./generated-versions.js";
+import { githubActionRefs, pnpmVersion } from "./generated-versions.js";
 import { renderTemplate } from "./render.js";
 import type { ScaffoldConfig } from "./scaffold-config.js";
 
@@ -27,7 +27,6 @@ export const buildCiWorkflow = (config: ScaffoldConfig): string => {
           version: ${pnpmVersion}`,
     PUBLINT_COMMAND: "pnpm run publint",
     RUN_PREFIX: "pnpm run",
-    TSGO_PROBE_COMMAND: tsgoProbeCommand,
   });
 };
 

@@ -17,7 +17,7 @@ Useful checks:
 ```bash
 pnpm run lint        # Biome + oxlint + oxfmt --check
 pnpm run typecheck   # tsc --noEmit
-pnpm run deps:lint   # dependency-cruiser architecture rules
+pnpm run deps:lint   # fallow architecture and dependency rules
 pnpm run security:lint
 pnpm test            # vitest run
 pnpm build           # tsc + copy template assets into dist/

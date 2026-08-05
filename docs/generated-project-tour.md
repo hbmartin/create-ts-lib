@@ -16,7 +16,7 @@ flow (or their matching CLI flags).
 | `test/cli.test.ts` _(optional)_ | CLI coverage with a mocked `meow` so the CLI stays tested.                                              |
 
 The layout convention is enforced: implementation code lives in `source/`,
-tests live in `test/`, and dependency-cruiser fails the build if `source/`
+tests live in `test/`, and fallow fails the build if `source/`
 ever imports from `test/`.
 
 ## Build
@@ -47,7 +47,7 @@ artifacts (`dist/index.js`, `dist/index.d.ts`) are the same either way, so
 
 | Path                        | Purpose                                                                                                                                                                                               |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.dependency-cruiser.cjs`   | Architecture rules: no circular deps, no unresolvable imports, no `source/` → `test/` imports, no dev-dependency imports from `source/`.                                                              |
+| `.fallowrc.jsonc`           | Architecture rules: no circular deps, no unresolvable imports, no undeclared packages, no `source/` → `test/` imports, no dev-dependency imports from `source/`.                                      |
 | `semgrep.yml`               | Security rules: no `eval`-like execution, no `child_process` `exec`/`execSync`, no `shell: true`, no transient JSR CLI execution, no weak crypto hashes, no `Math.random` in security-sensitive code. |
 | `scripts/security-lint.mjs` | Wrapper that prefers `semgrep` on PATH and falls back to a pinned `uvx semgrep` run.                                                                                                                  |
 
