@@ -16,6 +16,22 @@ export interface NextStepsOptions {
   skipInstall: boolean;
 }
 
+/**
+ * Renders an answer that workspace mode makes inert, without discarding it.
+ *
+ * These three are gated behind files the workspace root owns -- Codecov and the
+ * security workflows only ever edit or accompany `.github/workflows/**`, and the
+ * community-health files are suppressed outright -- so reporting a plain "yes"
+ * for a workspace package claims something the scaffold did not do. The answer
+ * is still recorded in the state file and still applies if the package is later
+ * lifted out, so it is qualified rather than hidden.
+ */
+const formatRootOwnedAnswer = (config: ScaffoldConfig, answer: boolean): string => {
+  const value = answer ? "yes" : "no";
+
+  return config.workspaceMode ? `${value} (root-owned)` : value;
+};
+
 export const printSummary = (
   config: ScaffoldConfig,
   targetDirectory: string,
@@ -33,9 +49,9 @@ export const printSummary = (
     ["Node target", `${config.nodeTarget}+`],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
-    ["Codecov", config.includeCodecov ? "yes" : "no"],
-    ["Security workflows", config.includeSecurityWorkflows ? "yes" : "no"],
-    ["Community files", config.includeCommunityFiles ? "yes" : "no"],
+    ["Codecov", formatRootOwnedAnswer(config, config.includeCodecov)],
+    ["Security workflows", formatRootOwnedAnswer(config, config.includeSecurityWorkflows)],
+    ["Community files", formatRootOwnedAnswer(config, config.includeCommunityFiles)],
     ["Workspace package", config.workspaceMode ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
     ["Zod", config.includeZod ? "yes" : "no"],
@@ -137,7 +153,10 @@ workspace globs match this package, then install from the workspace root:
 };
 
 const buildCodecovSetupStep = (config: ScaffoldConfig): string => {
-  if (!config.includeCodecov || config.packageManager !== "pnpm") {
+  // The upload step lives in the generated CI workflow, which workspace mode
+  // does not emit -- so there is nothing here for Codecov to receive, and the
+  // URL would point at the parent repository the scaffold does not own.
+  if (config.workspaceMode || !config.includeCodecov || config.packageManager !== "pnpm") {
     return "";
   }
 

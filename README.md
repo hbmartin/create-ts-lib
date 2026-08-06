@@ -429,6 +429,13 @@ No GitHub repository is created either. The repo URL prompt defaults to the
 detected workspace remote rather than to a personal repo named after the
 package, since that is not where `packages/<name>` lives.
 
+Because Codecov, the security workflows, and the community-health files all
+depend on files the root owns, answering `yes` to any of them changes nothing
+about a workspace package. The scaffold summary marks them `yes (root-owned)`
+rather than claiming they were applied, and the Codecov setup URL is not printed.
+The answers are still recorded in `.create-ts-lib.json`, so they take effect
+again if the package is ever moved out of the workspace.
+
 **Workspace mode never writes outside the target directory.** Registering the
 package in the parent workspace globs is left to you, and the printed next steps
 say so. Pass `--workspace` or `--no-workspace` to skip the prompt; under `--yes`
@@ -445,7 +452,7 @@ Before creating a GitHub repo or writing files, the generator rejects non-empty 
 4. `<package-manager> run build`
 5. `<package-manager> run test`
 
-`--skip-git` skips step 1–2 and `--skip-install` skips steps 3–5; the printed next steps then include the commands you skipped. Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively or passed with `--repo-url` (and `--skip-git` is not set), the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. When Codecov is enabled for a pnpm project with a GitHub repo URL, the final next steps also include the Codecov setup URL for that repository. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
+`--skip-git` skips step 1–2 and `--skip-install` skips steps 3–5; the printed next steps then include the commands you skipped. Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively or passed with `--repo-url` (and `--skip-git` is not set), the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. When Codecov is enabled for a pnpm project with a GitHub repo URL, the final next steps also include the Codecov setup URL for that repository — except in workspace mode, where the upload step lives in a CI workflow the package does not generate. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
 
 ## Updating a Generated Project
 
