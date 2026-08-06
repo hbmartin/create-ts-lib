@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { buildProjectFiles, type ScaffoldConfig } from "../source/templates/files.js";
 import { semgrepVersion } from "../source/templates/generated-versions.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const securityLintScript = join(repositoryRoot, "scripts/security-lint.mjs");
@@ -128,75 +128,67 @@ const runSecurityLint = async (
   status: number | null;
   stdout: string;
 }> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-security-lint-"));
-  try {
-    const binDirectory = join(tempDirectory, "bin");
-    const commandLogPath = join(tempDirectory, "command-log.txt");
-    await mkdir(binDirectory);
+  const tempDirectory = await createTempDirectory("create-ts-lib-security-lint-");
+  const binDirectory = join(tempDirectory, "bin");
+  const commandLogPath = join(tempDirectory, "command-log.txt");
+  await mkdir(binDirectory);
 
-    for (const command of commands) {
-      await createFakeCommand(binDirectory, command);
-    }
-
-    const result = spawnSync(process.execPath, [securityLintScript], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        COMMAND_LOG: commandLogPath,
-        PATH: binDirectory,
-        SECURITY_LINT_FORCE_UVX: "",
-        ...env,
-      },
-    });
-    const commandLogContent = await readFile(commandLogPath, "utf8").catch(() => "");
-
-    return {
-      commandLog: commandLogContent.split(/\r?\n/u).filter((line) => line.length > 0),
-      stderr: result.stderr,
-      status: result.status,
-      stdout: result.stdout,
-    };
-  } finally {
-    await rm(tempDirectory, { recursive: true, force: true });
+  for (const command of commands) {
+    await createFakeCommand(binDirectory, command);
   }
+
+  const result = spawnSync(process.execPath, [securityLintScript], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      COMMAND_LOG: commandLogPath,
+      PATH: binDirectory,
+      SECURITY_LINT_FORCE_UVX: "",
+      ...env,
+    },
+  });
+  const commandLogContent = await readFile(commandLogPath, "utf8").catch(() => "");
+
+  return {
+    commandLog: commandLogContent.split(/\r?\n/u).filter((line) => line.length > 0),
+    stderr: result.stderr,
+    status: result.status,
+    stdout: result.stdout,
+  };
 };
 
 const runSemgrepScan = async (
   configContent: string,
   fixtures: Record<string, string>,
 ): Promise<SemgrepScanOutput> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-semgrep-"));
-  try {
-    const sourceDirectory = join(tempDirectory, "source");
-    const testDirectory = join(tempDirectory, "test");
-    await mkdir(sourceDirectory);
-    await mkdir(testDirectory);
-    await writeFile(join(tempDirectory, "semgrep.yml"), configContent, "utf8");
+  const tempDirectory = await createTempDirectory("create-ts-lib-semgrep-");
+  const sourceDirectory = join(tempDirectory, "source");
+  const testDirectory = join(tempDirectory, "test");
+  await mkdir(sourceDirectory);
+  await mkdir(testDirectory);
+  await writeFile(join(tempDirectory, "semgrep.yml"), configContent, "utf8");
 
-    for (const [fileName, content] of Object.entries(fixtures)) {
-      await writeFile(join(sourceDirectory, fileName), content.trimStart(), "utf8");
-    }
-
-    if (semgrepRunner === undefined) {
-      throw new Error("No Semgrep runner available; this test should have been skipped.");
-    }
-
-    const result = spawnSync(
-      semgrepRunner.command,
-      [...semgrepRunner.leadingArguments, ...semgrepScanArguments],
-      { cwd: tempDirectory, encoding: "utf8" },
-    );
-
-    if (result.error) {
-      throw result.error;
-    }
-
-    expect(result.status, result.stderr).toBe(0);
-    return JSON.parse(result.stdout) as SemgrepScanOutput;
-  } finally {
-    await rm(tempDirectory, { recursive: true, force: true });
+  for (const [fileName, content] of Object.entries(fixtures)) {
+    await writeFile(join(sourceDirectory, fileName), content.trimStart(), "utf8");
   }
+
+  if (semgrepRunner === undefined) {
+    throw new Error("No Semgrep runner available; this test should have been skipped.");
+  }
+
+  const result = spawnSync(
+    semgrepRunner.command,
+    [...semgrepRunner.leadingArguments, ...semgrepScanArguments],
+    { cwd: tempDirectory, encoding: "utf8" },
+  );
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  expect(result.status, result.stderr).toBe(0);
+  return JSON.parse(result.stdout) as SemgrepScanOutput;
 };
 
 describe("security-lint wrapper", () => {

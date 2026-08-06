@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { buildProjectFiles, type ScaffoldConfig } from "../source/templates/files.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 // A gate that reports success while analysing nothing is worse than no gate at
 // all, and this project has shipped that bug twice: dependency-cruiser cruised
@@ -79,37 +79,33 @@ const cleanTestSupport = 'export const support = "support";\n';
 const runGate = async (
   overrides: Record<string, string> = {},
 ): Promise<{ output: string; status: number | null }> => {
-  const fixtureDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-gate-"));
+  const fixtureDirectory = await createTempDirectory("create-ts-lib-gate-");
 
-  try {
-    const files: Record<string, string> = {
-      ".fallowrc.jsonc": readGeneratedFallowConfig(),
-      "package.json": fixturePackageJson,
-      "source/index.ts": cleanSourceIndex,
-      "source/helper.ts": cleanSourceHelper,
-      "test/support.ts": cleanTestSupport,
-      ...overrides,
-    };
+  const files: Record<string, string> = {
+    ".fallowrc.jsonc": readGeneratedFallowConfig(),
+    "package.json": fixturePackageJson,
+    "source/index.ts": cleanSourceIndex,
+    "source/helper.ts": cleanSourceHelper,
+    "test/support.ts": cleanTestSupport,
+    ...overrides,
+  };
 
-    for (const [relativePath, content] of Object.entries(files)) {
-      const target = join(fixtureDirectory, relativePath);
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, content, "utf8");
-    }
-
-    const result = spawnSync(process.execPath, [fallowBin, "dead-code"], {
-      cwd: fixtureDirectory,
-      encoding: "utf8",
-    });
-
-    if (result.error) {
-      throw result.error;
-    }
-
-    return { output: `${result.stdout}${result.stderr}`, status: result.status };
-  } finally {
-    await rm(fixtureDirectory, { recursive: true, force: true });
+  for (const [relativePath, content] of Object.entries(files)) {
+    const target = join(fixtureDirectory, relativePath);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, content, "utf8");
   }
+
+  const result = spawnSync(process.execPath, [fallowBin, "dead-code"], {
+    cwd: fixtureDirectory,
+    encoding: "utf8",
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return { output: `${result.stdout}${result.stderr}`, status: result.status };
 };
 
 describe("generated architecture gate", () => {
