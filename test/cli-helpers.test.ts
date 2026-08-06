@@ -181,6 +181,20 @@ describe("parseCliArguments", () => {
     });
   });
 
+  // `--help` and `--version` are handled before any command runs, so asking for
+  // help must not first demand the action that help exists to explain.
+  it.each([
+    [["config", "--help"], "help"],
+    [["config", "-h"], "help"],
+    [["config", "--version"], "version"],
+  ] as const)("parses %j without requiring a config action", (args, flag) => {
+    const parsed = parseCliArguments([...args]);
+
+    expect(parsed.command).toBe("config");
+    expect(parsed[flag]).toBe(true);
+    expect(parsed.configAction).toBeUndefined();
+  });
+
   it("accepts --config for both scaffold and config commands", () => {
     expect(parseCliArguments(["my-lib", "--config", "/tmp/c.json"])).toMatchObject({
       command: "scaffold",
@@ -200,6 +214,9 @@ describe("parseCliArguments", () => {
     [["config", "unset"], "config unset requires a key"],
     [["config", "path", "license"], "Unexpected extra argument: license"],
     [["config", "set", "license", "MIT", "extra"], "Unexpected extra argument: extra"],
+    // Only `set` takes a value; these used to parse and drop it silently.
+    [["config", "get", "license", "junk"], "Unexpected extra argument: junk"],
+    [["config", "unset", "license", "junk"], "Unexpected extra argument: junk"],
   ])("rejects malformed config arguments %j", (args, expectedError) => {
     expect(() => parseCliArguments(args)).toThrow(expectedError);
   });

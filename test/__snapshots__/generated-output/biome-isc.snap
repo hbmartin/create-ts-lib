@@ -9,6 +9,7 @@ coverage
 *.log
 *.tsbuildinfo
 *.orig
+*.orig.*
 *.tgz
 .env
 .env.*
@@ -1074,7 +1075,7 @@ executable: false
     "workspaceMode": false
   },
   "files": {
-    ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
+    ".gitignore": "6fdd1a84dd27b2073507437c5af7ca7f2d0f6709640ace5fd2bde35af48565bc",
     "biome.jsonc": "ea517684bef315669884757f883a8296e958cc764eaece1d57e37623e103b1c7",
     ".vscode/extensions.json": "40af2f96f539e1173868ac6a11bf9984c4c5b4edaefbd7d6e1484df25198d376",
     ".vscode/settings.json": "7f49c0f31b67567382a2b8cb992e3802093493bcd3a68c1c28361a7eb38f51eb",

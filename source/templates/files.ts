@@ -13,7 +13,7 @@ import {
   packageManagerConfig,
   type ScaffoldConfig,
 } from "./scaffold-config.js";
-import { buildStateFile } from "./state.js";
+import { assertValidScaffoldConfig, buildStateFile } from "./state.js";
 import { buildVsCodeFiles } from "./vscode.js";
 import {
   buildCiWorkflow,
@@ -52,6 +52,7 @@ const rootOwnedFiles = (config: ScaffoldConfig, build: () => GeneratedFile[]): G
   config.workspaceMode ? [] : build();
 
 export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
+  assertValidScaffoldConfig(config);
   const pmConfig = packageManagerConfig[config.packageManager];
   const files: GeneratedFile[] = [
     ...rootOwnedFiles(config, () => [

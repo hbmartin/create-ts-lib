@@ -156,7 +156,7 @@ npx @hbmartin/create-ts-lib my-lib --force
 
 ```text
 create-ts-lib [directory] [options]
-create-ts-lib update [directory] [--dry-run] [--force] [--yes]
+create-ts-lib update [directory] [--dry-run] [--force] [--yes] [--no-backup]
 create-ts-lib config path
 create-ts-lib config get [key]
 create-ts-lib config set <key> <value>
@@ -184,6 +184,9 @@ create-ts-lib config unset <key>
 | `--[no-]security-workflows` | Include or omit CodeQL and Scorecard workflows        |
 | `--[no-]community-files`    | Include or omit CONTRIBUTING/CODE_OF_CONDUCT/SECURITY |
 | `--[no-]workspace`          | Scaffold as a package inside an existing workspace    |
+| `--no-backup`               | Skip `<file>.orig` backups when `update` overwrites edits |
+| `--save-defaults`           | Save this run's reusable answers as personal defaults |
+| `--config <path>`           | Read and write personal defaults at this path         |
 | `--skip-git`                | Skip git init and git remote setup                    |
 | `--skip-install`            | Skip dependency install, build, and test              |
 | `--help`, `-h`              | Print usage and exit                                  |
@@ -396,10 +399,19 @@ In workspace mode the generator omits the files a repository root already owns:
 | `.vscode/*`           | lint/format config, `source/`, `test/`     |
 | `lefthook.yml`        | `README.md`, `LICENSE`, `AGENTS.md`        |
 | `pnpm-workspace.yaml` | `.create-ts-lib.json`                      |
+| `CODE_OF_CONDUCT.md`  |                                            |
+| `CONTRIBUTING.md`     |                                            |
+| `SECURITY.md`         |                                            |
+
+The community-health files are omitted even with `--community-files`: GitHub only
+surfaces them at the repository root, so a copy inside `packages/<name>/` is a
+file nothing reads.
 
 The generated `package.json` also drops `packageManager`, the `prepare` hook,
 and the `lefthook` devDependency, since the root pins all three. Git setup is
-skipped entirely — the workspace repository owns it.
+skipped entirely — the workspace repository owns it, so the printed next steps
+leave out the `git push` instructions even when a repository URL is configured.
+That URL still lands in `package.json`: it is the parent repository's.
 
 **Workspace mode never writes outside the target directory.** Registering the
 package in the parent workspace globs is left to you, and the printed next steps
@@ -461,9 +473,11 @@ Interactively, `update` prints the plan and then offers three choices:
 
 When `--force` overwrites a file you modified, your previous contents are kept
 alongside it as `<file>.orig` before the new template is written, and the paths
-are printed. Generated `.gitignore` files ignore `*.orig`. Files that were never
-modified are not backed up — there is nothing to lose. Pass `--no-backup` to opt
-out.
+are printed. An existing backup is never overwritten: a taken name moves the new
+backup to `<file>.orig.1`, `<file>.orig.2`, and so on, which is why the printed
+paths are worth reading rather than assuming. Generated `.gitignore` files ignore
+`*.orig`. Files that were never modified are not backed up — there is nothing to
+lose. Pass `--no-backup` to opt out.
 
 ## Next Steps After Scaffolding
 

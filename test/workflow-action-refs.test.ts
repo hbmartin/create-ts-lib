@@ -9,10 +9,17 @@ import { githubActionRefs } from "../source/templates/generated-versions.js";
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowsDirectory = join(repositoryRoot, ".github", "workflows");
 
-// Matches a SHA-pinned action reference plus its trailing version comment, e.g.
-// `uses: actions/checkout@df4cb1c... # v6.0.3`.
+// Matches every `uses:` reference and whatever follows it on the line, pinned or
+// not. Collecting only SHA-pinned entries would make an unpinned
+// `uses: actions/checkout@v6` invisible to both tests below -- the exact
+// regression the pinning is meant to prevent.
 const whitespaceRunPattern = /\s+/gu;
-const pinnedActionReferencePattern = /uses:\s*(?<reference>[^\s@]+@[0-9a-f]{40}\s*#\s*v[^\s]+)/gu;
+const actionReferencePattern = /uses:\s*(?<reference>\S+[^\n]*)/gu;
+// `owner/repo[/path]@<40-hex> # vX.Y.Z`, the only shape allowed here.
+const pinnedActionReferencePattern = /^[^\s@]+@[0-9a-f]{40} # v\S+$/u;
+// `./.github/workflows/x.yml` is this repository's own file, not a third-party
+// action, so there is no SHA to pin it to.
+const localWorkflowReferencePattern = /^\.{1,2}\//u;
 
 const readWorkflowActionReferences = async (): Promise<Map<string, string[]>> => {
   const entries = await readdir(workflowsDirectory, { withFileTypes: true });
@@ -23,11 +30,15 @@ const readWorkflowActionReferences = async (): Promise<Map<string, string[]>> =>
 
   for (const workflowFile of workflowFiles) {
     const content = await readFile(join(workflowsDirectory, workflowFile), "utf8");
-    const references = Array.from(content.matchAll(pinnedActionReferencePattern)).map((match) => {
-      const { reference } = match.groups ?? {};
+    const references = Array.from(content.matchAll(actionReferencePattern))
+      .map((match) => {
+        // Destructured rather than indexed so both the lint rule preferring dot
+        // access and the compiler rule forbidding it on index signatures agree.
+        const { reference } = match.groups ?? {};
 
-      return reference?.replace(whitespaceRunPattern, " ").trim() ?? "";
-    });
+        return (reference ?? "").replace(whitespaceRunPattern, " ").trim();
+      })
+      .filter((reference) => !localWorkflowReferencePattern.test(reference));
 
     referencesByFile.set(workflowFile, references);
   }
@@ -36,13 +47,27 @@ const readWorkflowActionReferences = async (): Promise<Map<string, string[]>> =>
 };
 
 describe("github action pins", () => {
-  it("finds SHA-pinned action references to check", async () => {
+  it("finds action references to check", async () => {
     const referencesByFile = await readWorkflowActionReferences();
     const totalReferences = Array.from(referencesByFile.values()).flat().length;
 
     // Guards the regex itself: a pattern that silently stops matching would
     // make every assertion below vacuously true.
     expect(totalReferences).toBeGreaterThan(0);
+  });
+
+  it("pins every external action to a full-length SHA", async () => {
+    const referencesByFile = await readWorkflowActionReferences();
+    const unpinned = Array.from(referencesByFile).flatMap(([workflowFile, references]) =>
+      references
+        .filter((reference) => !pinnedActionReferencePattern.test(reference))
+        .map((reference) => `${workflowFile}: ${reference}`),
+    );
+
+    // A tag or branch ref is mutable, so the action's code can change under CI
+    // without any change landing here. Pin to the commit and record the version
+    // in the trailing comment so Renovate can still bump it.
+    expect(unpinned).toEqual([]);
   });
 
   it("mirrors every workflow action pin in githubActionRefs", async () => {

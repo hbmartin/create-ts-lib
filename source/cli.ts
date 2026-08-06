@@ -235,9 +235,6 @@ const runScaffoldWorkflow = async (
       });
   const { config, githubRepositoryCreation } = configResult;
   assertValidPackageName(config.projectName);
-  if (cliArguments.saveDefaults) {
-    await saveDefaultsFromConfig(config, userConfig, userConfigPath);
-  }
   if (cliArguments.yes) {
     await warnForNpmPackageNameAvailability(config.projectName, warn);
   }
@@ -248,6 +245,19 @@ const runScaffoldWorkflow = async (
 
   if (!cliArguments.dryRun) {
     await assertTargetDirectoryIsSafe(targetDirectory, cliArguments.force);
+  }
+
+  // After the safety check, so a scaffold that refuses to run does not leave
+  // personal defaults behind, and never during a dry run: --dry-run promises no
+  // writes, including the ones outside the target directory.
+  if (cliArguments.saveDefaults) {
+    if (cliArguments.dryRun) {
+      process.stdout.write(
+        `${cyan("info")} Dry run: personal defaults were not saved to ${userConfigPath}.\n\n`,
+      );
+    } else {
+      await saveDefaultsFromConfig(config, userConfig, userConfigPath);
+    }
   }
 
   printSummary(config, targetDirectory, cliArguments.dryRun, githubRepositoryCreation);

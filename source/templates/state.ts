@@ -53,6 +53,27 @@ export const scaffoldStateSchema = z.object({
 
 export type ScaffoldState = z.infer<typeof scaffoldStateSchema>;
 
+/**
+ * Guards the public entry points, which JavaScript callers can reach with any
+ * object at all. Without this a bad `packageManager` surfaces as a TypeError
+ * from a lookup table several frames later instead of a message naming the
+ * field. Deliberately asserts rather than returning `result.data`: substituting
+ * the parsed object would reorder the caller's keys in the state file and
+ * silently repair configs instead of reporting them.
+ */
+export const assertValidScaffoldConfig = (config: ScaffoldConfig): void => {
+  const result = scaffoldConfigSchema.safeParse(config);
+  if (result.success) {
+    return;
+  }
+
+  throw new Error(
+    `Invalid scaffold config: ${result.error.issues
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .join("; ")}`,
+  );
+};
+
 export const hashFileContent = (content: string): string =>
   createHash("sha256").update(content, "utf8").digest("hex");
 

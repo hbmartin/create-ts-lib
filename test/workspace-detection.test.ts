@@ -56,6 +56,42 @@ describe("detectWorkspaceRoot", () => {
     expect(detected?.directory).toBe(await realpath(repositoryRoot));
   });
 
+  // Every one of these is a valid pnpm-workspace.yaml. Missing any of them
+  // means a real monorepo is never offered workspace mode.
+  it.each([
+    ["flow sequence", 'packages: ["packages/*"]\n'],
+    ["single-quoted flow sequence", "packages: ['packages/*', 'apps/*']\n"],
+    ["blank line before the sequence", 'packages:\n\n  - "packages/*"\n'],
+    ["comment before the sequence", 'packages:\n  # our packages\n  - "packages/*"\n'],
+    ["comment between entries", 'packages:\n  - "apps/*"\n  # and the rest\n  - "packages/*"\n'],
+    ["trailing comment on an entry", 'packages:\n  - "packages/*" # everything\n'],
+  ])("finds a pnpm workspace declared as a %s", async (_name, pnpmWorkspace) => {
+    const { packagesDirectory } = await createFixture({ pnpmWorkspace });
+
+    const detected = await detectWorkspaceRoot(packagesDirectory);
+
+    expect(detected?.manifest).toBe("pnpm-workspace.yaml");
+  });
+
+  it.each([
+    ["flow sequence", 'packages: ["."]\n'],
+    ["comment before the sequence", 'packages:\n  # just this one\n  - "."\n'],
+  ])("still ignores the single-package idiom declared as a %s", async (_name, pnpmWorkspace) => {
+    const { packagesDirectory } = await createFixture({ pnpmWorkspace });
+
+    await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
+  });
+
+  it("stops at the next top-level key", async () => {
+    // `onlyBuiltDependencies` is a sequence too; absorbing it would turn a
+    // single-package project into a false workspace.
+    const { packagesDirectory } = await createFixture({
+      pnpmWorkspace: 'packages:\n  - "."\n\nonlyBuiltDependencies:\n  - esbuild\n',
+    });
+
+    await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
+  });
+
   it("finds a package.json workspaces array", async () => {
     const { packagesDirectory } = await createFixture({
       packageJson: { name: "root", workspaces: ["packages/*"] },

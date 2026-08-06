@@ -31,9 +31,15 @@ ${normalizedUrl}/security/advisories/new`;
  * The three community-health files OpenSSF Scorecard grades. Emitted only when
  * `includeCommunityFiles` is set, so projects that inherit them from a parent
  * repository are not given duplicates.
+ *
+ * Workspace mode suppresses them the same way `rootOwnedFiles` suppresses the
+ * git ignore and hooks: GitHub only surfaces these at the repository root, so a
+ * copy inside `packages/<name>/` is a file nothing ever reads. `--workspace
+ * --community-files` is therefore a deliberate no-op, and the workspace summary
+ * printed after scaffolding lists them among the files left to the parent.
  */
 export const buildCommunityFiles = (config: ScaffoldConfig): GeneratedFile[] => {
-  if (!config.includeCommunityFiles) {
+  if (!config.includeCommunityFiles || config.workspaceMode) {
     return [];
   }
 

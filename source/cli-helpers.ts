@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 
+import { gitReadCommandOptions } from "./git-repository.js";
 import { type LintFormatTooling, lintFormatToolingSchema } from "./lint-format-tooling.js";
 import { normalizeGitHubUrl, stripPackageScope } from "./name-helpers.js";
 import type { Bundler, LicenseName, PackageManager } from "./templates/scaffold-config.js";
@@ -53,7 +54,14 @@ export interface DetectedDefaults {
 export type CliCommand = "config" | "scaffold" | "update";
 export type ConfigAction = "get" | "path" | "set" | "unset";
 
-const configActions = new Set<ConfigAction>(["get", "path", "set", "unset"]);
+/**
+ * Declared in the order the error messages list them. Plain lexicographic order
+ * is what these ASCII identifiers want; `localeCompare` would make the wording
+ * depend on the runtime's locale for no gain.
+ */
+const configActions: readonly ConfigAction[] = ["get", "path", "set", "unset"];
+const configActionSet = new Set<ConfigAction>(configActions);
+const configActionList = configActions.join(", ");
 
 export type WarningSink = (message: string) => void;
 type CliBooleanFlag =
@@ -318,7 +326,14 @@ const applyPositionals = (parsed: CliArguments, positionals: string[]): void => 
     remaining = remaining.slice(1);
   } else if (remaining[0] === "config") {
     parsed.command = "config";
-    applyConfigPositionals(parsed, remaining.slice(1));
+    // `--help` and `--version` short-circuit in `main()` before any command
+    // runs, so `config --help` must not be rejected for the action it will
+    // never use. `update --version` already worked only because `update` has no
+    // required positional.
+    if (!parsed.help && !parsed.version) {
+      applyConfigPositionals(parsed, remaining.slice(1));
+    }
+
     return;
   }
 
@@ -333,21 +348,17 @@ const applyPositionals = (parsed: CliArguments, positionals: string[]): void => 
 };
 
 const isConfigAction = (value: string): value is ConfigAction =>
-  configActions.has(value as ConfigAction);
+  configActionSet.has(value as ConfigAction);
 
 const applyConfigPositionals = (parsed: CliArguments, positionals: string[]): void => {
   const [action, key, value, ...extra] = positionals;
 
   if (action === undefined) {
-    throw new Error(
-      `Missing config action. Expected one of: ${[...configActions].sort().join(", ")}`,
-    );
+    throw new Error(`Missing config action. Expected one of: ${configActionList}`);
   }
 
   if (!isConfigAction(action)) {
-    throw new Error(
-      `Unknown config action: ${action}. Expected one of: ${[...configActions].sort().join(", ")}`,
-    );
+    throw new Error(`Unknown config action: ${action}. Expected one of: ${configActionList}`);
   }
 
   if (extra.length > 0) {
@@ -366,6 +377,12 @@ const applyConfigPositionals = (parsed: CliArguments, positionals: string[]): vo
 
   if (action === "path" && key !== undefined) {
     throw new Error(`Unexpected extra argument: ${key}`);
+  }
+
+  // Only `set` consumes a value. `config get license extra` used to parse and
+  // then drop `extra` silently, which reads as a working command.
+  if ((action === "get" || action === "unset") && value !== undefined) {
+    throw new Error(`Unexpected extra argument: ${value}`);
   }
 
   if (key !== undefined) {
@@ -443,7 +460,7 @@ export const detectDefaults = async (
 const defaultGitReaders = (warn: WarningSink): GitReaders => ({
   readGitConfigValue: async (key) => {
     try {
-      const { stdout } = await execFileAsync("git", ["config", key]);
+      const { stdout } = await execFileAsync("git", ["config", key], gitReadCommandOptions);
       return stdout.trim();
     } catch {
       warn(`Could not read git config ${key}; using a blank default.`);
@@ -452,7 +469,11 @@ const defaultGitReaders = (warn: WarningSink): GitReaders => ({
   },
   readGitRemoteOrigin: async () => {
     try {
-      const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"]);
+      const { stdout } = await execFileAsync(
+        "git",
+        ["remote", "get-url", "origin"],
+        gitReadCommandOptions,
+      );
       return stdout.trim();
     } catch {
       warn("Could not read git remote origin; using a blank GitHub repo default.");

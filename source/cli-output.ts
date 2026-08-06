@@ -89,14 +89,19 @@ export const printNextSteps = (
   ]
     .map((step) => `${step}\n`)
     .join("");
-  const githubPublishSteps = options.includeGitHubPublishSteps
-    ? `
+  // Workspace mode skips git setup entirely, so no remote was added here even
+  // when one is configured -- printing `git push -u origin HEAD` would name a
+  // remote that does not exist. The repository URL still belongs in the
+  // generated package.json: it is the parent repository's.
+  const githubPublishSteps =
+    options.includeGitHubPublishSteps && !config.workspaceMode
+      ? `
 Publish to GitHub:
   git add .
   git commit -m "Initial scaffold"
   git push -u origin HEAD
 `
-    : "";
+      : "";
   const trustedPublishingStep = hasGitHubWorkflows(config)
     ? `
 Enable npm trusted publishing for the release workflow: https://docs.npmjs.com/trusted-publishers
@@ -124,8 +129,8 @@ const buildWorkspaceSteps = (config: ScaffoldConfig): string => {
 
   return `
 Workspace package: root-owned files (git ignore, CI workflows, Renovate, editor
-settings, hooks) were not generated. Confirm the workspace globs match this
-package, then install from the workspace root:
+settings, hooks, community health files) were not generated. Confirm the
+workspace globs match this package, then install from the workspace root:
   ${config.packageManager} install
 `;
 };

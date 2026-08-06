@@ -100,6 +100,14 @@ Because state files on disk were written by older releases, the schema is a
 compatibility surface — see step 2 of
 [Adding a `ScaffoldConfig` field](#adding-a-scaffoldconfig-field).
 
+Two rules keep the classifier honest across runs. `applyUpdatePlan` rewrites the
+state file to describe **what is on disk**, so a partial apply (`options.only`,
+the interactive "choose files" path) keeps the previously recorded hash for every
+entry it did not write — recording the freshly rendered hash for a skipped file
+would make the next run read it as a user edit. And backups never overwrite: a
+taken `<file>.orig` steps to `.orig.1`, and the path actually used comes back on
+`UpdatePlanEntry.backupPath` for the CLI to print.
+
 ## Workspace mode
 
 `config.workspaceMode` means "scaffold a package inside an existing repo." Git

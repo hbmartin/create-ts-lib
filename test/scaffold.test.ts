@@ -13,6 +13,7 @@ import {
   scaffoldProject,
 } from "../source/scaffold.js";
 import { renderBiomeJsonc } from "../source/templates/biome.js";
+import { buildCommunityFiles } from "../source/templates/community.js";
 import {
   buildProjectFiles,
   defaultScaffoldConfig,
@@ -1128,6 +1129,25 @@ describe("community-health files", () => {
 
     for (const communityPath of communityPaths) {
       expect(paths).toContain(communityPath);
+    }
+  });
+
+  it("omits them in workspace mode even when enabled", () => {
+    // GitHub only surfaces these at the repository root, so a copy inside
+    // packages/<name>/ is a file nothing reads. They are root-owned like the
+    // git ignore and the hooks.
+    expect(
+      buildCommunityFiles({ ...baseConfig, includeCommunityFiles: true, workspaceMode: true }),
+    ).toEqual([]);
+
+    const paths = buildProjectFiles({
+      ...baseConfig,
+      includeCommunityFiles: true,
+      workspaceMode: true,
+    }).map((file) => file.path);
+
+    for (const communityPath of communityPaths) {
+      expect(paths).not.toContain(communityPath);
     }
   });
 

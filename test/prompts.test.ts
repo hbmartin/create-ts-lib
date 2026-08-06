@@ -160,9 +160,17 @@ describe("createFallbackPrompts checkbox", () => {
     await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).resolves.toEqual([]);
   });
 
-  it.each(["0", "4", "two"])("rejects the out-of-range selection %j", async (answer) => {
+  // `,` and `, ,` used to parse as an empty selection, silently dropping every
+  // feature the user meant to keep. Only "n"/"none" mean nothing.
+  it.each(["0", "4", "two", ",", ", ,"])("rejects the invalid selection %j", async (answer) => {
     await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).rejects.toThrow(
       "Invalid selection",
     );
+  });
+
+  it.each(["1,", " 2 "])("still accepts the padded selection %j", async (answer) => {
+    await expect(
+      createPrompts(answer).checkbox({ choices, message: "Pick" }),
+    ).resolves.toHaveLength(1);
   });
 });
