@@ -83,6 +83,6 @@ Key scripts:
 | `.create-ts-lib.json`               | Scaffold state: the config you chose plus a hash of every generated file. `create-ts-lib update` uses it to re-sync tooling files without touching anything you edited. |
 | `.gitignore`                        | Ignores build output, coverage, env files, and editor clutter while keeping the generated `.vscode` files.                                                              |
 | `pnpm-workspace.yaml` _(pnpm only)_ | Explicitly allows Lefthook's install script under pnpm's build-script policy.                                                                                           |
-| `AGENTS.md`                         | Conventions for coding agents (and humans): where code lives, which tools run, and how to verify changes.                                                               |
+| `AGENTS.md`                         | Self-contained conventions for coding agents (and humans): where code lives, the selected package manager, public-API documentation, and how to verify changes.          |
 | `README.md`                         | Pre-filled with badges, install/usage snippets, development commands, and release instructions.                                                                         |
 | `vitest.config.ts`                  | Vitest with v8 coverage and 80% thresholds on lines, branches, functions, and statements.                                                                               |

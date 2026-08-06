@@ -290,6 +290,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
 - Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- When public API or CLI behavior changes, update `README.md` and tests.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
 - Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
@@ -298,7 +299,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` uses Semgrep; install Semgrep or uv if neither is available.
 
 ===== .fallowrc.jsonc =====
 executable: false
@@ -1238,7 +1239,7 @@ executable: false
     "CODE_OF_CONDUCT.md": "053c9c452c6372dce2cd0e6baa82a969de7e8f45dcf131b84b775f2d428583ee",
     "CONTRIBUTING.md": "7c8b115a3b83a2528d9c660139fc5618db2c41015305165fa562e93d87faa8ec",
     "SECURITY.md": "e1d31b30e962dfad01e4cb3b36e3b77f869b00ba02af9ba11c45d7d606853ef1",
-    "AGENTS.md": "0dcd4f3e8e652b04f8837ba1038291079b4e3f19046ddde80ff9b6bf26272740",
+    "AGENTS.md": "59e923fba85c1a66a9c8bd32b67e0147352edffbaa01d3099ff534e1eae84dce",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",

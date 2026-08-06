@@ -89,6 +89,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
 - Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- When public API or CLI behavior changes, update `README.md` and tests.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
 - Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
@@ -97,7 +98,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` uses Semgrep; install Semgrep or uv if neither is available.
 
 ===== .fallowrc.jsonc =====
 executable: false
@@ -937,7 +938,7 @@ executable: false
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
-    "AGENTS.md": "85cbd383c299a42af405fd4c3a7abbe9125e2f1e406c53ed3f7f32f59716c325",
+    "AGENTS.md": "dbf879120dece3ffef022de5ca4c7ddb75068812e9d2a2010f70cff943587cf2",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",

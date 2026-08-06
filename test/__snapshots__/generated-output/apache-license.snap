@@ -87,7 +87,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 ## Code Changes
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
-- Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- When public API or CLI behavior changes, update `README.md` and tests.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
 - Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
@@ -96,7 +96,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` uses Semgrep; install Semgrep or uv if neither is available.
 
 ===== .fallowrc.jsonc =====
 executable: false
@@ -706,7 +706,7 @@ executable: false
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
-    "AGENTS.md": "0dcd4f3e8e652b04f8837ba1038291079b4e3f19046ddde80ff9b6bf26272740",
+    "AGENTS.md": "fe2fa752653cb316fe1d39b38a792bfc28d424b170182b4223ab0c4c432197fd",
     ".fallowrc.jsonc": "e407bb4cc65566751e569cffc84488fe110615bac15bf964de3522176bc49d7d",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",

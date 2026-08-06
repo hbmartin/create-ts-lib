@@ -365,7 +365,8 @@ Generated packages include:
 - `check`, `deps:lint`, `security:lint`, `prepublishOnly`, `publint`,
   `types:lint`, `verify:artifacts`, `verify:package`, `size:report`, and
   `release:check` scripts
-- `AGENTS.md` with opinionated guidance for Codex and other coding agents
+- `AGENTS.md` with opinionated, package-manager-aware guidance for Codex and
+  other coding agents
 - a `.create-ts-lib.json` state file so `create-ts-lib update` can re-sync
   tooling files later
 - `Apache-2.0` license by default, stamped with the scaffold year and recorded in
