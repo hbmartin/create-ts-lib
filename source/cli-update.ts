@@ -8,10 +8,12 @@ import { getPackageManagerRunPrefix } from "./cli-output.js";
 import { loadPromptModule } from "./prompts.js";
 import {
   applyUpdatePlan,
+  backupFileSuffix,
   planUpdate,
   readScaffoldState,
   type UpdateFileStatus,
   type UpdatePlan,
+  type UpdatePlanEntry,
 } from "./update.js";
 
 const statusLabels = {
@@ -57,23 +59,36 @@ export const runUpdateWorkflow = async (
     return;
   }
 
+  let selectedPaths: string[] | undefined;
   if (!cliArguments.yes) {
-    const promptModule = await loadPromptModule(warn);
-    const confirmed = await promptModule.confirm({
-      default: true,
-      message: `Apply ${pendingEntries.length} file update(s)?`,
-    });
+    selectedPaths = await promptForEntriesToApply(pendingEntries, warn);
 
-    if (!confirmed) {
+    if (selectedPaths === undefined) {
       process.stdout.write(`${cyan("info")} Update cancelled; no files were written.\n`);
+      return;
+    }
+
+    if (selectedPaths.length === 0) {
+      process.stdout.write(`${cyan("info")} No files selected; nothing was written.\n`);
       return;
     }
   }
 
   const written = await applyUpdatePlan(targetDirectory, plan, {
+    backup: cliArguments.backup !== false,
     force: cliArguments.force,
+    ...(selectedPaths === undefined ? {} : { only: selectedPaths }),
   });
   process.stdout.write(`${green("done")} Updated ${written.length} file(s).\n`);
+
+  const backedUp = written.filter((entry) => entry.status === "skip-modified");
+  if (backedUp.length > 0 && cliArguments.backup !== false) {
+    process.stdout.write(
+      `${cyan("info")} Your previous contents were kept as ${backedUp
+        .map((entry) => `${entry.path}${backupFileSuffix}`)
+        .join(", ")}.\n`,
+    );
+  }
 
   if (written.some((entry) => entry.path === "package.json")) {
     const runPrefix = getPackageManagerRunPrefix(state.config.packageManager);
@@ -81,6 +96,45 @@ export const runUpdateWorkflow = async (
       `${cyan("info")} package.json changed; run ${state.config.packageManager} install and ${runPrefix} check.\n`,
     );
   }
+};
+
+type ApplyDecision = "all" | "cancel" | "choose";
+
+/**
+ * Returns the paths to write, an empty array when nothing was selected, or
+ * undefined when the user cancelled.
+ */
+const promptForEntriesToApply = async (
+  pendingEntries: UpdatePlanEntry[],
+  warn: WarningSink,
+): Promise<string[] | undefined> => {
+  const promptModule = await loadPromptModule(warn);
+  const decision = await promptModule.select<ApplyDecision>({
+    choices: [
+      { name: `Apply all ${pendingEntries.length} file(s)`, value: "all" },
+      { name: "Choose files…", value: "choose" },
+      { name: "Cancel", value: "cancel" },
+    ],
+    default: "all",
+    message: "Apply these updates?",
+  });
+
+  if (decision === "cancel") {
+    return undefined;
+  }
+
+  if (decision === "all") {
+    return pendingEntries.map((entry) => entry.path);
+  }
+
+  return promptModule.checkbox<string>({
+    choices: pendingEntries.map((entry) => ({
+      checked: true,
+      name: `${statusLabels[entry.status].trim()} ${entry.path}`,
+      value: entry.path,
+    })),
+    message: "Select the files to update",
+  });
 };
 
 const printUpdatePlan = (plan: UpdatePlan, force: boolean): void => {

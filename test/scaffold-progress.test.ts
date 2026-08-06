@@ -37,10 +37,12 @@ vi.mock("node:child_process", () => ({
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A test library",
   githubRepoUrl: "",
   includeCli: false,
   includeCodecov: true,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -48,6 +50,7 @@ const baseConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
+  workspaceMode: false,
 };
 
 afterEach(() => {
@@ -257,6 +260,29 @@ describe("scaffoldProject post-scaffold progress", () => {
     expect(progress.succeed).toHaveBeenCalledWith("Dependencies installed");
     expect(progress.succeed).toHaveBeenCalledWith("Generated project built");
     expect(progress.succeed).toHaveBeenCalledWith("Generated project tested");
+  });
+
+  it("skips git setup in workspace mode without needing --skip-git", async () => {
+    mockSpawnClose(0);
+    const progress = createProgress();
+    const targetDirectory = await createTempTarget("create-ts-lib-workspace-");
+    const { scaffoldProject } = await import("../source/scaffold.js");
+
+    await scaffoldProject(
+      { ...baseConfig, workspaceMode: true },
+      {
+        gitRemoteOriginUrl: "https://github.com/hbmartin/example-lib",
+        progress,
+        targetDirectory,
+      },
+    );
+
+    // No git init and no remote wiring: the workspace repository owns both.
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(progress.info).toHaveBeenCalledWith(
+      "Skipping git setup; the workspace repository owns it.",
+    );
+    expect(progress.succeed).toHaveBeenCalledWith("Dependencies installed");
   });
 
   it("skips install, build, and test while still preparing git when skipInstall is set", async () => {

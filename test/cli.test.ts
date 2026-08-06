@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import packageJson from "../package.json" with { type: "json" };
-import type { DetectedDefaults } from "../source/cli-helpers.js";
+import { cliOptionNames, type DetectedDefaults } from "../source/cli-helpers.js";
 import type {
   CreateGitHubRepositoryRequest,
   CreateGitHubRepositoryResult,
@@ -13,6 +13,8 @@ import type {
 } from "../source/github-cli.js";
 import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
 import { PostScaffoldSetupError, type ScaffoldProgress } from "../source/scaffold.js";
+import type { UserConfig } from "../source/user-config.js";
+import type { DetectedWorkspace } from "../source/workspace-detection.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -35,7 +37,13 @@ interface PromptSelectOptions {
   message: string;
 }
 
+interface PromptCheckboxOptions {
+  choices: Array<{ checked?: boolean; name: string; value: string }>;
+  message: string;
+}
+
 interface PromptModule {
+  checkbox?(options: PromptCheckboxOptions): Promise<string[]>;
   confirm(options: { default?: boolean; message: string }): Promise<boolean>;
   input(options: PromptInputOptions): Promise<string>;
   select(options: PromptSelectOptions): Promise<string>;
@@ -47,6 +55,7 @@ interface RunCliOptions {
     request: CreateGitHubRepositoryRequest,
   ) => Promise<CreateGitHubRepositoryResult>;
   detectedDefaults?: Partial<DetectedDefaults>;
+  detectWorkspaceRoot?: (containingDirectory: string) => Promise<DetectedWorkspace | undefined>;
   inspectPersonalGitHubRepository?: (projectName: string) => Promise<GitHubRepositoryLookupResult>;
   promptModule?: PromptModule;
   ora?: (message: string) => {
@@ -85,6 +94,91 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("--[no-]zod");
     expect(result.stdout).toContain("--skip-install");
     expect(result.stdout).toContain("create-ts-lib update [directory]");
+  });
+
+  it("documents every parsed option in the help text", async () => {
+    const result = await runCli(["--help"]);
+    const undocumented = cliOptionNames.filter((name) => !documentsOption(result.stdout, name));
+
+    expect(undocumented).toEqual([]);
+  });
+
+  it("prints the resolved personal-defaults path", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+
+    const result = await runCli(["config", "path", "--config", configPath]);
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toBe(`${configPath}\n`);
+  });
+
+  it("round-trips config set, get, and unset", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+
+    const empty = await runCli(["config", "get", "--config", configPath]);
+    expect(empty.stdout).toContain("No personal defaults are set.");
+
+    const set = await runCli(["config", "set", "license", "MIT", "--config", configPath]);
+    expect(set.exitCode).toBeUndefined();
+    expect(set.stdout).toContain("Set license");
+
+    const get = await runCli(["config", "get", "license", "--config", configPath]);
+    expect(get.stdout).toBe("MIT\n");
+
+    const listed = await runCli(["config", "get", "--config", configPath]);
+    expect(listed.stdout).toContain("license: MIT");
+
+    const unset = await runCli(["config", "unset", "license", "--config", configPath]);
+    expect(unset.stdout).toContain("Unset license");
+
+    const after = await runCli(["config", "get", "license", "--config", configPath]);
+    expect(after.stdout).toContain("license is not set.");
+  });
+
+  it("applies a saved default to a later scaffold", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    await runCli(["config", "set", "license", "MIT", "--config", configPath]);
+
+    const result = await runCli(["demo-lib", "--yes", "--dry-run", "--config", configPath]);
+
+    expect(result.stdout).toContain("License: MIT");
+  });
+
+  it("reports invalid config keys and values without writing", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+
+    const badKey = await runCli(["config", "set", "nope", "x", "--config", configPath]);
+    expect(badKey.exitCode).toBe(1);
+    expect(badKey.stderr).toContain("Unknown config key: nope");
+
+    const badValue = await runCli(["config", "set", "includeZod", "yes", "--config", configPath]);
+    expect(badValue.exitCode).toBe(1);
+    expect(badValue.stderr).toContain("Invalid value for includeZod");
+
+    await expect(readFile(configPath, "utf8")).rejects.toThrow();
+  });
+
+  it("persists reusable answers with --save-defaults", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(
+      ["demo-lib", "--yes", "--license", "ISC", "--zod", "--save-defaults", "--config", configPath],
+      { scaffoldProject },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Saved personal defaults to");
+
+    const saved = JSON.parse(await readFile(configPath, "utf8")) as UserConfig;
+    expect(saved.license).toBe("ISC");
+    expect(saved.includeZod).toBe(true);
+    // Per-project answers must never be persisted as preferences.
+    expect(saved).not.toHaveProperty("projectName");
+    expect(saved).not.toHaveProperty("description");
+    expect(saved).not.toHaveProperty("githubRepoUrl");
+    expect(saved).not.toHaveProperty("copyrightYear");
+    expect(saved).not.toHaveProperty("workspaceMode");
   });
 
   it("prints an error and help for invalid arguments", async () => {
@@ -184,6 +278,85 @@ describe("cli entrypoint", () => {
     );
   });
 
+  it("passes --community-files to the scaffold operation", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--community-files"], {
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Community files: yes");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeCommunityFiles: true,
+        projectName: "demo-lib",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("enables workspace mode automatically under --yes when a workspace is detected", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], {
+      detectWorkspaceRoot: async () => ({
+        directory: "/repo",
+        manifest: "pnpm-workspace.yaml",
+      }),
+      scaffoldProject,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Workspace package: yes");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceMode: true }),
+      expect.any(Object),
+    );
+  });
+
+  it("lets --no-workspace override a detected workspace", async () => {
+    const detectWorkspaceRoot = vi.fn(async () => ({
+      directory: "/repo",
+      manifest: "pnpm-workspace.yaml" as const,
+    }));
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes", "--no-workspace"], {
+      detectWorkspaceRoot,
+      scaffoldProject,
+    });
+
+    expect(result.stdout).toContain("Workspace package: no");
+    // An explicit flag makes detection pointless, so it is not even run.
+    expect(detectWorkspaceRoot).not.toHaveBeenCalled();
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceMode: false }),
+      expect.any(Object),
+    );
+  });
+
+  it("does not enable workspace mode when no workspace is detected", async () => {
+    const scaffoldProject = vi.fn(async () => undefined);
+
+    const result = await runCli(["demo-lib", "--yes"], { scaffoldProject });
+
+    expect(result.stdout).toContain("Workspace package: no");
+    expect(scaffoldProject).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceMode: false }),
+      expect.any(Object),
+    );
+  });
+
+  it("lists the community-health files in the dry-run plan", async () => {
+    const result = await runCli(["demo-lib", "--yes", "--dry-run", "--community-files"]);
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("CODE_OF_CONDUCT.md");
+    expect(result.stdout).toContain("CONTRIBUTING.md");
+    expect(result.stdout).toContain("SECURITY.md");
+  });
+
   it.each<[string, string[]]>([
     ["missing value", ["--lint-format"]],
     ["invalid value", ["--lint-format", "eslint"]],
@@ -268,7 +441,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Zod: no");
     expect(result.stdout).toContain("JSR: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.confirm).toHaveBeenCalledTimes(5);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(6);
     expect(promptModule.select).toHaveBeenCalledTimes(4);
   });
 
@@ -1161,7 +1334,7 @@ describe("cli entrypoint", () => {
     expect(promptModule.input).not.toHaveBeenCalled();
     expect(promptModule.select).not.toHaveBeenCalled();
     // Feature confirms still run because no toggle flags were provided.
-    expect(promptModule.confirm).toHaveBeenCalledTimes(5);
+    expect(promptModule.confirm).toHaveBeenCalledTimes(6);
     expect(inspectPersonalGitHubRepository).not.toHaveBeenCalled();
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1311,10 +1484,12 @@ describe("cli entrypoint", () => {
       {
         author: "Harold Martin <harold@example.com>",
         bundler: "tsc",
+        copyrightYear: "2026",
         description: "A test library",
         githubRepoUrl: "",
         includeCli: false,
         includeCodecov: false,
+        includeCommunityFiles: false,
         includeJsr: false,
         includeSecurityWorkflows: false,
         includeZod: false,
@@ -1322,6 +1497,7 @@ describe("cli entrypoint", () => {
         lintFormatTooling: "oxlint-oxfmt",
         packageManager: "pnpm",
         projectName: "update-lib",
+        workspaceMode: false,
       },
       { postScaffold: false, targetDirectory },
     );
@@ -1348,6 +1524,97 @@ describe("cli entrypoint", () => {
     await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toContain(
       "no-child-process-exec",
     );
+  });
+
+  it("applies only the files chosen in the interactive update prompt", async () => {
+    const targetDirectory = await scaffoldUpdateFixture("create-ts-lib-cli-update-choose-");
+    // Two files diverge from the templates but still match their recorded
+    // hashes, so both are safely writable.
+    await staleButUnmodified(targetDirectory, ["semgrep.yml", "tsconfig.json"]);
+
+    const promptModule = {
+      checkbox: vi.fn(async () => ["semgrep.yml"]),
+      confirm: vi.fn(async () => true),
+      input: vi.fn(async () => ""),
+      select: vi.fn(async () => "choose"),
+    };
+    const result = await runCli(["update", targetDirectory], { promptModule });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Updated 1 file(s).");
+    expect(promptModule.checkbox).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Select the files to update" }),
+    );
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toContain(
+      "no-child-process-exec",
+    );
+    // The unselected file is left exactly as it was.
+    await expect(readFile(join(targetDirectory, "tsconfig.json"), "utf8")).resolves.toBe(
+      staleContent,
+    );
+  });
+
+  it("writes nothing when the interactive update is cancelled", async () => {
+    const targetDirectory = await scaffoldUpdateFixture("create-ts-lib-cli-update-cancel-");
+    await staleButUnmodified(targetDirectory, ["semgrep.yml"]);
+
+    const result = await runCli(["update", targetDirectory], {
+      promptModule: {
+        confirm: vi.fn(async () => true),
+        input: vi.fn(async () => ""),
+        select: vi.fn(async () => "cancel"),
+      },
+    });
+
+    expect(result.stdout).toContain("Update cancelled; no files were written.");
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toBe(
+      staleContent,
+    );
+  });
+
+  it("writes nothing when no files are selected", async () => {
+    const targetDirectory = await scaffoldUpdateFixture("create-ts-lib-cli-update-none-");
+    await staleButUnmodified(targetDirectory, ["semgrep.yml"]);
+
+    const result = await runCli(["update", targetDirectory], {
+      promptModule: {
+        checkbox: vi.fn(async () => []),
+        confirm: vi.fn(async () => true),
+        input: vi.fn(async () => ""),
+        select: vi.fn(async () => "choose"),
+      },
+    });
+
+    expect(result.stdout).toContain("No files selected; nothing was written.");
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toBe(
+      staleContent,
+    );
+  });
+
+  it("keeps a .orig backup when --force overwrites a modified file", async () => {
+    const targetDirectory = await scaffoldUpdateFixture("create-ts-lib-cli-update-backup-");
+    const edited = "rules: []\n";
+    await writeFile(join(targetDirectory, "semgrep.yml"), edited, "utf8");
+
+    const result = await runCli(["update", targetDirectory, "--yes", "--force"]);
+
+    expect(result.stdout).toContain("Updated 1 file(s).");
+    expect(result.stdout).toContain("semgrep.yml.orig");
+    await expect(readFile(join(targetDirectory, "semgrep.yml.orig"), "utf8")).resolves.toBe(edited);
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toContain(
+      "no-child-process-exec",
+    );
+  });
+
+  it("skips the backup with --no-backup", async () => {
+    const targetDirectory = await scaffoldUpdateFixture("create-ts-lib-cli-update-nobackup-");
+    await writeFile(join(targetDirectory, "semgrep.yml"), "rules: []\n", "utf8");
+
+    const result = await runCli(["update", targetDirectory, "--yes", "--force", "--no-backup"]);
+
+    expect(result.stdout).toContain("Updated 1 file(s).");
+    expect(result.stdout).not.toContain("semgrep.yml.orig");
+    await expect(readFile(join(targetDirectory, "semgrep.yml.orig"), "utf8")).rejects.toThrow();
   });
 
   it("reports an error when update runs outside a scaffolded project", async () => {
@@ -1427,6 +1694,67 @@ const buildGitHubPromptModule = ({
   }),
 });
 
+const staleContent = "# replaced by the test\n";
+
+const scaffoldUpdateFixture = async (prefix: string): Promise<string> => {
+  const tempDirectory = await mkdtemp(join(tmpdir(), prefix));
+  const targetDirectory = join(tempDirectory, "update-lib");
+  vi.doUnmock("../source/scaffold.js");
+  vi.resetModules();
+  const { scaffoldProject } = await import("../source/scaffold.js");
+  const { defaultScaffoldConfig } = await import("../source/templates/files.js");
+  await scaffoldProject(
+    defaultScaffoldConfig({
+      author: "Harold Martin <harold@example.com>",
+      copyrightYear: "2026",
+      includeCodecov: false,
+      license: "MIT",
+      projectName: "update-lib",
+    }),
+    { postScaffold: false, targetDirectory },
+  );
+
+  return targetDirectory;
+};
+
+/**
+ * Rewrites files on disk and re-records their hashes, so `update` classifies
+ * them as `update` (template moved on, user did not touch the file) rather than
+ * `skip-modified`.
+ */
+const staleButUnmodified = async (targetDirectory: string, paths: string[]): Promise<void> => {
+  const { hashFileContent, stateFileName } = await import("../source/templates/state.js");
+  const statePath = join(targetDirectory, stateFileName);
+  const state = JSON.parse(await readFile(statePath, "utf8")) as {
+    files: Record<string, string>;
+  };
+
+  for (const path of paths) {
+    await writeFile(join(targetDirectory, path), staleContent, "utf8");
+    state.files[path] = hashFileContent(staleContent);
+  }
+
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+};
+
+const regExpMetaCharacters = /[.*+?^${}()|[\]\\]/gu;
+
+const escapeRegExp = (value: string): string =>
+  value.replaceAll(regExpMetaCharacters, String.raw`\$&`);
+
+/**
+ * `--x` and `--no-x` are documented once in the collapsed `--[no-]x` form, so
+ * accept either spelling. Matching on token boundaries keeps `-h` from being
+ * satisfied by the `-h` inside `--help`.
+ */
+const documentsOption = (help: string, optionName: string): boolean => {
+  const collapsedName = `--[no-]${optionName.replace(/^--(?:no-)?/u, "")}`;
+
+  return [optionName, collapsedName].some((token) =>
+    new RegExp(`(?:^|\\s)${escapeRegExp(token)}(?=[\\s,]|$)`, "mu").test(help),
+  );
+};
+
 const ciEnvironmentVariable = "CI";
 const forceColorEnvironmentVariable = "FORCE_COLOR";
 const noColorEnvironmentVariable = "NO_COLOR";
@@ -1439,6 +1767,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   vi.doUnmock("../source/npm-registry.js");
   vi.doUnmock("../source/prompts.js");
   vi.doUnmock("../source/scaffold.js");
+  vi.doUnmock("../source/workspace-detection.js");
   vi.doUnmock("ora");
 
   vi.doMock("../source/cli-helpers.js", async (importOriginal) => {
@@ -1500,6 +1829,15 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
         packageName,
         status: "available",
       })),
+  }));
+
+  // Detection walks the real filesystem from the working directory, so stub it
+  // by default. Otherwise the repository the tests happen to run in decides
+  // whether workspace mode turns on.
+  vi.doMock("../source/workspace-detection.js", () => ({
+    detectWorkspaceRoot:
+      options.detectWorkspaceRoot ??
+      vi.fn(async (): Promise<DetectedWorkspace | undefined> => undefined),
   }));
 
   if (options.scaffoldProject) {

@@ -34,10 +34,12 @@ import {
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -45,6 +47,7 @@ const baseConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
+  workspaceMode: false,
 };
 
 const forbiddenReleasePleaseFilePaths = [
@@ -84,7 +87,11 @@ interface GeneratedPackageJson {
   };
   devDependencies: Record<string, string> & {
     jsr?: string;
+    lefthook?: string;
     tsdown?: string;
+  };
+  engines: {
+    node: string;
   };
   exports: {
     ".": Record<string, string>;
@@ -108,6 +115,7 @@ interface GeneratedPackageJson {
     dev: string;
     format: string;
     lint: string;
+    prepare?: string;
     prepublishOnly: string;
     publint: string;
     "release:check": string;
@@ -210,7 +218,7 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain(`version: ${pnpmVersion}`);
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("fail-fast: false");
-    expect(ciWorkflow?.content).toContain('node-version: ["22", "24"]');
+    expect(ciWorkflow?.content).toContain('node-version: ["24"]');
     expect(ciWorkflow?.content).toContain("node-version: $" + "{{ matrix.node-version }}");
     expect(ciWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(ciWorkflow?.content).toContain("enable-cache: true");
@@ -233,7 +241,7 @@ describe("buildProjectFiles", () => {
     expect(releaseWorkflow?.content).toContain("id-token: write");
     expect(releaseWorkflow?.content).toContain("ref: $" + "{{ github.event.release.tag_name }}");
     expect(releaseWorkflow?.content).toContain(`version: ${pnpmVersion}`);
-    expect(releaseWorkflow?.content).toContain("node-version: '22.x'");
+    expect(releaseWorkflow?.content).toContain("node-version: '24.x'");
     expect(releaseWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(releaseWorkflow?.content).toContain("enable-cache: true");
     expect(releaseWorkflow?.content).toContain('SECURITY_LINT_FORCE_UVX: "1"');
@@ -383,11 +391,30 @@ describe("buildProjectFiles", () => {
     expect(biomePackageJson.devDependencies["@biomejs/biome"]).toBe(
       readGeneratorSpecifier(generatorDevDependencies, "@biomejs/biome"),
     );
-    // Generated projects target Node 22/24, so their type definitions stay on
-    // the 24.x line independently of the generator's own @types/node major.
-    expect(expectedNodeTypesVersion).toMatch(/^\^24\./);
     expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
     expect(packageJson.pnpm?.overrides["@types/node"]).toBe(expectedNodeTypesVersion);
+  });
+
+  it("pins @types/node to the same major as the engines.node floor", () => {
+    // Two hand-maintained literals in two files with nothing linking them:
+    // `engines.node` in package-json.ts and `@types/node` in
+    // generated-versions.ts. Left to drift they produce a project that
+    // typechecks against a newer Node than it claims to support, and because
+    // typecheck runs once the CI matrix never notices. This is the link.
+    const packageJson = parseGeneratedJson<GeneratedPackageJson>(
+      buildProjectFiles(baseConfig),
+      "package.json",
+    );
+
+    const engineFloorMajor = /^>=(\d+)$/.exec(packageJson.engines.node)?.[1];
+    const nodeTypesMajor = /^\^(\d+)\./.exec(packageJson.devDependencies["@types/node"] ?? "")?.[1];
+
+    expect(engineFloorMajor, `unparseable engines.node: ${packageJson.engines.node}`).toBeDefined();
+    expect(
+      nodeTypesMajor,
+      `unparseable @types/node: ${packageJson.devDependencies["@types/node"]}`,
+    ).toBeDefined();
+    expect(nodeTypesMajor).toBe(engineFloorMajor);
   });
 
   it.each(["npm", "pnpm", "yarn"] as const)(
@@ -974,6 +1001,167 @@ describe("buildProjectFiles", () => {
       expect(licenseFile.content).toContain("Harold Martin");
     },
   );
+});
+
+describe("workspace mode", () => {
+  const workspaceConfig: ScaffoldConfig = { ...baseConfig, workspaceMode: true };
+
+  const rootOwnedPaths = [
+    ".gitignore",
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    ".vscode/extensions.json",
+    ".vscode/settings.json",
+    "lefthook.yml",
+    "pnpm-workspace.yaml",
+    "renovate.json",
+  ];
+
+  const packageOwnedPaths = [
+    ".fallowrc.jsonc",
+    "AGENTS.md",
+    "LICENSE",
+    "README.md",
+    "package.json",
+    "scripts/security-lint.mjs",
+    "semgrep.yml",
+    "source/index.ts",
+    "test/utils/formatting.test.ts",
+    "tsconfig.json",
+    "vitest.config.ts",
+  ];
+
+  const readPackageJson = (config: ScaffoldConfig): GeneratedPackageJson => {
+    const file = buildProjectFiles(config).find((candidate) => candidate.path === "package.json");
+
+    return JSON.parse(file?.content ?? "{}") as GeneratedPackageJson;
+  };
+
+  it("omits every root-owned file", () => {
+    const paths = buildProjectFiles(workspaceConfig).map((file) => file.path);
+
+    for (const rootOwnedPath of rootOwnedPaths) {
+      expect(paths).not.toContain(rootOwnedPath);
+    }
+  });
+
+  it("keeps every package-owned file", () => {
+    const paths = buildProjectFiles(workspaceConfig).map((file) => file.path);
+
+    for (const packageOwnedPath of packageOwnedPaths) {
+      expect(paths).toContain(packageOwnedPath);
+    }
+  });
+
+  it("emits those root-owned files in normal mode", () => {
+    const paths = buildProjectFiles(baseConfig).map((file) => file.path);
+
+    for (const rootOwnedPath of rootOwnedPaths) {
+      expect(paths).toContain(rootOwnedPath);
+    }
+  });
+
+  it("leaves the package manager and hook install to the workspace root", () => {
+    const packageJson = readPackageJson(workspaceConfig);
+
+    expect(packageJson.packageManager).toBeUndefined();
+    expect(packageJson.scripts.prepare).toBeUndefined();
+    expect(packageJson.devDependencies.lefthook).toBeUndefined();
+  });
+
+  it("still pins the package manager and hooks in normal mode", () => {
+    const packageJson = readPackageJson(baseConfig);
+
+    expect(packageJson.packageManager).toBe(`pnpm@${pnpmVersion}`);
+    expect(packageJson.scripts.prepare).toBe("lefthook install");
+    expect(packageJson.devDependencies.lefthook).toBeDefined();
+  });
+
+  it("omits CI badges and release docs the root owns", () => {
+    const readme = buildProjectFiles(workspaceConfig).find((file) => file.path === "README.md");
+
+    expect(readme?.content).not.toContain("actions/workflows/ci.yml/badge.svg");
+    expect(readme?.content).not.toContain("## Releasing");
+  });
+});
+
+describe("community-health files", () => {
+  const communityPaths = ["CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "SECURITY.md"];
+
+  const findCommunityFile = (config: ScaffoldConfig, path: string): string => {
+    const file = buildProjectFiles(config).find((candidate) => candidate.path === path);
+    if (!file) {
+      throw new Error(`Expected generated file ${path}`);
+    }
+
+    return file.content;
+  };
+
+  it("omits the files unless includeCommunityFiles is set", () => {
+    const paths = buildProjectFiles(baseConfig).map((file) => file.path);
+
+    for (const communityPath of communityPaths) {
+      expect(paths).not.toContain(communityPath);
+    }
+  });
+
+  it("emits all three files when enabled", () => {
+    const paths = buildProjectFiles({ ...baseConfig, includeCommunityFiles: true }).map(
+      (file) => file.path,
+    );
+
+    for (const communityPath of communityPaths) {
+      expect(paths).toContain(communityPath);
+    }
+  });
+
+  it("points SECURITY.md at GitHub private advisory reporting when a repo URL is set", () => {
+    const content = findCommunityFile(
+      {
+        ...baseConfig,
+        githubRepoUrl: "git@github.com:hbmartin/example-lib.git",
+        includeCommunityFiles: true,
+      },
+      "SECURITY.md",
+    );
+
+    expect(content).toContain("https://github.com/hbmartin/example-lib/security/advisories/new");
+  });
+
+  it("falls back to the author email when no repo URL is configured", () => {
+    const content = findCommunityFile(
+      {
+        ...baseConfig,
+        author: "Ada Lovelace <ada@example.com>",
+        githubRepoUrl: "",
+        includeCommunityFiles: true,
+      },
+      "SECURITY.md",
+    );
+
+    expect(content).toContain("privately to ada@example.com");
+    expect(content).not.toContain("advisories/new");
+  });
+
+  it("keeps the Contributor Covenant placeholder when the author has no email", () => {
+    const content = findCommunityFile(
+      { ...baseConfig, author: "Ada Lovelace", includeCommunityFiles: true },
+      "CODE_OF_CONDUCT.md",
+    );
+
+    expect(content).toContain("[INSERT CONTACT METHOD]");
+  });
+
+  it("uses the selected package manager in CONTRIBUTING commands", () => {
+    const content = findCommunityFile(
+      { ...baseConfig, includeCommunityFiles: true, packageManager: "npm" },
+      "CONTRIBUTING.md",
+    );
+
+    expect(content).toContain("npm install");
+    expect(content).toContain("npm run check");
+    expect(content).not.toContain("pnpm");
+  });
 });
 
 describe("renderBiomeJsonc", () => {

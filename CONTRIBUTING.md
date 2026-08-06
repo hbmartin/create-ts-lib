@@ -69,6 +69,26 @@ To **add a new generated file**:
    `verify:artifacts` check in `package.json` so a missing copy fails the build.
 4. Add or update a structural test in `test/scaffold.test.ts`.
 
+To **add a new `ScaffoldConfig` option**:
+
+1. Add the field to `ScaffoldConfig` and `defaultScaffoldConfigValues` in
+   `source/templates/scaffold-config.ts`.
+2. Add it to `scaffoldConfigSchema` in `source/templates/state.ts` **with a
+   `.default()`**. This is not optional: generated projects carry a
+   `.create-ts-lib.json` written by whichever release scaffolded them, and
+   `create-ts-lib update` has to keep parsing those older files. A field without
+   a default breaks `update` for every project already on disk.
+3. If it is a reusable preference rather than a per-project answer, add it to
+   `userConfigSchema` in `source/user-config.ts` and to the coercion table
+   beside it (typed so a missing entry fails to compile).
+4. Add the CLI flag in `source/cli-helpers.ts` and document it in the `helpText`
+   in `source/cli.ts` — `test/cli.test.ts` fails if any parsed option is
+   undocumented.
+
+`test/state-compatibility.test.ts` guards step 2 against frozen fixtures in
+`test/__fixtures__/state/`. Those fixtures are deliberately stale; do not
+regenerate them to make a failure go away — add the `.default()` instead.
+
 ## Tests
 
 Generated output is verified with **structural assertions, not snapshots** — a

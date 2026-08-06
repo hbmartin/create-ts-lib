@@ -161,9 +161,11 @@
       "includes": [
         "scripts/**/*.mjs",
         "source/cli.ts",
+        "source/cli-config.ts",
         "source/cli-helpers.ts",
         "source/cli-output.ts",
         "source/cli-update.ts",
+        "source/git-repository.ts",
         "source/github-cli.ts",
         "source/path-comparison.ts",
         "source/prompts.ts",
@@ -172,6 +174,7 @@
         "source/templates/**/*.ts",
         "source/update.ts",
         "source/user-config.ts",
+        "source/workspace-detection.ts",
       ],
       "linter": {
         "rules": {

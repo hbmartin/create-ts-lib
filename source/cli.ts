@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import process from "node:process";
 
-import { red, yellow } from "yoctocolors";
+import { cyan, red, yellow } from "yoctocolors";
 
 import packageJson from "../package.json" with { type: "json" };
-
+import { runConfigWorkflow } from "./cli-config.js";
 import {
   type CliArguments,
   deriveDirectoryName,
@@ -35,13 +35,23 @@ import { PostScaffoldSetupError, scaffoldProject } from "./scaffold.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import { defaultScaffoldConfig, type ScaffoldConfig } from "./templates/files.js";
 import { stripUndefinedOverrides } from "./templates/scaffold-config.js";
-import { loadUserConfig } from "./user-config.js";
+import {
+  getUserConfigPath,
+  loadUserConfig,
+  saveUserConfig,
+  type UserConfig,
+} from "./user-config.js";
+import { detectWorkspaceRoot } from "./workspace-detection.js";
 
 const helpText = `create-ts-lib
 
 Usage:
   create-ts-lib [directory] [options]
-  create-ts-lib update [directory] [--dry-run] [--force] [--yes]
+  create-ts-lib update [directory] [--dry-run] [--force] [--yes] [--no-backup]
+  create-ts-lib config path
+  create-ts-lib config get [key]
+  create-ts-lib config set <key> <value>
+  create-ts-lib config unset <key>
 
 Options:
   --yes, -y                 Use detected/default answers without prompting
@@ -55,10 +65,16 @@ Options:
   --package-manager <pm>    Choose pnpm, npm, or yarn
   --lint-format <tooling>   Choose oxlint-oxfmt or biome
   --bundler <bundler>       Choose tsc or tsdown
+  --[no-]cli                Include or omit the CLI entry point
   --[no-]codecov            Include or omit Codecov upload in generated CI
+  --[no-]community-files    Include or omit CONTRIBUTING, CODE_OF_CONDUCT, SECURITY
   --[no-]zod                Include or omit Zod in the generated project
   --[no-]jsr                Include or omit JSR publishing support
   --[no-]security-workflows Include or omit CodeQL and Scorecard workflows
+  --[no-]workspace          Scaffold as a package inside an existing workspace
+  --no-backup               Skip <file>.orig backups when update overwrites edits
+  --save-defaults           Save this run's reusable answers as personal defaults
+  --config <path>           Read and write personal defaults at this path
   --skip-git                Skip git init and git remote setup
   --skip-install            Skip dependency install, build, and test
   --help, -h                Show help
@@ -67,15 +83,18 @@ Options:
 The update command re-renders generated tooling files in an existing project
 and applies template improvements, skipping files you have modified.
 
-Personal defaults are read from $XDG_CONFIG_HOME/create-ts-lib/config.json
-(usually ~/.config/create-ts-lib/config.json).
+The config command manages personal defaults, read by default from
+$XDG_CONFIG_HOME/create-ts-lib/config.json (usually
+~/.config/create-ts-lib/config.json).
 
 Examples:
   pnpm create @hbmartin/ts-lib my-lib
   npm create @hbmartin/ts-lib my-lib
   npx @hbmartin/create-ts-lib my-lib
   npx @hbmartin/create-ts-lib my-lib --yes --license MIT --no-codecov
+  npx @hbmartin/create-ts-lib my-lib --save-defaults
   npx @hbmartin/create-ts-lib update my-lib --dry-run
+  npx @hbmartin/create-ts-lib config set license MIT
 `;
 
 const main = async (): Promise<void> => {
@@ -104,11 +123,20 @@ const main = async (): Promise<void> => {
   }
 
   try {
-    await (cliArguments.update
-      ? runUpdateWorkflow(cliArguments, warn)
-      : runScaffoldWorkflow(cliArguments, warn));
+    await runCommand(cliArguments, warn);
   } catch (error) {
     handleCliError(error);
+  }
+};
+
+const runCommand = async (cliArguments: CliArguments, warn: WarningSink): Promise<void> => {
+  switch (cliArguments.command) {
+    case "config":
+      return runConfigWorkflow(cliArguments, warn);
+    case "update":
+      return runUpdateWorkflow(cliArguments, warn);
+    case "scaffold":
+      return runScaffoldWorkflow(cliArguments, warn);
   }
 };
 
@@ -120,6 +148,7 @@ const buildProvidedOverrides = (cliArguments: CliArguments): Partial<ScaffoldCon
     githubRepoUrl: cliArguments.repoUrl,
     includeCli: cliArguments.cli,
     includeCodecov: cliArguments.codecov,
+    includeCommunityFiles: cliArguments.communityFiles,
     includeJsr: cliArguments.jsr,
     includeSecurityWorkflows: cliArguments.securityWorkflows,
     includeZod: cliArguments.zod,
@@ -127,13 +156,54 @@ const buildProvidedOverrides = (cliArguments: CliArguments): Partial<ScaffoldCon
     lintFormatTooling: cliArguments.lintFormatTooling,
     packageManager: cliArguments.packageManager,
     projectName: cliArguments.projectName,
+    workspaceMode: cliArguments.workspace,
   });
+
+/**
+ * Persists this run's reusable answers. Per-project values (name, description,
+ * repo URL, workspace mode, copyright year) are deliberately excluded -- they
+ * describe one project, not a preference.
+ */
+const saveDefaultsFromConfig = async (
+  config: ScaffoldConfig,
+  existingUserConfig: UserConfig,
+  configPath: string,
+): Promise<void> => {
+  await saveUserConfig(
+    {
+      ...existingUserConfig,
+      author: config.author,
+      bundler: config.bundler,
+      includeCli: config.includeCli,
+      includeCodecov: config.includeCodecov,
+      includeCommunityFiles: config.includeCommunityFiles,
+      includeJsr: config.includeJsr,
+      includeSecurityWorkflows: config.includeSecurityWorkflows,
+      includeZod: config.includeZod,
+      license: config.license,
+      lintFormatTooling: config.lintFormatTooling,
+      packageManager: config.packageManager,
+    },
+    configPath,
+  );
+  process.stdout.write(`${cyan("info")} Saved personal defaults to ${configPath}.\n\n`);
+};
+
+/**
+ * Directory the new package will be created inside. Without a directory
+ * argument the package always lands directly in the working directory.
+ */
+const getPackageContainingDirectory = (cliArguments: CliArguments): string =>
+  cliArguments.directoryArgument === undefined
+    ? process.cwd()
+    : dirname(resolve(cliArguments.directoryArgument));
 
 const runScaffoldWorkflow = async (
   cliArguments: CliArguments,
   warn: WarningSink,
 ): Promise<void> => {
-  const userConfig = await loadUserConfig(warn);
+  const userConfigPath = cliArguments.configPath ?? getUserConfigPath();
+  const userConfig = await loadUserConfig(warn, userConfigPath);
   const defaults = await detectDefaults(cliArguments.directoryArgument, { warn });
   const promptDefaults = defaultScaffoldConfig({
     ...userConfig,
@@ -142,16 +212,32 @@ const runScaffoldWorkflow = async (
     projectName: defaults.projectName,
   });
   const provided = buildProvidedOverrides(cliArguments);
+  const detectedWorkspace =
+    cliArguments.workspace === undefined
+      ? await detectWorkspaceRoot(getPackageContainingDirectory(cliArguments))
+      : undefined;
   const configResult = cliArguments.yes
-    ? { config: defaultScaffoldConfig({ ...promptDefaults, ...provided }) }
+    ? {
+        config: defaultScaffoldConfig({
+          ...promptDefaults,
+          // Non-interactive runs cannot be asked, so a detected workspace opts
+          // in automatically. The scaffold summary always reports the result.
+          workspaceMode: detectedWorkspace !== undefined,
+          ...provided,
+        }),
+      }
     : await promptForConfig({
         defaults: promptDefaults,
+        detectedWorkspace,
         promptModule: await loadPromptModule(warn),
         provided,
         warn,
       });
   const { config, githubRepositoryCreation } = configResult;
   assertValidPackageName(config.projectName);
+  if (cliArguments.saveDefaults) {
+    await saveDefaultsFromConfig(config, userConfig, userConfigPath);
+  }
   if (cliArguments.yes) {
     await warnForNpmPackageNameAvailability(config.projectName, warn);
   }

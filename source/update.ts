@@ -128,9 +128,31 @@ const classifyFile = async (
   return hashFileContent(diskContent) === state.files[file.path] ? "update" : "skip-modified";
 };
 
+const backupExistingFile = async (fullPath: string): Promise<void> => {
+  let existingContent: string;
+  try {
+    existingContent = await readFile(fullPath, "utf8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return;
+    }
+
+    throw error;
+  }
+
+  await writeFile(`${fullPath}${backupFileSuffix}`, existingContent, "utf8");
+};
+
 export interface ApplyUpdateOptions {
+  /** Write a `<path>.orig` copy before overwriting a user-modified file. */
+  backup?: boolean;
   force?: boolean;
+  /** Restrict the write to these paths; omit to write every writable entry. */
+  only?: readonly string[];
 }
+
+/** Suffix for the copy kept when `--force` overwrites a file you changed. */
+export const backupFileSuffix = ".orig";
 
 const writableStatuses = (force: boolean): Set<UpdateFileStatus> =>
   force ? new Set(["create", "skip-modified", "update"]) : new Set(["create", "update"]);
@@ -142,14 +164,21 @@ export const applyUpdatePlan = async (
 ): Promise<UpdatePlanEntry[]> => {
   const resolvedTarget = resolve(targetDirectory);
   const statuses = writableStatuses(options.force === true);
+  const selectedPaths = options.only === undefined ? undefined : new Set(options.only);
   const written: UpdatePlanEntry[] = [];
 
   for (const entry of plan.entries) {
-    if (!statuses.has(entry.status)) {
+    if (!statuses.has(entry.status) || selectedPaths?.has(entry.path) === false) {
       continue;
     }
 
     const fullPath = join(resolvedTarget, entry.path);
+    // Only `skip-modified` entries hold work worth preserving: `update` matches
+    // the hash recorded at scaffold time and `create` does not exist on disk.
+    if (entry.status === "skip-modified" && options.backup !== false) {
+      await backupExistingFile(fullPath);
+    }
+
     await mkdir(dirname(fullPath), { recursive: true });
     await writeFile(fullPath, entry.newContent, "utf8");
     if (entry.executable) {

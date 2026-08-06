@@ -34,6 +34,8 @@ export const printSummary = (
     ["GitHub repo", config.githubRepoUrl || "(none)"],
     ["Codecov", config.includeCodecov ? "yes" : "no"],
     ["Security workflows", config.includeSecurityWorkflows ? "yes" : "no"],
+    ["Community files", config.includeCommunityFiles ? "yes" : "no"],
+    ["Workspace package", config.workspaceMode ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
     ["Zod", config.includeZod ? "yes" : "no"],
     ["JSR", config.includeJsr ? "yes" : "no"],
@@ -101,6 +103,7 @@ Enable npm trusted publishing for the release workflow: https://docs.npmjs.com/t
 `
     : "";
   const codecovSetupStep = buildCodecovSetupStep(config);
+  const workspaceSteps = buildWorkspaceSteps(config);
 
   process.stdout.write(`Created ${config.projectName}
 
@@ -109,7 +112,22 @@ Next steps:
 ${skippedSetupSteps}  ${runPrefix} dev
   ${runPrefix} lint
   ${runPrefix} test
-${githubPublishSteps}${trustedPublishingStep}${codecovSetupStep}`);
+${workspaceSteps}${githubPublishSteps}${trustedPublishingStep}${codecovSetupStep}`);
+};
+
+// Workspace mode never writes outside the target directory, so registering the
+// package in the parent manifest is left to the user as an explicit step.
+const buildWorkspaceSteps = (config: ScaffoldConfig): string => {
+  if (!config.workspaceMode) {
+    return "";
+  }
+
+  return `
+Workspace package: root-owned files (git ignore, CI workflows, Renovate, editor
+settings, hooks) were not generated. Confirm the workspace globs match this
+package, then install from the workspace root:
+  ${config.packageManager} install
+`;
 };
 
 const buildCodecovSetupStep = (config: ScaffoldConfig): string => {

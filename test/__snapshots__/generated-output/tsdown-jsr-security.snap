@@ -8,6 +8,7 @@ coverage
 .DS_Store
 *.log
 *.tsbuildinfo
+*.orig
 *.tgz
 .env
 .env.*
@@ -60,6 +61,208 @@ executable: false
   "typescript.tsdk": "node_modules/typescript/lib"
 }
 
+===== CODE_OF_CONDUCT.md =====
+executable: false
+
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, caste, color, religion, or sexual
+identity and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+- Focusing on what is best not just for us as individuals, but for the overall
+  community
+
+Examples of unacceptable behavior include:
+
+- The use of sexualized language or imagery, and sexual attention or advances of
+  any kind
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address,
+  without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+Community leaders have the right and responsibility to remove, edit, or reject
+comments, commits, code, wiki edits, issues, and other contributions that are
+not aligned to this Code of Conduct, and will communicate reasons for moderation
+decisions when appropriate.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+Examples of representing our community include using an official email address,
+posting via an official social media account, or acting as an appointed
+representative at an online or offline event.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+harold@example.com.
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement Guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series of
+actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or permanent
+ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior, harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within the
+community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
+
+Community Impact Guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder][mozilla].
+
+For answers to common questions about this code of conduct, see the FAQ at
+https://www.contributor-covenant.org/faq. Translations are available at
+https://www.contributor-covenant.org/translations.
+
+[homepage]: https://www.contributor-covenant.org
+[mozilla]: https://github.com/mozilla/diversity
+
+===== CONTRIBUTING.md =====
+executable: false
+
+# Contributing
+
+Thanks for your interest in improving `@hbmartin/full-featured-lib`.
+
+## Setup
+
+Use Node 24 or newer.
+
+```bash
+pnpm install
+```
+
+The install step also installs Lefthook. The local pre-commit hook runs the same
+lint command CI runs.
+
+## Development
+
+```bash
+pnpm run dev            # rebuild on change
+pnpm run test           # run tests
+pnpm run lint           # lint and format check
+pnpm run typecheck      # tsc --noEmit
+pnpm run deps:lint      # architecture rules
+pnpm run security:lint  # Semgrep policy checks
+```
+
+`pnpm run check` runs lint, typecheck, dependency and security checks, and
+coverage in the same order CI does. Run it before opening a pull request.
+
+## Pull requests
+
+- Keep changes focused; open an issue first for anything large or breaking.
+- Add or update tests for every behavior change — coverage is enforced at 80%.
+- Make sure `pnpm run check` passes locally.
+- Write commit messages in the imperative mood ("Add X", not "Added X").
+
+## Releasing
+
+Maintainers cut releases by bumping the version, pushing the tag, and publishing
+a GitHub release. See the README for the full flow.
+
+## Code of conduct
+
+Participation in this project is governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+===== SECURITY.md =====
+executable: false
+
+# Security Policy
+
+## Supported Versions
+
+The latest release and the default branch are supported for security fixes.
+
+## Reporting a Vulnerability
+
+Please report suspected vulnerabilities through GitHub's private vulnerability
+reporting:
+
+https://github.com/hbmartin/generated-lib/security/advisories/new
+
+Include the affected version, steps to reproduce, impact, and any known
+workaround. Please do not open a public issue for a suspected vulnerability
+until a fix or mitigation is available.
+
 ===== AGENTS.md =====
 executable: false
 
@@ -71,7 +274,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Use pnpm for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
-- Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Treat this package as Node 24+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. Linting is handled by Oxlint, and formatting is handled by Oxfmt.
 
 ## Code Changes
@@ -500,7 +703,7 @@ executable: false
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }
 
@@ -821,7 +1024,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["22", "24"]
+        node-version: ["24"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -886,7 +1089,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
@@ -1002,30 +1205,36 @@ executable: false
   "config": {
     "author": "Harold Martin <harold@example.com>",
     "bundler": "tsdown",
+    "copyrightYear": "2026",
     "description": "A generated TypeScript library",
     "githubRepoUrl": "https://github.com/hbmartin/generated-lib",
     "includeCli": true,
     "includeCodecov": true,
+    "includeCommunityFiles": true,
     "includeJsr": true,
     "includeSecurityWorkflows": true,
     "includeZod": false,
     "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
     "packageManager": "pnpm",
-    "projectName": "@hbmartin/full-featured-lib"
+    "projectName": "@hbmartin/full-featured-lib",
+    "workspaceMode": false
   },
   "files": {
-    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
     ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
-    "AGENTS.md": "26c15158aa82921801660370057760bf5b6a41914c478aaeb00206ca853599c5",
+    "CODE_OF_CONDUCT.md": "053c9c452c6372dce2cd0e6baa82a969de7e8f45dcf131b84b775f2d428583ee",
+    "CONTRIBUTING.md": "7c8b115a3b83a2528d9c660139fc5618db2c41015305165fa562e93d87faa8ec",
+    "SECURITY.md": "e1d31b30e962dfad01e4cb3b36e3b77f869b00ba02af9ba11c45d7d606853ef1",
+    "AGENTS.md": "0dcd4f3e8e652b04f8837ba1038291079b4e3f19046ddde80ff9b6bf26272740",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
-    "package.json": "7b6d2f65d51d00c0ca086c4261d002149e54739d939ea033ddabb4d0b2b41d31",
+    "package.json": "51c79e35e903a16ebfb6a26c6e4ff5a8ab6affa190e6ec73999690ed3ac7414d",
     "README.md": "5221c24795e34e61068c89fa3c7956cca57d401067ccd812db4f3f2c5c881b23",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
@@ -1040,8 +1249,8 @@ executable: false
     "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
     "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "c5905da8de08f4a11aebf3b0cc161c3177aee00c039a1a8277b74a0ed515902e",
-    ".github/workflows/release.yml": "51fda8ee05f6c67edeeee41decd06c522e33eb875cf28cfc096105f64f922971",
+    ".github/workflows/ci.yml": "0efad446325b35832c540f239480cfa10e891f4525477b6a1cd30084039b2ab6",
+    ".github/workflows/release.yml": "f48ce64b55a54f87a49b741d8c6ec0749f34ec88c6b836d77ab066217cef7d2d",
     ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
     ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
   },

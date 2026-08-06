@@ -5,7 +5,11 @@ import { z } from "zod";
 import packageJson from "../../package.json" with { type: "json" };
 
 import { lintFormatToolingSchema } from "../lint-format-tooling.js";
-import type { GeneratedFile, ScaffoldConfig } from "./scaffold-config.js";
+import {
+  currentCopyrightYear,
+  type GeneratedFile,
+  type ScaffoldConfig,
+} from "./scaffold-config.js";
 
 /**
  * Marker file written into every scaffolded project. It records the scaffold
@@ -24,10 +28,12 @@ export const bundlerSchema = z.enum(["tsc", "tsdown"]);
 export const scaffoldConfigSchema = z.object({
   author: z.string(),
   bundler: bundlerSchema,
+  copyrightYear: z.string().default(currentCopyrightYear),
   description: z.string(),
   githubRepoUrl: z.string(),
   includeCli: z.boolean(),
   includeCodecov: z.boolean(),
+  includeCommunityFiles: z.boolean().default(false),
   includeJsr: z.boolean(),
   includeSecurityWorkflows: z.boolean(),
   includeZod: z.boolean(),
@@ -35,6 +41,7 @@ export const scaffoldConfigSchema = z.object({
   lintFormatTooling: lintFormatToolingSchema,
   packageManager: packageManagerSchema,
   projectName: z.string(),
+  workspaceMode: z.boolean().default(false),
 }) satisfies z.ZodType<ScaffoldConfig>;
 
 export const scaffoldStateSchema = z.object({

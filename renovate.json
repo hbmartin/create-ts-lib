@@ -55,6 +55,27 @@
       "depNameTemplate": "tsdown",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track SHA-pinned GitHub Actions emitted into generated workflows. The github-actions manager only reads workflow YAML, so without this the copies in githubActionRefs drift and scaffolded projects stay pinned to stale actions.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": [
+        "\"(?<depName>[^\"\\s@/]+/[^\"\\s@/]+)(?:/[^\"\\s@]*)?@(?<currentDigest>[0-9a-f]{40})\\s*#\\s*(?<currentValue>v[^\"\\s]+)\""
+      ],
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the pinned Semgrep version used by the security lint wrapper and its generated copy.",
+      "managerFilePatterns": [
+        "/^source/templates/generated-versions\\.ts$/",
+        "/^scripts/security-lint\\.mjs$/"
+      ],
+      "matchStrings": ["semgrepVersion = \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "semgrep",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
     }
   ]
 }

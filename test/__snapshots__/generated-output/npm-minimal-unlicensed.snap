@@ -8,6 +8,7 @@ coverage
 .DS_Store
 *.log
 *.tsbuildinfo
+*.orig
 *.tgz
 .env
 .env.*
@@ -71,7 +72,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Use pnpm for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
-- Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Treat this package as Node 24+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. Linting is handled by Oxlint, and formatting is handled by Oxfmt.
 
 ## Code Changes
@@ -481,7 +482,7 @@ executable: false
     "@types/node": "^24.13.3"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }
 
@@ -651,30 +652,33 @@ executable: false
   "config": {
     "author": "",
     "bundler": "tsc",
+    "copyrightYear": "2026",
     "description": "",
     "githubRepoUrl": "",
     "includeCli": false,
     "includeCodecov": false,
+    "includeCommunityFiles": false,
     "includeJsr": false,
     "includeSecurityWorkflows": false,
     "includeZod": false,
     "license": "UNLICENSED",
     "lintFormatTooling": "oxlint-oxfmt",
     "packageManager": "npm",
-    "projectName": "npm-minimal"
+    "projectName": "npm-minimal",
+    "workspaceMode": false
   },
   "files": {
-    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
     ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
-    "AGENTS.md": "26c15158aa82921801660370057760bf5b6a41914c478aaeb00206ca853599c5",
+    "AGENTS.md": "0dcd4f3e8e652b04f8837ba1038291079b4e3f19046ddde80ff9b6bf26272740",
     ".fallowrc.jsonc": "e407bb4cc65566751e569cffc84488fe110615bac15bf964de3522176bc49d7d",
     "lefthook.yml": "83d5774a9434f63d0870112d321754cb668ef0abde42491b5b717b440168c8af",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
-    "package.json": "f674263d11313a8c3e50228d6cad9410e807c505a2783876e3f520a6ddac36be",
+    "package.json": "e9a9238be1fb661cf7fc0d66b46290a5605e70ae37d139ef7778751f305aa0b4",
     "README.md": "093f8d9f7e30547074aed6d1aea8009bfe917b1da23bde7c38112e399bc42b84",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
     "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",

@@ -13,9 +13,11 @@ const execFileAsync = promisify(execFile);
 
 export interface CliArguments {
   author?: string;
+  backup?: boolean;
   bundler?: Bundler;
   cli?: boolean;
   codecov?: boolean;
+  communityFiles?: boolean;
   description?: string;
   directoryArgument?: string;
   dryRun: boolean;
@@ -28,10 +30,16 @@ export interface CliArguments {
   projectName?: string;
   repoUrl?: string;
   securityWorkflows?: boolean;
+  command: CliCommand;
+  configAction?: ConfigAction;
+  configKey?: string;
+  configPath?: string;
+  configValue?: string;
+  saveDefaults: boolean;
   skipGit: boolean;
   skipInstall: boolean;
-  update: boolean;
   version: boolean;
+  workspace?: boolean;
   yes: boolean;
   zod?: boolean;
 }
@@ -42,9 +50,30 @@ export interface DetectedDefaults {
   projectName: string;
 }
 
+export type CliCommand = "config" | "scaffold" | "update";
+export type ConfigAction = "get" | "path" | "set" | "unset";
+
+const configActions = new Set<ConfigAction>(["get", "path", "set", "unset"]);
+
 export type WarningSink = (message: string) => void;
-type CliBooleanFlag = "dryRun" | "force" | "help" | "skipGit" | "skipInstall" | "version" | "yes";
-type CliToggleFlag = "cli" | "codecov" | "jsr" | "securityWorkflows" | "zod";
+type CliBooleanFlag =
+  | "dryRun"
+  | "force"
+  | "help"
+  | "saveDefaults"
+  | "skipGit"
+  | "skipInstall"
+  | "version"
+  | "yes";
+type CliToggleFlag =
+  | "backup"
+  | "cli"
+  | "codecov"
+  | "communityFiles"
+  | "jsr"
+  | "securityWorkflows"
+  | "workspace"
+  | "zod";
 
 interface GitReaders {
   readGitConfigValue(key: string): Promise<string>;
@@ -55,6 +84,7 @@ const cliFlagAliases = new Map<string, CliBooleanFlag>([
   ["--dry-run", "dryRun"],
   ["--force", "force"],
   ["--help", "help"],
+  ["--save-defaults", "saveDefaults"],
   ["--skip-git", "skipGit"],
   ["--skip-install", "skipInstall"],
   ["--version", "version"],
@@ -66,14 +96,19 @@ const cliFlagAliases = new Map<string, CliBooleanFlag>([
 
 const cliToggleFlags = new Map<string, { key: CliToggleFlag; value: boolean }>([
   ["--cli", { key: "cli", value: true }],
+  ["--no-backup", { key: "backup", value: false }],
   ["--codecov", { key: "codecov", value: true }],
+  ["--community-files", { key: "communityFiles", value: true }],
   ["--jsr", { key: "jsr", value: true }],
   ["--no-cli", { key: "cli", value: false }],
   ["--no-codecov", { key: "codecov", value: false }],
+  ["--no-community-files", { key: "communityFiles", value: false }],
   ["--no-jsr", { key: "jsr", value: false }],
   ["--no-security-workflows", { key: "securityWorkflows", value: false }],
   ["--no-zod", { key: "zod", value: false }],
+  ["--no-workspace", { key: "workspace", value: false }],
   ["--security-workflows", { key: "securityWorkflows", value: true }],
+  ["--workspace", { key: "workspace", value: true }],
   ["--zod", { key: "zod", value: true }],
 ]);
 
@@ -89,6 +124,16 @@ const updateCompatibleFlags = new Set<CliBooleanFlag>([
   "version",
   "yes",
 ]);
+
+/**
+ * Value and toggle options each non-scaffold command additionally accepts.
+ * Everything else in the parsing maps stays scaffold-only, so a newly added
+ * option is rejected for these commands until it is listed here deliberately.
+ */
+const commandCompatibleOptions = {
+  config: new Set(["--config"]),
+  update: new Set(["--no-backup"]),
+} satisfies Record<Exclude<CliCommand, "scaffold">, ReadonlySet<string>>;
 
 interface CliValueOptionConfig {
   apply(parsed: CliArguments, value: string, optionName: string): void;
@@ -126,6 +171,14 @@ const cliValueOptions = new Map<string, CliValueOptionConfig>([
     {
       apply: (parsed, value, optionName) => {
         parsed.bundler = parseBundlerValue(value, optionName);
+      },
+    },
+  ],
+  [
+    "--config",
+    {
+      apply: (parsed, value) => {
+        parsed.configPath = value;
       },
     },
   ],
@@ -179,14 +232,26 @@ const cliValueOptions = new Map<string, CliValueOptionConfig>([
   ],
 ]);
 
+/**
+ * Every option name the parser accepts, derived from the parsing maps so a new
+ * option cannot be added without `--help` coverage. `cli-output` tests assert
+ * each name (or its collapsed `--[no-]name` form) appears in the help text.
+ */
+export const cliOptionNames: readonly string[] = [
+  ...cliFlagAliases.keys(),
+  ...cliToggleFlags.keys(),
+  ...cliValueOptions.keys(),
+];
+
 export const parseCliArguments = (args: string[]): CliArguments => {
   const parsed: CliArguments = {
+    command: "scaffold",
     dryRun: false,
     force: false,
     help: false,
+    saveDefaults: false,
     skipGit: false,
     skipInstall: false,
-    update: false,
     version: false,
     yes: false,
   };
@@ -234,17 +299,27 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 };
 
 const validateUpdateArguments = (parsed: CliArguments, scaffoldOnlyOptions: string[]): void => {
-  const [firstScaffoldOnlyOption] = scaffoldOnlyOptions;
-  if (parsed.update && firstScaffoldOnlyOption !== undefined) {
-    throw new Error(`Option ${firstScaffoldOnlyOption} cannot be used with update.`);
+  if (parsed.command === "scaffold") {
+    return;
+  }
+
+  const allowedOptions = commandCompatibleOptions[parsed.command];
+  const [rejectedOption] = scaffoldOnlyOptions.filter((option) => !allowedOptions.has(option));
+  if (rejectedOption !== undefined) {
+    throw new Error(`Option ${rejectedOption} cannot be used with ${parsed.command}.`);
   }
 };
 
 const applyPositionals = (parsed: CliArguments, positionals: string[]): void => {
   let remaining = positionals;
+
   if (remaining[0] === "update") {
-    parsed.update = true;
+    parsed.command = "update";
     remaining = remaining.slice(1);
+  } else if (remaining[0] === "config") {
+    parsed.command = "config";
+    applyConfigPositionals(parsed, remaining.slice(1));
+    return;
   }
 
   const [directoryArgument, ...extra] = remaining;
@@ -254,6 +329,51 @@ const applyPositionals = (parsed: CliArguments, positionals: string[]): void => 
 
   if (directoryArgument !== undefined) {
     parsed.directoryArgument = directoryArgument;
+  }
+};
+
+const isConfigAction = (value: string): value is ConfigAction =>
+  configActions.has(value as ConfigAction);
+
+const applyConfigPositionals = (parsed: CliArguments, positionals: string[]): void => {
+  const [action, key, value, ...extra] = positionals;
+
+  if (action === undefined) {
+    throw new Error(
+      `Missing config action. Expected one of: ${[...configActions].sort().join(", ")}`,
+    );
+  }
+
+  if (!isConfigAction(action)) {
+    throw new Error(
+      `Unknown config action: ${action}. Expected one of: ${[...configActions].sort().join(", ")}`,
+    );
+  }
+
+  if (extra.length > 0) {
+    throw new Error(`Unexpected extra argument: ${extra[0]}`);
+  }
+
+  parsed.configAction = action;
+
+  if ((action === "set" || action === "unset") && key === undefined) {
+    throw new Error(`config ${action} requires a key.`);
+  }
+
+  if (action === "set" && value === undefined) {
+    throw new Error("config set requires a value.");
+  }
+
+  if (action === "path" && key !== undefined) {
+    throw new Error(`Unexpected extra argument: ${key}`);
+  }
+
+  if (key !== undefined) {
+    parsed.configKey = key;
+  }
+
+  if (value !== undefined) {
+    parsed.configValue = value;
   }
 };
 

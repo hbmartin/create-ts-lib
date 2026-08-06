@@ -16,6 +16,7 @@ Guidance for Codex and other coding agents working in this repository.
 - Keep the public API intentional. Export from `source/index.ts` deliberately.
 - Keep CLI code focused on argument parsing, prompts, progress output, and process I/O. Put reusable behavior in library modules.
 - When generated output changes, update scaffold tests and README documentation in the same change.
+- Adding a `ScaffoldConfig` field requires a `.default()` on its `scaffoldConfigSchema` entry. Generated projects carry `.create-ts-lib.json` files written by older releases, and `create-ts-lib update` must keep parsing them. `test/state-compatibility.test.ts` enforces this against frozen fixtures in `test/__fixtures__/state/`.
 - When adding or changing template assets, verify they are copied by `pnpm run build` and covered by generated-file assertions.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.

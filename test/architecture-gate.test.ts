@@ -23,10 +23,12 @@ const gateTestTimeout = 30_000;
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -34,6 +36,7 @@ const baseConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
+  workspaceMode: false,
 };
 
 const readGeneratedFallowConfig = (): string => {
@@ -51,6 +54,23 @@ const fixturePackageJson = `${JSON.stringify(
   undefined,
   2,
 )}\n`;
+// The dependency rules classify by manifest membership, not by resolvability,
+// so these fixtures never install anything: an undeclared bare specifier is
+// reported as unlisted rather than unresolved, and a declared-but-absent
+// devDependency is still enough to trip the production and unused checks.
+const fixtureDependencyName = "gate-fixture-dep";
+const fixturePackageJsonWithDevDependency = `${JSON.stringify(
+  {
+    name: "gate-fixture",
+    version: "0.0.0",
+    private: true,
+    type: "module",
+    devDependencies: { [fixtureDependencyName]: "^1.0.0" },
+  },
+  undefined,
+  2,
+)}\n`;
+const importFixtureDependency = `import { value } from "${fixtureDependencyName}";\nexport const probe = value;\n`;
 const cleanSourceIndex = 'export { helper } from "./helper.js";\n';
 const cleanSourceHelper = 'export const helper = "helper";\n';
 const cleanTestSupport = 'export const support = "support";\n';
@@ -140,6 +160,52 @@ describe("generated architecture gate", () => {
 
       expect(status, output).toBe(1);
       expect(output.toLowerCase()).toContain("unresolved");
+    },
+    gateTestTimeout,
+  );
+
+  it(
+    "fails on an undeclared dependency",
+    async () => {
+      const { output, status } = await runGate({
+        "source/index.ts": `${cleanSourceIndex}${importFixtureDependency}`,
+      });
+
+      expect(status, output).toBe(1);
+      expect(output).toContain(fixtureDependencyName);
+      expect(output.toLowerCase()).toContain("unlisted");
+    },
+    gateTestTimeout,
+  );
+
+  it(
+    "fails when source imports a devDependency",
+    async () => {
+      const { output, status } = await runGate({
+        "package.json": fixturePackageJsonWithDevDependency,
+        "source/index.ts": `${cleanSourceIndex}${importFixtureDependency}`,
+      });
+
+      expect(status, output).toBe(1);
+      expect(output).toContain(fixtureDependencyName);
+      expect(output.toLowerCase()).toContain("dev dependencies used in production");
+    },
+    gateTestTimeout,
+  );
+
+  it(
+    "fails on a devDependency nothing imports",
+    async () => {
+      // `unused-dev-dependencies` is the sixth error-level rule in the
+      // generated config; it catches tooling that was added to package.json but
+      // never wired into a script, tsconfig, or vitest config.
+      const { output, status } = await runGate({
+        "package.json": fixturePackageJsonWithDevDependency,
+      });
+
+      expect(status, output).toBe(1);
+      expect(output).toContain(fixtureDependencyName);
+      expect(output.toLowerCase()).toContain("unused devdependencies");
     },
     gateTestTimeout,
   );

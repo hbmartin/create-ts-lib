@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { buildProjectFiles, type ScaffoldConfig } from "../source/templates/files.js";
+import { semgrepVersion } from "../source/templates/generated-versions.js";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const securityLintScript = join(repositoryRoot, "scripts/security-lint.mjs");
@@ -25,7 +26,6 @@ const semgrepScanArguments = [
   "source",
   "test",
 ];
-const semgrepVersion = "1.172.0";
 const semgrepScanTestTimeout = 20_000;
 
 interface SemgrepScanOutput {
@@ -37,10 +37,12 @@ interface SemgrepScanOutput {
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A test library",
   githubRepoUrl: "https://github.com/hbmartin/example-lib",
   includeCli: false,
   includeCodecov: true,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -48,6 +50,7 @@ const baseConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
+  workspaceMode: false,
 };
 
 const createFakeCommand = async (binDirectory: string, name: string): Promise<void> => {
@@ -177,14 +180,14 @@ describe("security-lint wrapper", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.commandLog).toEqual(["uvx", "semgrep@1.172.0", ...semgrepArguments]);
+    expect(result.commandLog).toEqual(["uvx", `semgrep@${semgrepVersion}`, ...semgrepArguments]);
   });
 
   it("falls back to pinned uvx Semgrep when semgrep is missing", async () => {
     const result = await runSecurityLint(["uvx"]);
 
     expect(result.status).toBe(0);
-    expect(result.commandLog).toEqual(["uvx", "semgrep@1.172.0", ...semgrepArguments]);
+    expect(result.commandLog).toEqual(["uvx", `semgrep@${semgrepVersion}`, ...semgrepArguments]);
   });
 
   it("warns when semgrep and uvx are both missing", async () => {
@@ -193,7 +196,7 @@ describe("security-lint wrapper", () => {
     expect(result.status).toBe(1);
     expect(result.commandLog).toEqual([]);
     expect(result.stderr).toContain(
-      "warning: security:lint requires semgrep on PATH or uvx for semgrep@1.172.0.",
+      `warning: security:lint requires semgrep on PATH or uvx for semgrep@${semgrepVersion}.`,
     );
     expect(result.stderr).toContain(
       "warning: install Semgrep directly or install uv so uvx can run the pinned scan.",

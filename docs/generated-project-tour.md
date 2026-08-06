@@ -27,7 +27,7 @@ ever imports from `test/`.
 | `tsconfig.build.json` _(tsc only)_ | Adds declarations and `rootDir` for the `tsc` production build.                  |
 | `tsdown.config.ts` _(tsdown only)_ | [tsdown](https://tsdown.dev) bundler config emitting ESM + `.d.ts` into `dist/`. |
 
-Both build options are ESM-only and target Node 22+. `tsc` is the default —
+Both build options are ESM-only and target Node 24+. `tsc` is the default —
 plain, predictable compilation. Choose `tsdown` when you want bundling,
 multiple entry points collapsed into one file, or faster builds; the emitted
 artifacts (`dist/index.js`, `dist/index.d.ts`) are the same either way, so
@@ -70,7 +70,7 @@ Key scripts:
 
 | Path                                           | Purpose                                                                                                                                                                                                                                     |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`                     | SHA-pinned CI on Node 22 and 24: audit, full check suite, TS 7 probe, build, publint, optional Codecov upload.                                                                                                                              |
+| `.github/workflows/ci.yml`                     | SHA-pinned CI on Node 24: audit, full check suite, TS 7 probe, build, publint, optional Codecov upload.                                                                                                                                     |
 | `.github/workflows/release.yml`                | Publishes to npm when you publish a GitHub release, authenticating with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) and `--provenance` — no `NPM_TOKEN` secret. Adds a JSR publish step when JSR is enabled. |
 | `.github/workflows/codeql.yml` _(optional)_    | CodeQL static analysis on pushes, PRs, and a weekly schedule.                                                                                                                                                                               |
 | `.github/workflows/scorecard.yml` _(optional)_ | [OpenSSF Scorecard](https://scorecard.dev) supply-chain posture checks.                                                                                                                                                                     |

@@ -1,9 +1,10 @@
 import { execFile, spawn } from "node:child_process";
-import { access, chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { formatErrorMessage } from "./filesystem-errors.js";
+import { readGitRepositoryRoot } from "./git-repository.js";
 import { assertValidPackageName } from "./package-name.js";
 import { equalResolvedPaths } from "./path-comparison.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
@@ -77,7 +78,9 @@ export const scaffoldProject = async (
   }
 
   if (options.postScaffold !== false) {
-    if (options.skipGit === true) {
+    if (config.workspaceMode) {
+      options.progress?.info("Skipping git setup; the workspace repository owns it.");
+    } else if (options.skipGit === true) {
       options.progress?.info("Skipping git setup (--skip-git).");
     } else {
       await runPostScaffoldStep(
@@ -154,16 +157,6 @@ export const initializeGitRepositoryIfNeeded = async (cwd: string): Promise<void
 
   if (repositoryRoot === undefined) {
     await execFileAsync("git", ["init"], { cwd });
-  }
-};
-
-const readGitRepositoryRoot = async (cwd: string): Promise<string | undefined> => {
-  try {
-    await access(cwd);
-    const result = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd });
-    return getExecFileStdout(result).trim();
-  } catch {
-    return undefined;
   }
 };
 
@@ -252,5 +245,3 @@ const runPostScaffoldStep = async (
     });
   }
 };
-
-const getExecFileStdout = (result: { stdout: string }): string => result.stdout;

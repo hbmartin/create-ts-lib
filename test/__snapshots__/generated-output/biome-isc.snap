@@ -8,6 +8,7 @@ coverage
 .DS_Store
 *.log
 *.tsbuildinfo
+*.orig
 *.tgz
 .env
 .env.*
@@ -236,7 +237,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Use pnpm for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
-- Treat this package as Node 22+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Treat this package as Node 24+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. Linting and formatting are handled by Biome.
 
 ## Code Changes
@@ -661,7 +662,7 @@ executable: false
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }
 
@@ -949,7 +950,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["22", "24"]
+        node-version: ["24"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -1008,7 +1009,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
@@ -1056,29 +1057,32 @@ executable: false
   "config": {
     "author": "Harold Martin <harold@example.com>",
     "bundler": "tsc",
+    "copyrightYear": "2026",
     "description": "A generated TypeScript library",
     "githubRepoUrl": "https://github.com/hbmartin/generated-lib",
     "includeCli": true,
     "includeCodecov": false,
+    "includeCommunityFiles": false,
     "includeJsr": false,
     "includeSecurityWorkflows": false,
     "includeZod": false,
     "license": "ISC",
     "lintFormatTooling": "biome",
     "packageManager": "pnpm",
-    "projectName": "biome-library"
+    "projectName": "biome-library",
+    "workspaceMode": false
   },
   "files": {
-    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
     "biome.jsonc": "ea517684bef315669884757f883a8296e958cc764eaece1d57e37623e103b1c7",
     ".vscode/extensions.json": "40af2f96f539e1173868ac6a11bf9984c4c5b4edaefbd7d6e1484df25198d376",
     ".vscode/settings.json": "7f49c0f31b67567382a2b8cb992e3802093493bcd3a68c1c28361a7eb38f51eb",
-    "AGENTS.md": "b165cda5f59b2e9d6bda04ea8cc841e69c8ebd1cdff64a111400eecc9f41362f",
+    "AGENTS.md": "57e38f36ac6d5c890ac9a064ddfb7f28c74fc786656a86ec9d03fba1c1cde54a",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
-    "package.json": "8aa8e3b803eba41fab0c400342403a36baa7c2e103dd9990d9c8c613a939d3c0",
+    "package.json": "90dea65d5d6053afc4d62350ca311b1cfbc2b407ed9c5665a0e0fdb73bd3d329",
     "README.md": "e737ddcb2a12939f50271574bf9029b2e70525e2e59905f704444339b8becf1b",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
@@ -1092,8 +1096,8 @@ executable: false
     "source/cli.ts": "04c189205b0b59e57cf22a5f9e2a68c5e701c9a7c0db9c9981db22c5ef1b9d03",
     "test/cli.test.ts": "5d9ffab7e8ec1f65e49e3f532f552e9e154e4ae85ad414886a2cf68b85ba3bbf",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "8ad87221f473fba975e7864620d3c9300ee1b49275120ea9b2a84adb869af0d6",
-    ".github/workflows/release.yml": "fa6cd16483808198cad7444d9459b52d599ac5034b95d071a710b955069ce7ac"
+    ".github/workflows/ci.yml": "474ab0806433d9166b3347173ef6bcf561f8524d5014d778674f95616988de57",
+    ".github/workflows/release.yml": "e63b094cd60567c9c63daa78f5fc1a96c7768d09730060fdcdc9ae5a5ebbe32e"
   },
   "generator": "@hbmartin/create-ts-lib",
   "version": "<generator-version>"

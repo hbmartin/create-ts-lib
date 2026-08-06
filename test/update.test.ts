@@ -2,13 +2,15 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { scaffoldProject } from "../source/scaffold.js";
 import type { ScaffoldConfig } from "../source/templates/files.js";
+import { currentCopyrightYear } from "../source/templates/scaffold-config.js";
 import { hashFileContent, type ScaffoldState, stateFileName } from "../source/templates/state.js";
 import {
   applyUpdatePlan,
+  backupFileSuffix,
   planUpdate,
   readScaffoldState,
   type UpdatePlanEntry,
@@ -17,10 +19,12 @@ import {
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A test library",
   githubRepoUrl: "",
   includeCli: false,
   includeCodecov: false,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -28,6 +32,7 @@ const baseConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "example-lib",
+  workspaceMode: false,
 };
 
 const scaffoldFixtureProject = async (): Promise<string> => {
@@ -68,6 +73,20 @@ describe("readScaffoldState", () => {
     expect(state.generator).toBe("@hbmartin/create-ts-lib");
     expect(Object.keys(state.files)).toContain("package.json");
     expect(Object.keys(state.files)).not.toContain(stateFileName);
+  });
+
+  it("defaults copyrightYear for state files written before the field existed", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const state = await readStateFixture(targetDirectory);
+    const { copyrightYear: _omitted, ...configWithoutYear } = state.config;
+    await writeStateFixture(targetDirectory, {
+      ...state,
+      config: configWithoutYear as ScaffoldConfig,
+    });
+
+    const parsed = await readScaffoldState(targetDirectory);
+
+    expect(parsed.config.copyrightYear).toMatch(/^\d{4}$/u);
   });
 
   it("rejects directories without a state file", async () => {
@@ -130,6 +149,25 @@ describe("planUpdate", () => {
     expect(plan.entries.length).toBeGreaterThan(0);
     expect(plan.entries.every((entry) => entry.status === "up-to-date")).toBe(true);
     expect(plan.entries.map((entry) => entry.path)).not.toContain(stateFileName);
+  });
+
+  it("replays the recorded copyright year instead of rewriting LICENSE in a later year", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const state = await readScaffoldState(targetDirectory);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2031-06-01T00:00:00.000Z"));
+    try {
+      // Proves the clock really moved, so a regression cannot make this vacuous.
+      expect(currentCopyrightYear()).not.toBe(baseConfig.copyrightYear);
+
+      const plan = await planUpdate(targetDirectory, state);
+
+      expect(findEntry(plan.entries, "LICENSE").status).toBe("up-to-date");
+      expect(findEntry(plan.entries, "LICENSE").newContent).toContain(baseConfig.copyrightYear);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("classifies user-modified files, deleted files, and stale-but-unmodified files", async () => {
@@ -218,5 +256,87 @@ describe("applyUpdatePlan", () => {
     await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toContain(
       "no-child-process-exec",
     );
+  });
+});
+
+describe("applyUpdatePlan selection and backups", () => {
+  const makeStale = async (targetDirectory: string, paths: string[]): Promise<void> => {
+    const state = await readStateFixture(targetDirectory);
+    for (const path of paths) {
+      await writeFile(join(targetDirectory, path), staleFixtureContent, "utf8");
+      state.files[path] = hashFileContent(staleFixtureContent);
+    }
+    await writeStateFixture(targetDirectory, state);
+  };
+
+  const staleFixtureContent = "# stale\n";
+
+  it("writes only the paths listed in `only`", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await makeStale(targetDirectory, ["semgrep.yml", "tsconfig.json"]);
+    const state = await readScaffoldState(targetDirectory);
+    const plan = await planUpdate(targetDirectory, state);
+
+    const written = await applyUpdatePlan(targetDirectory, plan, { only: ["semgrep.yml"] });
+
+    expect(written.map((entry) => entry.path)).toEqual(["semgrep.yml"]);
+    await expect(readFile(join(targetDirectory, "tsconfig.json"), "utf8")).resolves.toBe(
+      staleFixtureContent,
+    );
+  });
+
+  it("writes nothing for an empty `only` list", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await makeStale(targetDirectory, ["semgrep.yml"]);
+    const state = await readScaffoldState(targetDirectory);
+    const plan = await planUpdate(targetDirectory, state);
+
+    const written = await applyUpdatePlan(targetDirectory, plan, { only: [] });
+
+    expect(written).toEqual([]);
+    await expect(readFile(join(targetDirectory, "semgrep.yml"), "utf8")).resolves.toBe(
+      staleFixtureContent,
+    );
+  });
+
+  it("backs up user-modified files before a forced overwrite", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const edited = "rules: []\n";
+    await writeFile(join(targetDirectory, "semgrep.yml"), edited, "utf8");
+    const state = await readScaffoldState(targetDirectory);
+    const plan = await planUpdate(targetDirectory, state);
+
+    await applyUpdatePlan(targetDirectory, plan, { force: true });
+
+    await expect(
+      readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
+    ).resolves.toBe(edited);
+  });
+
+  it("does not back up files that were never modified", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await makeStale(targetDirectory, ["semgrep.yml"]);
+    const state = await readScaffoldState(targetDirectory);
+    const plan = await planUpdate(targetDirectory, state);
+
+    // `update` entries match the recorded hash, so nothing is at risk.
+    await applyUpdatePlan(targetDirectory, plan, { force: true });
+
+    await expect(
+      readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("skips the backup when backup is false", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await writeFile(join(targetDirectory, "semgrep.yml"), "rules: []\n", "utf8");
+    const state = await readScaffoldState(targetDirectory);
+    const plan = await planUpdate(targetDirectory, state);
+
+    await applyUpdatePlan(targetDirectory, plan, { backup: false, force: true });
+
+    await expect(
+      readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
+    ).rejects.toThrow();
   });
 });
