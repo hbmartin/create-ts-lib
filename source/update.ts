@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { isErrorWithCode, isFileNotFoundError } from "./filesystem-errors.js";
+import { isInsideDirectory } from "./path-comparison.js";
 import { buildProjectFiles } from "./templates/files.js";
 import type { GeneratedFile } from "./templates/scaffold-config.js";
 import {
@@ -27,8 +28,30 @@ export interface UpdatePlanEntry {
   status: UpdateFileStatus;
 }
 
+/**
+ * How a path the state file records but the templates no longer render relates
+ * to what is on disk.
+ *
+ * Deliberately not part of `UpdateFileStatus`: an orphan has no rendered
+ * content, so it cannot honour `UpdatePlanEntry.newContent`, and widening that
+ * union would enrol orphans in every `status !== "up-to-date"` filter -- all of
+ * which mean "pending work to write".
+ */
+export type OrphanStatus =
+  | "orphan-external"
+  | "orphan-gone"
+  | "orphan-modified"
+  | "orphan-unmodified";
+
+export interface OrphanedFile {
+  path: string;
+  status: OrphanStatus;
+}
+
 export interface UpdatePlan {
   entries: UpdatePlanEntry[];
+  /** Paths recorded in the state file that the current config no longer renders. */
+  orphans: OrphanedFile[];
   state: ScaffoldState;
   stateFile: GeneratedFile;
 }
@@ -84,6 +107,9 @@ const readStateFileContent = async (
  * - `create`: the file does not exist on disk
  * - `skip-modified`: the user changed the file since scaffolding; it is only
  *   overwritten with `--force`
+ *
+ * Paths the state file records but the render no longer produces come back
+ * separately as `orphans`.
  */
 export const planUpdate = async (
   targetDirectory: string,
@@ -94,6 +120,11 @@ export const planUpdate = async (
   if (stateFile === undefined) {
     throw new Error(`Rendered project files unexpectedly omit ${stateFileName}.`);
   }
+
+  // Includes the state file itself, so `.create-ts-lib.json` can never be
+  // classified as an orphan: `update` must not be able to delete the record it
+  // reads on the next run.
+  const renderedPaths = new Set(renderedFiles.map((file) => file.path));
 
   const entries: UpdatePlanEntry[] = [];
   for (const file of renderedFiles) {
@@ -109,7 +140,65 @@ export const planUpdate = async (
     });
   }
 
-  return { entries, state, stateFile };
+  return {
+    entries,
+    orphans: await buildOrphans(targetDirectory, state, renderedPaths),
+    state,
+    stateFile,
+  };
+};
+
+const buildOrphans = async (
+  targetDirectory: string,
+  state: ScaffoldState,
+  renderedPaths: ReadonlySet<string>,
+): Promise<OrphanedFile[]> => {
+  const resolvedTarget = resolve(targetDirectory);
+  const orphans: OrphanedFile[] = [];
+
+  // Insertion order rather than sorted: the state file's key order is the render
+  // order of whichever release wrote it, which groups related files far better
+  // than lexicographic order would.
+  for (const [path, recordedHash] of Object.entries(state.files)) {
+    if (renderedPaths.has(path)) {
+      continue;
+    }
+
+    orphans.push({ path, status: await classifyOrphan(resolvedTarget, path, recordedHash) });
+  }
+
+  return orphans;
+};
+
+const classifyOrphan = async (
+  resolvedTarget: string,
+  path: string,
+  recordedHash: string,
+): Promise<OrphanStatus> => {
+  const fullPath = resolve(resolvedTarget, path);
+  // `.create-ts-lib.json` is user-editable and its keys are unvalidated strings.
+  // This is the first place one becomes a path that something may delete, so
+  // where it lands is checked rather than assumed.
+  if (!isInsideDirectory(resolvedTarget, fullPath)) {
+    return "orphan-external";
+  }
+
+  let diskContent: string;
+  try {
+    diskContent = await readFile(fullPath, "utf8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return "orphan-gone";
+    }
+
+    // Unlike `classifyFile`, an unreadable path is not rethrown. There,
+    // misclassifying as `create` would overwrite it; here the fail-safe answer
+    // never removes anything, and throwing would let one unreadable leftover
+    // block every update the project will ever run.
+    return "orphan-modified";
+  }
+
+  return hashFileContent(diskContent) === recordedHash ? "orphan-unmodified" : "orphan-modified";
 };
 
 const classifyFile = async (
@@ -227,10 +316,22 @@ export const applyUpdatePlan = async (
 
   const statePath = join(resolvedTarget, plan.stateFile.path);
   const writtenPaths = new Set(written.map((entry) => entry.path));
-  await writeFile(statePath, mergeStateFileContent(plan, writtenPaths), "utf8");
+  const clearedOrphanPaths = clearedOrphans(plan);
+  await writeFile(statePath, mergeStateFileContent(plan, writtenPaths, clearedOrphanPaths), "utf8");
 
   return written;
 };
+
+/**
+ * Orphan paths whose key should leave the state file. Only the ones already
+ * absent from disk for now: nothing is deleted to establish that, and without
+ * it a file the user removed by hand is re-reported on every run for the life
+ * of the project.
+ */
+const clearedOrphans = (plan: UpdatePlan): ReadonlySet<string> =>
+  new Set(
+    plan.orphans.filter((orphan) => orphan.status === "orphan-gone").map((orphan) => orphan.path),
+  );
 
 /**
  * The state file records what is on disk, so a partial apply must keep the
@@ -243,7 +344,11 @@ export const applyUpdatePlan = async (
  * already matches the new render, and preserving their stale hash would produce
  * the same misclassification one release later.
  */
-const mergeStateFileContent = (plan: UpdatePlan, writtenPaths: ReadonlySet<string>): string => {
+const mergeStateFileContent = (
+  plan: UpdatePlan,
+  writtenPaths: ReadonlySet<string>,
+  clearedOrphanPaths: ReadonlySet<string>,
+): string => {
   // Re-reading what this process just rendered, so the shape is known; parsing
   // through Zod here would reorder the config keys against a fresh scaffold.
   const renderedState = JSON.parse(plan.stateFile.content) as ScaffoldState;
@@ -261,6 +366,21 @@ const mergeStateFileContent = (plan: UpdatePlan, writtenPaths: ReadonlySet<strin
     } else {
       renderedState.files[entry.path] = previousHash;
     }
+  }
+
+  // The rendered map cannot contain an orphan -- being absent from the render is
+  // what makes it one -- so a survivor has to be *added back*, not merely left
+  // alone. The loop above only ever overwrites or deletes keys that are already
+  // there, which is why every apply used to erase the record silently. Dropping
+  // it loses the one hash that proves the file is untouched, and no later run
+  // could tell it apart from something the user wrote by hand.
+  for (const orphan of plan.orphans) {
+    const previousHash = plan.state.files[orphan.path];
+    if (clearedOrphanPaths.has(orphan.path) || previousHash === undefined) {
+      continue;
+    }
+
+    renderedState.files[orphan.path] = previousHash;
   }
 
   return `${JSON.stringify(renderedState, null, 2)}\n`;

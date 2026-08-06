@@ -10,8 +10,10 @@ import { hashFileContent, type ScaffoldState, stateFileName } from "../source/te
 import {
   applyUpdatePlan,
   backupFileSuffix,
+  type OrphanStatus,
   planUpdate,
   readScaffoldState,
+  type UpdatePlan,
   type UpdatePlanEntry,
 } from "../source/update.js";
 import { createTempDirectory, createTempPath } from "./helpers/temp-directory.js";
@@ -61,6 +63,25 @@ const findEntry = (entries: UpdatePlanEntry[], path: string): UpdatePlanEntry =>
   }
 
   return entry;
+};
+
+const orphanStatusFor = (plan: UpdatePlan, path: string): OrphanStatus | undefined =>
+  plan.orphans.find((orphan) => orphan.path === path)?.status;
+
+/**
+ * Flips a recorded config option so the next render drops files the state file
+ * still records — the realistic way a project grows orphans, and the reason
+ * "absent from the render" cannot be read as "the templates dropped it".
+ */
+const retoolProject = async (
+  targetDirectory: string,
+  config: Partial<ScaffoldConfig>,
+): Promise<void> => {
+  const state = await readStateFixture(targetDirectory);
+  await writeStateFixture(targetDirectory, {
+    ...state,
+    config: { ...state.config, ...config },
+  });
 };
 
 describe("readScaffoldState", () => {
@@ -394,5 +415,114 @@ describe("applyUpdatePlan selection and backups", () => {
     await expect(
       readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
     ).rejects.toThrow();
+  });
+});
+
+describe("orphaned files", () => {
+  // The base fixture uses oxlint-oxfmt, so flipping to Biome orphans both
+  // oxlint config files and creates biome.jsonc.
+  const orphanedByBiome = [".oxfmtrc.json", ".oxlintrc.json"];
+
+  const planAfterRetool = async (
+    targetDirectory: string,
+    config: Partial<ScaffoldConfig>,
+  ): Promise<UpdatePlan> => {
+    await retoolProject(targetDirectory, config);
+
+    return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+  };
+
+  it("reports files the render no longer produces, and never as plan entries", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    for (const path of orphanedByBiome) {
+      expect(orphanStatusFor(plan, path)).toBe("orphan-unmodified");
+      // An orphan has no rendered content, so it must never reach the entry
+      // list where every status means "pending work to write".
+      expect(plan.entries.some((entry) => entry.path === path)).toBe(false);
+    }
+    expect(findEntry(plan.entries, "biome.jsonc").status).toBe("create");
+  });
+
+  it("distinguishes edited and already-deleted orphans", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await writeFile(join(targetDirectory, ".oxfmtrc.json"), "{ /* mine */ }\n", "utf8");
+    await rm(join(targetDirectory, ".oxlintrc.json"));
+
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    expect(orphanStatusFor(plan, ".oxfmtrc.json")).toBe("orphan-modified");
+    expect(orphanStatusFor(plan, ".oxlintrc.json")).toBe("orphan-gone");
+  });
+
+  it("never treats its own state file as an orphan", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const state = await readStateFixture(targetDirectory);
+    // A future release could start recording it; `update` still must not be able
+    // to delete the record it reads on the next run.
+    state.files[stateFileName] = hashFileContent("anything");
+    await writeStateFixture(targetDirectory, state);
+
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+    expect(orphanStatusFor(plan, stateFileName)).toBeUndefined();
+  });
+
+  it.each(["../escaped.txt", "/etc/hosts"])(
+    "flags the recorded path %j as pointing outside the project",
+    async (escapingPath) => {
+      const targetDirectory = await scaffoldFixtureProject();
+      const state = await readStateFixture(targetDirectory);
+      state.files[escapingPath] = hashFileContent("anything");
+      await writeStateFixture(targetDirectory, state);
+
+      const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+      expect(orphanStatusFor(plan, escapingPath)).toBe("orphan-external");
+    },
+  );
+
+  it("keeps recording an orphan the run did not clear", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    // The first apply of any kind used to erase the record, because the state
+    // file is rebuilt from the render and an orphan is by definition not in it.
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    for (const path of orphanedByBiome) {
+      expect(orphanStatusFor(nextPlan, path)).toBe("orphan-unmodified");
+    }
+  });
+
+  it("drops the record for an orphan that is already gone", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await rm(join(targetDirectory, ".oxfmtrc.json"));
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const state = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(state.files, ".oxfmtrc.json")).toBe(false);
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(orphanStatusFor(nextPlan, ".oxfmtrc.json")).toBeUndefined();
+  });
+
+  it("leaves everything on disk when a config toggle orphans a batch of files", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+
+    // Workspace mode is the widest blast radius a single field has.
+    const plan = await planAfterRetool(targetDirectory, { workspaceMode: true });
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const state = await readStateFixture(targetDirectory);
+    for (const path of [".gitignore", "lefthook.yml", "pnpm-workspace.yaml"]) {
+      expect(orphanStatusFor(plan, path)).toBe("orphan-unmodified");
+      await expect(readFile(join(targetDirectory, path), "utf8")).resolves.toBeTypeOf("string");
+      expect(Object.hasOwn(state.files, path)).toBe(true);
+    }
   });
 });

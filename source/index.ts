@@ -12,5 +12,11 @@ export type {
 } from "./templates/files.js";
 export { buildProjectFiles, defaultScaffoldConfig } from "./templates/files.js";
 export type { ScaffoldState } from "./templates/state.js";
-export type { UpdateFileStatus, UpdatePlan, UpdatePlanEntry } from "./update.js";
+export type {
+  OrphanedFile,
+  OrphanStatus,
+  UpdateFileStatus,
+  UpdatePlan,
+  UpdatePlanEntry,
+} from "./update.js";
 export { applyUpdatePlan, planUpdate, readScaffoldState } from "./update.js";
