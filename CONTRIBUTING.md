@@ -2,7 +2,7 @@
 
 ## Setup
 
-Use Node 22 or newer and pnpm 11.5.2.
+Use Node 24 or newer and pnpm 11.5.2.
 
 ```bash
 pnpm install
@@ -36,6 +36,9 @@ pnpm exec vitest run test/scaffold.test.ts
 pnpm exec vitest run test/scaffold.test.ts -t "generates a README"
 ```
 
+[`docs/checks-and-tests.md`](docs/checks-and-tests.md) documents every command in
+detail, the full `SMOKE_*` environment matrix, and the cross-cutting guard tests.
+
 ## How scaffolding works
 
 The generator turns a `ScaffoldConfig` into a list of files, then writes them:
@@ -49,54 +52,44 @@ The generator turns a `ScaffoldConfig` into a list of files, then writes them:
 
 ## Changing generated output
 
-Static files live as `*.tmpl` assets under `source/templates/assets/` and are
-copied verbatim into `dist/templates/assets/` by `scripts/build.mjs` (a recursive
-directory copy — new `.tmpl` files are picked up automatically, no copy wiring
-needed).
+[`docs/extending-the-generator.md`](docs/extending-the-generator.md) is the
+reference for this — template rendering, version pinning, the `update` classifier,
+and workspace mode. Two procedures carry hard requirements:
 
-Placeholders in a template use `{{KEY}}` syntax and are filled in by
-`renderTemplate(path, replacements)` in `source/templates/files.ts`. Files whose
-content depends on more than simple substitution (for example `package.json`, the
-README, and the CI workflow) are assembled by dedicated `build*` functions in the
-same file.
+**Adding a new generated file.** A `*.tmpl` asset under `source/templates/assets/`
+is copied into `dist/templates/assets/` automatically by `scripts/build.mjs`, so
+no copy wiring is needed. But copying is not emitting: the file only reaches a
+scaffolded project once `buildProjectFiles` returns it, and only survives publish
+once `scripts/verify-artifacts.mjs` covers it (automatic for `.tmpl` assets, a
+hand-listed array for compiled entry points). Add a structural test in
+`test/scaffold.test.ts` too.
 
-To **add a new generated file**:
-
-1. Add the template under `source/templates/assets/` (or write a `build*`
-   function if the content is computed).
-2. Register it in `buildProjectFiles` so it ends up in the returned list.
-3. If it is required for the package to work after publish, add it to the
-   `verify:artifacts` check in `package.json` so a missing copy fails the build.
-4. Add or update a structural test in `test/scaffold.test.ts`.
-
-To **add a new `ScaffoldConfig` option**:
-
-1. Add the field to `ScaffoldConfig` and `defaultScaffoldConfigValues` in
-   `source/templates/scaffold-config.ts`.
-2. Add it to `scaffoldConfigSchema` in `source/templates/state.ts` **with a
-   `.default()`**. This is not optional: generated projects carry a
-   `.create-ts-lib.json` written by whichever release scaffolded them, and
-   `create-ts-lib update` has to keep parsing those older files. A field without
-   a default breaks `update` for every project already on disk.
-3. If it is a reusable preference rather than a per-project answer, add it to
-   `userConfigSchema` in `source/user-config.ts` and to the coercion table
-   beside it (typed so a missing entry fails to compile).
-4. Add the CLI flag in `source/cli-helpers.ts` and document it in the `helpText`
-   in `source/cli.ts` — `test/cli.test.ts` fails if any parsed option is
-   undocumented.
-
-`test/state-compatibility.test.ts` guards step 2 against frozen fixtures in
+**Adding a new `ScaffoldConfig` option.** Four steps, of which step 2 is
+load-bearing: the `scaffoldConfigSchema` entry in `source/templates/state.ts`
+needs a `.default()`. This is not optional — generated projects carry a
+`.create-ts-lib.json` written by whichever release scaffolded them, and
+`create-ts-lib update` has to keep parsing those older files. A field without a
+default breaks `update` for every project already on disk.
+`test/state-compatibility.test.ts` guards this against frozen fixtures in
 `test/__fixtures__/state/`. Those fixtures are deliberately stale; do not
 regenerate them to make a failure go away — add the `.default()` instead.
 
 ## Tests
 
-Generated output is verified with **structural assertions, not snapshots** — a
-test calls `buildProjectFiles(config)`, finds the file it cares about, and asserts
-the specific lines or fields that matter (see `test/scaffold.test.ts`). When you
-change generated output, update these assertions rather than adding snapshot
-files; this keeps tests readable and makes intentional changes explicit in the
-diff.
+Generated output is verified two ways, and a template change usually touches both:
+
+- **Structural assertions** — a test calls `buildProjectFiles(config)`, finds the
+  file it cares about, and asserts the specific lines or fields that matter (see
+  `test/scaffold.test.ts`). This is the primary style: it keeps tests readable and
+  makes intentional changes explicit in the diff. Prefer it for new behavior.
+- **Golden files** — `test/generated-output-snapshot.test.ts` serializes five
+  whole-project configs into `test/__snapshots__/generated-output/`, so
+  *unintended* drift shows up even where no assertion covers it. Update with
+  `pnpm exec vitest run test/generated-output-snapshot.test.ts -u` and read the
+  diff rather than accepting it blindly.
+
+When you change generated output, update `README.md` and
+`docs/generated-project-tour.md` in the same commit.
 
 ## Release
 
