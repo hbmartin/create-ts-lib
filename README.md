@@ -415,7 +415,12 @@ surfaces them at the repository root, so a copy inside `packages/<name>/` is a
 file nothing reads.
 
 The generated `package.json` also drops `packageManager`, the `prepare` hook,
-and the `lefthook` devDependency, since the root pins all three. Git setup is
+and the `lefthook` devDependency, since the root pins all three. That is a
+precondition, not something detection verifies: a `pnpm-workspace.yaml` or a
+`workspaces` field is enough to offer workspace mode, so on an npm or Yarn root
+that does not already own these, add them at the root — or add them back to the
+package — or the new package ends up without a pinned package manager and
+without Git hooks. Git setup is
 skipped entirely — the workspace repository owns it, so the printed next steps
 leave out the `git push` instructions even when a repository URL is configured.
 That URL still lands in `package.json`: it is the parent repository's.

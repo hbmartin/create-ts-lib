@@ -10,7 +10,7 @@ The generator is a pure function from config to file list, plus a thin writer:
 2. **Render** — `buildProjectFiles(config)` in `source/templates/files.ts` returns `GeneratedFile[]` (`{ path, content, executable? }`). This is the single place that decides which files a project gets.
 3. **Write** — `scaffoldProject` (`source/scaffold.ts`) writes the list, then runs post-scaffold steps (git init, remote, install, build, test), each wrapped in `PostScaffoldSetupError` carrying the failing step so the CLI can print targeted recovery.
 
-Three commands share this pipeline: `scaffold` (default), `update` (`source/update.ts`), and `config` (`source/cli-config.ts`). `source/index.ts` is the deliberate public API — export from it intentionally.
+Two commands share this pipeline: `scaffold` (default) and `update` (`source/update.ts`). `source/index.ts` is the deliberate public API — export from it intentionally.
 
 ## Critical invariants
 
