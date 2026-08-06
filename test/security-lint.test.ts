@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { buildProjectFiles, type ScaffoldConfig } from "../source/templates/files.js";
 import { semgrepVersion } from "../source/templates/generated-versions.js";
@@ -26,7 +26,18 @@ const semgrepScanArguments = [
   "source",
   "test",
 ];
-const semgrepScanTestTimeout = 20_000;
+// Semgrep is a Python front end: even warm, interpreter start-up and rule
+// loading cost several seconds before a single fixture is read, and the scan
+// competes with the rest of the suite plus coverage instrumentation. The old
+// 20s budget was roughly 4x that floor, which is a coin flip rather than a
+// timeout. `spawnSync` cannot be preempted anyway, so vitest's timeout is a
+// verdict rather than a budget -- a healthy run never spends the extra.
+const semgrepScanTestTimeout = 60_000;
+// `uvx semgrep@<pinned>` resolves, downloads, and installs on first use, which
+// is tens of seconds cold. Paid in `beforeAll` so it is not charged to the scan
+// test, and so a broken or offline uv reports itself as a warm-up failure
+// instead of masquerading as a rules regression.
+const semgrepWarmupTimeout = 180_000;
 
 interface SemgrepScanOutput {
   results: Array<{
@@ -70,9 +81,6 @@ exit 0
   await chmod(executablePath, 0o755);
 };
 
-const isMissingCommandError = (error: Error | undefined): boolean =>
-  (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
-
 const hasRunnableCommand = (command: string): boolean => {
   const result = spawnSync(command, ["--version"], {
     stdio: "ignore",
@@ -81,7 +89,30 @@ const hasRunnableCommand = (command: string): boolean => {
   return result.error === undefined && result.status === 0;
 };
 
-const hasSemgrepRunner = hasRunnableCommand("semgrep") || hasRunnableCommand("uvx");
+interface SemgrepRunner {
+  command: string;
+  leadingArguments: string[];
+}
+
+/**
+ * Resolved once, at module load, because `it.skipIf` is a collection-time
+ * decision that no hook can feed. Picking the runner up front also removes the
+ * old ENOENT-probe-then-fall-back-to-uvx path, which charged a failed spawn and
+ * a possible cold install to whichever test happened to run first.
+ */
+const resolveSemgrepRunner = (): SemgrepRunner | undefined => {
+  if (hasRunnableCommand("semgrep")) {
+    return { command: "semgrep", leadingArguments: [] };
+  }
+
+  if (hasRunnableCommand("uvx")) {
+    return { command: "uvx", leadingArguments: [`semgrep@${semgrepVersion}`] };
+  }
+
+  return undefined;
+};
+
+const semgrepRunner = resolveSemgrepRunner();
 
 const runSecurityLint = async (
   commands: string[],
@@ -142,17 +173,15 @@ const runSemgrepScan = async (
       await writeFile(join(sourceDirectory, fileName), content.trimStart(), "utf8");
     }
 
-    let result = spawnSync("semgrep", semgrepScanArguments, {
-      cwd: tempDirectory,
-      encoding: "utf8",
-    });
-
-    if (isMissingCommandError(result.error)) {
-      result = spawnSync("uvx", [`semgrep@${semgrepVersion}`, ...semgrepScanArguments], {
-        cwd: tempDirectory,
-        encoding: "utf8",
-      });
+    if (semgrepRunner === undefined) {
+      throw new Error("No Semgrep runner available; this test should have been skipped.");
     }
+
+    const result = spawnSync(
+      semgrepRunner.command,
+      [...semgrepRunner.leadingArguments, ...semgrepScanArguments],
+      { cwd: tempDirectory, encoding: "utf8" },
+    );
 
     if (result.error) {
       throw result.error;
@@ -215,6 +244,26 @@ describe("security-lint wrapper", () => {
 });
 
 describe("Semgrep security rules", () => {
+  // Guarded rather than skipped wholesale: the config-sync test below does not
+  // need a runner, so this hook still fires when the scan test is skipped.
+  beforeAll(() => {
+    if (semgrepRunner === undefined) {
+      return;
+    }
+
+    const warmup = spawnSync(
+      semgrepRunner.command,
+      [...semgrepRunner.leadingArguments, "--version"],
+      { encoding: "utf8", stdio: "ignore" },
+    );
+
+    if (warmup.error) {
+      throw warmup.error;
+    }
+
+    expect(warmup.status, "Semgrep warm-up failed").toBe(0);
+  }, semgrepWarmupTimeout);
+
   it("keeps generated Semgrep config in sync with the root config", async () => {
     const rootConfig = await readFile(semgrepConfigPath, "utf8");
     const generatedConfig = buildProjectFiles(baseConfig).find(
@@ -224,7 +273,7 @@ describe("Semgrep security rules", () => {
     expect(generatedConfig?.content).toBe(rootConfig);
   });
 
-  it.skipIf(!hasSemgrepRunner)(
+  it.skipIf(semgrepRunner === undefined)(
     "flags child_process exec and execSync aliases",
     async () => {
       const scan = await runSemgrepScan(await readFile(semgrepConfigPath, "utf8"), {

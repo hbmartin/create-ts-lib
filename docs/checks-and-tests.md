@@ -93,5 +93,10 @@ single module:
 - **`workflow-action-refs`** — fails when this repo's own workflows drift from
   `githubActionRefs`, because Renovate cannot see the copies emitted into
   generated projects.
-- **`security-lint`** — checks the Semgrep rules themselves.
+- **`security-lint`** — checks the Semgrep rules themselves. Most of it runs
+  against fake `semgrep`/`uvx` shims, so only one test needs a real runner; it is
+  skipped when neither `semgrep` nor `uvx` is on `PATH`. A `beforeAll` warms the
+  pinned `uvx semgrep@<version>` install so a cold uv cache is not charged
+  against that test's timeout — without it the first run on a fresh machine fails
+  on the download rather than on a rule.
 - **`generated-output-snapshot`** — the golden files described above.
