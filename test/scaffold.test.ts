@@ -553,6 +553,9 @@ describe("buildProjectFiles", () => {
         ) as GeneratedFallowConfig
       ).entry,
     ).toEqual(["source/index.ts", "source/cli.ts"]);
+    // Markdown is ignored so an unformatted README or CHANGELOG cannot block a
+    // commit: the generated Lefthook hook runs `oxfmt --check .` over the whole
+    // tree, not just the staged files.
     expect(oxfmtConfig.ignorePatterns).toEqual([
       "*.json",
       "**/*.json",
@@ -560,6 +563,8 @@ describe("buildProjectFiles", () => {
       "**/*.jsonc",
       "*.yml",
       "**/*.yml",
+      "*.md",
+      "**/*.md",
     ]);
     expect(oxlintConfig.ignorePatterns).toEqual(["*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]);
     expect(semgrep.content).toContain("no-eval-like-execution");

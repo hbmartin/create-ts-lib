@@ -25,7 +25,16 @@ report/
 executable: false
 
 {
-  "ignorePatterns": ["*.json", "**/*.json", "*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]
+  "ignorePatterns": [
+    "*.json",
+    "**/*.json",
+    "*.jsonc",
+    "**/*.jsonc",
+    "*.yml",
+    "**/*.yml",
+    "*.md",
+    "**/*.md"
+  ]
 }
 
 ===== .oxlintrc.json =====
@@ -1222,7 +1231,7 @@ executable: false
   },
   "files": {
     ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
-    ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
+    ".oxfmtrc.json": "b2bd97b91abc85dccd9e9c5ef17d1bc470032d4351920159e8921c78e449f8b1",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
