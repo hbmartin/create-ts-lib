@@ -9,6 +9,7 @@ import { assertValidPackageName } from "./package-name.js";
 import { equalResolvedPaths } from "./path-comparison.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
+import { assertValidScaffoldConfig } from "./templates/state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -61,6 +62,7 @@ export const scaffoldProject = async (
   config: ScaffoldConfig,
   options: ScaffoldOptions,
 ): Promise<void> => {
+  assertValidScaffoldConfig(config);
   assertValidPackageName(config.projectName);
 
   const targetDirectory = resolve(options.targetDirectory);

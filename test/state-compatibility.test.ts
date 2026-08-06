@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   type ScaffoldState,
@@ -23,12 +23,23 @@ const fixtureNames = ["v2.0.0-full", "v2.0.0-minimal"];
 const readFixture = async (name: string): Promise<string> =>
   readFile(fileURLToPath(new URL(`./__fixtures__/state/${name}.json`, import.meta.url)), "utf8");
 
+const fixtureDirectories: string[] = [];
+
 const projectWithState = async (stateContent: string): Promise<string> => {
   const targetDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-fixture-"));
+  fixtureDirectories.push(targetDirectory);
   await writeFile(join(targetDirectory, stateFileName), stateContent, "utf8");
 
   return targetDirectory;
 };
+
+afterEach(async () => {
+  await Promise.all(
+    fixtureDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { force: true, recursive: true })),
+  );
+});
 
 describe("scaffold state compatibility", () => {
   it.each(fixtureNames)("parses the %s state file", async (name) => {
@@ -98,6 +109,20 @@ describe("scaffold state compatibility", () => {
     ).toBe(true);
     // Guards the guard: if this list empties out, the assertion above is vacuous.
     expect(missingFields.length).toBeGreaterThan(0);
+
+    // A parse success alone does not prove `.default()`: `.optional()` also
+    // parses cleanly and then hands `update` an undefined field to render.
+    if (!result.success) {
+      return;
+    }
+
+    const undefinedFields = missingFields.filter(
+      (field) => (result.data as Record<string, unknown>)[field] === undefined,
+    );
+    expect(
+      undefinedFields,
+      "These fields parsed but produced no value, so they use .optional() where they need .default()",
+    ).toEqual([]);
   });
 
   it("still rejects genuinely invalid values", async () => {

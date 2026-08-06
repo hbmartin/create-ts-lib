@@ -13,6 +13,7 @@ import {
   scaffoldProject,
 } from "../source/scaffold.js";
 import { renderBiomeJsonc } from "../source/templates/biome.js";
+import { buildCommunityFiles } from "../source/templates/community.js";
 import {
   buildProjectFiles,
   defaultScaffoldConfig,
@@ -169,9 +170,11 @@ describe("renderTemplate", () => {
     expect(error).toBeInstanceOf(Error);
     const message = (error as Error).message;
     expect(message).toContain("Unresolved template placeholder(s) in agents.md.tmpl:");
+    expect(message).toContain("{{PACKAGE_MANAGER}}");
     expect(message).toContain("{{LINT_FORMAT_GUIDANCE}}");
     expect(message).toContain("{{ZOD_GUIDANCE}}");
-    expect(message).toContain("{{SEMGREP_VERSION}}");
+    expect(message).toContain("{{CLI_GUIDANCE}}");
+    expect(message).toContain("{{RUN_PREFIX}}");
   });
 
   it("allows GitHub Actions expressions in templates", () => {
@@ -189,8 +192,10 @@ describe("renderTemplate", () => {
 
   it("renders replacement values with dollar tokens literally", () => {
     const agents = renderTemplate("agents.md.tmpl", {
+      CLI_GUIDANCE: "",
       LINT_FORMAT_GUIDANCE: "literal $& value",
-      SEMGREP_VERSION: semgrepVersion,
+      PACKAGE_MANAGER: "pnpm",
+      RUN_PREFIX: "pnpm run",
       ZOD_GUIDANCE: "",
     });
 
@@ -218,7 +223,7 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain(`version: ${pnpmVersion}`);
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("fail-fast: false");
-    expect(ciWorkflow?.content).toContain('node-version: ["24"]');
+    expect(ciWorkflow?.content).toContain('node-version: ["24", "26"]');
     expect(ciWorkflow?.content).toContain("node-version: $" + "{{ matrix.node-version }}");
     expect(ciWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(ciWorkflow?.content).toContain("enable-cache: true");
@@ -529,7 +534,14 @@ describe("buildProjectFiles", () => {
     );
     expect(agents.content).not.toContain("Use Zod");
     expect(agents.content).toContain("Before handoff, run `pnpm run release:check`");
-    expect(agents.content).toContain(`uvx semgrep@${semgrepVersion}`);
+    expect(agents.content).toContain("Use pnpm for all package management and scripts.");
+    expect(agents.content).toContain(
+      "When public API or CLI behavior changes, update `README.md` and tests.",
+    );
+    expect(agents.content).toContain(
+      "uses Semgrep; install Semgrep or uv if neither is available.",
+    );
+    expect(agents.content).not.toContain("Keep CLI entry points thin.");
     // The architecture gate that replaced dependency-cruiser: `source/` may not
     // reach into `test/`, and the cycle/dependency rules stay hard errors.
     expect(fallowConfig.rules["boundary-violation"]).toBe("error");
@@ -553,6 +565,9 @@ describe("buildProjectFiles", () => {
         ) as GeneratedFallowConfig
       ).entry,
     ).toEqual(["source/index.ts", "source/cli.ts"]);
+    // Markdown is ignored so an unformatted README or CHANGELOG cannot block a
+    // commit: the generated Lefthook hook runs `oxfmt --check .` over the whole
+    // tree, not just the staged files.
     expect(oxfmtConfig.ignorePatterns).toEqual([
       "*.json",
       "**/*.json",
@@ -560,6 +575,8 @@ describe("buildProjectFiles", () => {
       "**/*.jsonc",
       "*.yml",
       "**/*.yml",
+      "*.md",
+      "**/*.md",
     ]);
     expect(oxlintConfig.ignorePatterns).toEqual(["*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]);
     expect(semgrep.content).toContain("no-eval-like-execution");
@@ -1115,6 +1132,25 @@ describe("community-health files", () => {
     }
   });
 
+  it("omits them in workspace mode even when enabled", () => {
+    // GitHub only surfaces these at the repository root, so a copy inside
+    // packages/<name>/ is a file nothing reads. They are root-owned like the
+    // git ignore and the hooks.
+    expect(
+      buildCommunityFiles({ ...baseConfig, includeCommunityFiles: true, workspaceMode: true }),
+    ).toEqual([]);
+
+    const paths = buildProjectFiles({
+      ...baseConfig,
+      includeCommunityFiles: true,
+      workspaceMode: true,
+    }).map((file) => file.path);
+
+    for (const communityPath of communityPaths) {
+      expect(paths).not.toContain(communityPath);
+    }
+  });
+
   it("points SECURITY.md at GitHub private advisory reporting when a repo URL is set", () => {
     const content = findCommunityFile(
       {
@@ -1161,6 +1197,36 @@ describe("community-health files", () => {
     expect(content).toContain("npm install");
     expect(content).toContain("npm run check");
     expect(content).not.toContain("pnpm");
+  });
+
+  it.each([
+    ["npm", "npm run"],
+    ["pnpm", "pnpm run"],
+    ["yarn", "yarn run"],
+  ] as const)("uses %s commands in AGENTS.md", (packageManager, runPrefix) => {
+    const agents = findGeneratedFile(
+      buildProjectFiles({ ...baseConfig, packageManager }),
+      "AGENTS.md",
+    );
+
+    expect(agents.content).toContain(
+      `Use ${packageManager} for all package management and scripts.`,
+    );
+    expect(agents.content).toContain(`Before handoff, run \`${runPrefix} release:check\``);
+    if (packageManager !== "pnpm") {
+      expect(agents.content).not.toContain("Use pnpm for all package management and scripts.");
+    }
+  });
+
+  it("includes CLI guidance only when CLI support is enabled", () => {
+    const withoutCli = findGeneratedFile(buildProjectFiles(baseConfig), "AGENTS.md");
+    const withCli = findGeneratedFile(
+      buildProjectFiles({ ...baseConfig, includeCli: true }),
+      "AGENTS.md",
+    );
+
+    expect(withoutCli.content).not.toContain("Keep CLI entry points thin.");
+    expect(withCli.content).toContain("Keep CLI entry points thin.");
   });
 });
 

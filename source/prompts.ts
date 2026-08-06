@@ -163,17 +163,24 @@ const isDefined = <T>(value: T | undefined): value is T => value !== undefined;
 const selectionSeparatorPattern = /[\s,]+/u;
 
 const parseSelectionIndexes = (answer: string, choiceCount: number): number[] => {
-  const indexes = answer
-    .split(selectionSeparatorPattern)
-    .filter((token) => token.length > 0)
-    .map((token) => {
-      const index = Number(token);
-      if (!Number.isInteger(index) || index < 1 || index > choiceCount) {
-        throw new Error(`Invalid selection: ${token}`);
-      }
+  const tokens = answer.split(selectionSeparatorPattern).filter((token) => token.length > 0);
 
-      return index;
-    });
+  // Separators with nothing between them (",", ", ,") are a typo, not a
+  // deliberate empty selection -- that is spelled "n"/"none" and handled by the
+  // caller. Returning [] here would silently drop every feature. Trailing
+  // separators such as "1," still parse, since they leave a real token behind.
+  if (tokens.length === 0) {
+    throw new Error(`Invalid selection: ${answer}`);
+  }
+
+  const indexes = tokens.map((token) => {
+    const index = Number(token);
+    if (!Number.isInteger(index) || index < 1 || index > choiceCount) {
+      throw new Error(`Invalid selection: ${token}`);
+    }
+
+    return index;
+  });
 
   return [...new Set(indexes)];
 };

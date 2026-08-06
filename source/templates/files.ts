@@ -13,7 +13,7 @@ import {
   packageManagerConfig,
   type ScaffoldConfig,
 } from "./scaffold-config.js";
-import { buildStateFile } from "./state.js";
+import { assertValidScaffoldConfig, buildStateFile } from "./state.js";
 import { buildVsCodeFiles } from "./vscode.js";
 import {
   buildCiWorkflow,
@@ -52,6 +52,7 @@ const rootOwnedFiles = (config: ScaffoldConfig, build: () => GeneratedFile[]): G
   config.workspaceMode ? [] : build();
 
 export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
+  assertValidScaffoldConfig(config);
   const pmConfig = packageManagerConfig[config.packageManager];
   const files: GeneratedFile[] = [
     ...rootOwnedFiles(config, () => [
@@ -65,8 +66,10 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
     ...buildCommunityFiles(config),
     {
       content: renderTemplate("agents.md.tmpl", {
+        CLI_GUIDANCE: buildCliAgentGuidance(config.includeCli),
         LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
-        SEMGREP_VERSION: semgrepVersion,
+        PACKAGE_MANAGER: config.packageManager,
+        RUN_PREFIX: pmConfig.runPrefix,
         ZOD_GUIDANCE: buildZodAgentGuidance(config.includeZod),
       }),
       path: "AGENTS.md",
@@ -266,4 +269,9 @@ const buildLintFormatAgentGuidance = (lintFormatTooling: LintFormatTooling): str
 const buildZodAgentGuidance = (includeZod: boolean): string =>
   includeZod
     ? "- Use Zod for external input validation and anywhere runtime validation is needed.\n"
+    : "";
+
+const buildCliAgentGuidance = (includeCli: boolean): string =>
+  includeCli
+    ? "- Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.\n"
     : "";

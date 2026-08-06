@@ -46,21 +46,47 @@ const readPackageJsonWorkspacePatterns = (packageJson: unknown): unknown[] | und
 };
 
 // A deliberately small scan rather than a YAML dependency: pnpm-workspace.yaml
-// package lists are a flat sequence of strings in practice.
-const pnpmPackagesBlockPattern = /^packages:\s*$/mu;
+// package lists are a flat sequence of strings in practice. Both spellings YAML
+// allows for that sequence are accepted, because a workspace the scan misses is
+// a workspace the user is never offered.
+const pnpmPackagesKeyPattern = /^packages:\s*(?<inline>.*)$/u;
 const lineBreakPattern = /\r?\n/u;
-const yamlSequenceItemPattern = /^\s*-\s*(?<item>.+?)\s*$/u;
+const yamlSequenceItemPattern = /^\s*-\s*(?<item>.+)$/u;
+const yamlIgnoredLinePattern = /^\s*(?:#.*)?$/u;
+const flowSequencePattern = /^\[(?<items>.*)\]$/u;
+const trailingCommentPattern = /\s+#.*$/u;
 const surroundingQuotesPattern = /^["']|["']$/gu;
 
-const readPnpmWorkspacePatterns = (content: string): string[] => {
-  const lines = content.split(lineBreakPattern);
-  const startIndex = lines.findIndex((line) => pnpmPackagesBlockPattern.test(line));
-  if (startIndex < 0) {
+/** Drops a trailing `# ...` comment and the quotes around a scalar. */
+const cleanSequenceItem = (raw: string): string => {
+  const trimmed = raw.trim();
+  const withoutComment = trimmed.startsWith("#") ? "" : trimmed.replace(trailingCommentPattern, "");
+
+  return withoutComment.trim().replace(surroundingQuotesPattern, "").trim();
+};
+
+// `packages: ["packages/*", "apps/*"]`
+const readFlowSequence = (value: string): string[] => {
+  const { items } = flowSequencePattern.exec(value)?.groups ?? {};
+  if (items === undefined) {
     return [];
   }
 
+  return items
+    .split(",")
+    .map((item) => cleanSequenceItem(item))
+    .filter((item) => item.length > 0);
+};
+
+// `packages:` followed by indented `- pattern` lines, which YAML lets blank
+// lines and comments sit inside.
+const readBlockSequence = (lines: readonly string[]): string[] => {
   const patterns: string[] = [];
-  for (const line of lines.slice(startIndex + 1)) {
+  for (const line of lines) {
+    if (yamlIgnoredLinePattern.test(line)) {
+      continue;
+    }
+
     // Destructured rather than indexed so both the lint rule preferring dot
     // access and the compiler rule forbidding it on index signatures are happy.
     const { item } = yamlSequenceItemPattern.exec(line)?.groups ?? {};
@@ -69,10 +95,25 @@ const readPnpmWorkspacePatterns = (content: string): string[] => {
       break;
     }
 
-    patterns.push(item.replace(surroundingQuotesPattern, ""));
+    patterns.push(cleanSequenceItem(item));
   }
 
   return patterns;
+};
+
+const readPnpmWorkspacePatterns = (content: string): string[] => {
+  const lines = content.split(lineBreakPattern);
+  const startIndex = lines.findIndex((line) => pnpmPackagesKeyPattern.test(line));
+  if (startIndex < 0) {
+    return [];
+  }
+
+  const { inline } = pnpmPackagesKeyPattern.exec(lines[startIndex] ?? "")?.groups ?? {};
+  const inlineValue = cleanSequenceItem(inline ?? "");
+
+  return inlineValue.length > 0
+    ? readFlowSequence(inlineValue)
+    : readBlockSequence(lines.slice(startIndex + 1));
 };
 
 const readWorkspaceManifest = async (directory: string): Promise<WorkspaceManifest | undefined> => {

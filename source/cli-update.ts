@@ -8,7 +8,6 @@ import { getPackageManagerRunPrefix } from "./cli-output.js";
 import { loadPromptModule } from "./prompts.js";
 import {
   applyUpdatePlan,
-  backupFileSuffix,
   planUpdate,
   readScaffoldState,
   type UpdateFileStatus,
@@ -81,12 +80,14 @@ export const runUpdateWorkflow = async (
   });
   process.stdout.write(`${green("done")} Updated ${written.length} file(s).\n`);
 
-  const backedUp = written.filter((entry) => entry.status === "skip-modified");
-  if (backedUp.length > 0 && cliArguments.backup !== false) {
+  // Report the path `applyUpdatePlan` actually used: a taken `.orig` pushes the
+  // backup to `.orig.1`, and naming the wrong file is worse than naming none.
+  const backupPaths = written
+    .map((entry) => entry.backupPath)
+    .filter((backupPath) => backupPath !== undefined);
+  if (backupPaths.length > 0) {
     process.stdout.write(
-      `${cyan("info")} Your previous contents were kept as ${backedUp
-        .map((entry) => `${entry.path}${backupFileSuffix}`)
-        .join(", ")}.\n`,
+      `${cyan("info")} Your previous contents were kept as ${backupPaths.join(", ")}.\n`,
     );
   }
 

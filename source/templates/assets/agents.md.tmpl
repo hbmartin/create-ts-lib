@@ -4,7 +4,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 ## Project Conventions
 
-- Use pnpm for all package management and scripts.
+- Use {{PACKAGE_MANAGER}} for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
 - Treat this package as Node 24+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. {{LINT_FORMAT_GUIDANCE}}
@@ -12,13 +12,13 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 ## Code Changes
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
-- Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+{{CLI_GUIDANCE}}- When public API or CLI behavior changes, update `README.md` and tests.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
 - Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
 
 ## Verification
 
-- Before handoff, run `pnpm run release:check`.
-- Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@{{SEMGREP_VERSION}}` scan. Install Semgrep directly or install uv if both commands are missing.
+- Before handoff, run `{{RUN_PREFIX}} release:check`.
+- Use smaller targeted checks while iterating, such as `{{RUN_PREFIX}} test`, `{{RUN_PREFIX}} lint`, `{{RUN_PREFIX}} deps:lint`, or `{{RUN_PREFIX}} security:lint`.
+- `{{RUN_PREFIX}} security:lint` uses Semgrep; install Semgrep or uv if neither is available.

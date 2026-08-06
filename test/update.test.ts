@@ -283,6 +283,45 @@ describe("applyUpdatePlan selection and backups", () => {
     await expect(readFile(join(targetDirectory, "tsconfig.json"), "utf8")).resolves.toBe(
       staleFixtureContent,
     );
+
+    // The state file must keep describing what is on disk. Recording the freshly
+    // rendered hash for a file that was never written would make the next run
+    // read the mismatch as a user edit and demand --force to finish the job.
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(findEntry(nextPlan.entries, "tsconfig.json").status).toBe("update");
+    expect(findEntry(nextPlan.entries, "semgrep.yml").status).toBe("up-to-date");
+  });
+
+  it("keeps a partially applied update resumable across several rounds", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await makeStale(targetDirectory, ["semgrep.yml", "tsconfig.json", "vitest.config.ts"]);
+
+    for (const path of ["semgrep.yml", "tsconfig.json"]) {
+      const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+      await applyUpdatePlan(targetDirectory, plan, { only: [path] });
+    }
+
+    const finalPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(findEntry(finalPlan.entries, "vitest.config.ts").status).toBe("update");
+    expect(finalPlan.entries.some((entry) => entry.status === "skip-modified")).toBe(false);
+  });
+
+  it("records no hash for a file it did not create", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    // Stands in for a file the templates gained after this project was
+    // scaffolded: missing from disk and from the recorded state.
+    await rm(join(targetDirectory, "semgrep.yml"));
+    const state = await readStateFixture(targetDirectory);
+    delete state.files["semgrep.yml"];
+    await writeStateFixture(targetDirectory, state);
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(findEntry(plan.entries, "semgrep.yml").status).toBe("create");
+
+    await applyUpdatePlan(targetDirectory, plan, { only: [] });
+
+    // Recording a hash for a file that is not on disk is a claim about nothing.
+    const updated = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(updated.files, "semgrep.yml")).toBe(false);
   });
 
   it("writes nothing for an empty `only` list", async () => {
@@ -306,11 +345,28 @@ describe("applyUpdatePlan selection and backups", () => {
     const state = await readScaffoldState(targetDirectory);
     const plan = await planUpdate(targetDirectory, state);
 
-    await applyUpdatePlan(targetDirectory, plan, { force: true });
+    const written = await applyUpdatePlan(targetDirectory, plan, { force: true });
 
     await expect(
       readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
     ).resolves.toBe(edited);
+    expect(findEntry(written, "semgrep.yml").backupPath).toBe(`semgrep.yml${backupFileSuffix}`);
+  });
+
+  it("never overwrites an existing backup", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const existingBackup = "the backup from the previous forced update\n";
+    const backupPath = join(targetDirectory, `semgrep.yml${backupFileSuffix}`);
+    await writeFile(join(targetDirectory, "semgrep.yml"), "rules: []\n", "utf8");
+    await writeFile(backupPath, existingBackup, "utf8");
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+    const written = await applyUpdatePlan(targetDirectory, plan, { force: true });
+
+    // Clobbering this would destroy the very work the backup exists to protect.
+    await expect(readFile(backupPath, "utf8")).resolves.toBe(existingBackup);
+    expect(findEntry(written, "semgrep.yml").backupPath).toBe(`semgrep.yml${backupFileSuffix}.1`);
+    await expect(readFile(`${backupPath}.1`, "utf8")).resolves.toBe("rules: []\n");
   });
 
   it("does not back up files that were never modified", async () => {

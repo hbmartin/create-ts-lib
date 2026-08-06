@@ -1,28 +1,23 @@
 # AGENTS.md
 
-Guidance for Codex and other coding agents working in this repository.
+Before making any edit, read [`CLAUDE.md`](CLAUDE.md). It is the authoritative
+source of guidance for Codex and other coding agents; despite its name, it is
+not Claude-specific.
 
-## Project Conventions
+Use pnpm for package management and scripts.
 
-- Use pnpm for package management and scripts.
-- Treat this package as Node 22+ and ESM-only.
-- Keep implementation code in `source/` and Vitest coverage in `test/`.
-- Keep scaffolded file templates in `source/templates/assets/`, and register emitted files in `source/templates/files.ts`.
-- Do not add Prettier. Formatting is handled by oxfmt, and linting is handled by Biome and oxlint.
-- Use Zod for external input validation and anywhere runtime validation is needed.
+It covers the scaffold pipeline, the invariants that constrain any change, and
+pointers into these task-specific guides:
 
-## Code Changes
+- [`docs/extending-the-generator.md`](docs/extending-the-generator.md) — changing
+  generated output, templates, `ScaffoldConfig`, state handling, `update`, or
+  workspace mode.
+- [`docs/checks-and-tests.md`](docs/checks-and-tests.md) — commands, smoke tests,
+  generated-output verification, CI, build, test, lint, or release work.
+- [`docs/generated-project-tour.md`](docs/generated-project-tour.md) — what a
+  generated project contains.
 
-- Keep the public API intentional. Export from `source/index.ts` deliberately.
-- Keep CLI code focused on argument parsing, prompts, progress output, and process I/O. Put reusable behavior in library modules.
-- When generated output changes, update scaffold tests and README documentation in the same change.
-- Adding a `ScaffoldConfig` field requires a `.default()` on its `scaffoldConfigSchema` entry. Generated projects carry `.create-ts-lib.json` files written by older releases, and `create-ts-lib update` must keep parsing them. `test/state-compatibility.test.ts` enforces this against frozen fixtures in `test/__fixtures__/state/`.
-- When adding or changing template assets, verify they are copied by `pnpm run build` and covered by generated-file assertions.
-- Prefer small, direct dependencies when they materially simplify the implementation.
-- Update or add Vitest tests for every behavior change.
+Before handoff, run `pnpm run release:check`.
 
-## Verification
-
-- Before handoff, run `pnpm run release:check`.
-- Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run typecheck`, or `pnpm run build`.
-- For template behavior changes, scaffold a scratch project and run its generated checks when the change affects generated scripts, configs, or package metadata.
+Keep detailed guidance in `CLAUDE.md`; keep this file as the concise,
+always-loaded entry point for critical rules and task routing.

@@ -9,6 +9,7 @@ coverage
 *.log
 *.tsbuildinfo
 *.orig
+*.orig.*
 *.tgz
 .env
 .env.*
@@ -25,7 +26,16 @@ report/
 executable: false
 
 {
-  "ignorePatterns": ["*.json", "**/*.json", "*.jsonc", "**/*.jsonc", "*.yml", "**/*.yml"]
+  "ignorePatterns": [
+    "*.json",
+    "**/*.json",
+    "*.jsonc",
+    "**/*.jsonc",
+    "*.yml",
+    "**/*.yml",
+    "*.md",
+    "**/*.md"
+  ]
 }
 
 ===== .oxlintrc.json =====
@@ -281,6 +291,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Keep the public API intentional. Export from `source/index.ts` deliberately, and do not expose internal modules by accident.
 - Keep CLI entry points thin. Parse arguments and handle process I/O in CLI files, but put reusable behavior in normal library modules.
+- When public API or CLI behavior changes, update `README.md` and tests.
 - Prefer small, direct dependencies when they materially simplify the implementation.
 - Update or add Vitest tests for every behavior change.
 - Update the fallow boundary rules and Semgrep checks when architecture or security expectations change.
@@ -289,7 +300,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Before handoff, run `pnpm run release:check`.
 - Use smaller targeted checks while iterating, such as `pnpm run test`, `pnpm run lint`, `pnpm run deps:lint`, or `pnpm run security:lint`.
-- `pnpm run security:lint` prefers `semgrep` on PATH and otherwise runs the pinned `uvx semgrep@1.172.0` scan. Install Semgrep directly or install uv if both commands are missing.
+- `pnpm run security:lint` uses Semgrep; install Semgrep or uv if neither is available.
 
 ===== .fallowrc.jsonc =====
 executable: false
@@ -1024,7 +1035,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["24"]
+        node-version: ["24", "26"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -1221,15 +1232,15 @@ executable: false
     "workspaceMode": false
   },
   "files": {
-    ".gitignore": "d98456a52e1162a37ce490958a4b718a48261df88fb2a4a086e33bb35324c9b3",
-    ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
+    ".gitignore": "6fdd1a84dd27b2073507437c5af7ca7f2d0f6709640ace5fd2bde35af48565bc",
+    ".oxfmtrc.json": "b2bd97b91abc85dccd9e9c5ef17d1bc470032d4351920159e8921c78e449f8b1",
     ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "CODE_OF_CONDUCT.md": "053c9c452c6372dce2cd0e6baa82a969de7e8f45dcf131b84b775f2d428583ee",
     "CONTRIBUTING.md": "7c8b115a3b83a2528d9c660139fc5618db2c41015305165fa562e93d87faa8ec",
     "SECURITY.md": "e1d31b30e962dfad01e4cb3b36e3b77f869b00ba02af9ba11c45d7d606853ef1",
-    "AGENTS.md": "0dcd4f3e8e652b04f8837ba1038291079b4e3f19046ddde80ff9b6bf26272740",
+    "AGENTS.md": "59e923fba85c1a66a9c8bd32b67e0147352edffbaa01d3099ff534e1eae84dce",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
@@ -1249,7 +1260,7 @@ executable: false
     "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
     "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "0efad446325b35832c540f239480cfa10e891f4525477b6a1cd30084039b2ab6",
+    ".github/workflows/ci.yml": "85e46689238f8527c2852629fac7fbbb3bcefadf092bf1a9bb0ff045cb167217",
     ".github/workflows/release.yml": "f48ce64b55a54f87a49b741d8c6ec0749f34ec88c6b836d77ab066217cef7d2d",
     ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
     ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"

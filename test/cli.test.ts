@@ -158,6 +158,34 @@ describe("cli entrypoint", () => {
     await expect(readFile(configPath, "utf8")).rejects.toThrow();
   });
 
+  it("prints help for config --help instead of demanding an action", async () => {
+    const result = await runCli(["config", "--help"]);
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("create-ts-lib config set <key> <value>");
+    expect(result.stderr).toBe("");
+  });
+
+  it("does not save defaults during a dry run", async () => {
+    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+
+    const result = await runCli([
+      "demo-lib",
+      "--yes",
+      "--dry-run",
+      "--license",
+      "ISC",
+      "--save-defaults",
+      "--config",
+      configPath,
+    ]);
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Dry run: personal defaults were not saved");
+    // --dry-run promises no writes, including the ones outside the target.
+    await expect(readFile(configPath, "utf8")).rejects.toThrow();
+  });
+
   it("persists reusable answers with --save-defaults", async () => {
     const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
     const scaffoldProject = vi.fn(async () => undefined);
@@ -518,6 +546,10 @@ describe("cli entrypoint", () => {
           return "oxlint-oxfmt";
         }
 
+        if (message === "Build tool") {
+          return "tsc";
+        }
+
         return "pnpm";
       }),
     };
@@ -829,6 +861,10 @@ describe("cli entrypoint", () => {
           return "oxlint-oxfmt";
         }
 
+        if (message === "Build tool") {
+          return "tsc";
+        }
+
         return "pnpm";
       }),
     };
@@ -896,6 +932,10 @@ describe("cli entrypoint", () => {
           return "oxlint-oxfmt";
         }
 
+        if (message === "Build tool") {
+          return "tsc";
+        }
+
         return "pnpm";
       }),
     };
@@ -955,6 +995,10 @@ describe("cli entrypoint", () => {
 
         if (message === "Lint and format tooling") {
           return "oxlint-oxfmt";
+        }
+
+        if (message === "Build tool") {
+          return "tsc";
         }
 
         return "pnpm";
