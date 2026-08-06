@@ -41,7 +41,7 @@ Setting up a publishable TypeScript library means making the same dozen decision
 - **ESM-only, Node 22+** — no dual-format build complexity.
 - **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
-- **dependency-cruiser + Semgrep** for lightweight architecture and security policy checks.
+- **fallow + Semgrep** for lightweight architecture and security policy checks.
 - **Lefthook** for lightweight pre-commit hooks.
 - **publint + are-the-types-wrong** wired in so your published package is correct before you ship it.
 
@@ -56,7 +56,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 | Output format                 | ESM-only (Node 22+)                     | CJS + ESM            | You decide           |
 | Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
-| Architecture + security gates | dependency-cruiser + Semgrep            | —                    | —                    |
+| Architecture + security gates | fallow + Semgrep                        | —                    | —                    |
 | Publish validation            | publint + are-the-types-wrong + dry-run | —                    | Manual               |
 | Git hooks                     | Lefthook (pre-wired)                    | Husky (manual)       | Manual               |
 | CI + release workflow         | GitHub Actions (pnpm)                   | —                    | Manual               |
@@ -262,7 +262,7 @@ my-lib/
 │   └── settings.json
 ├── AGENTS.md
 ├── .create-ts-lib.json         # scaffold state used by the update command
-├── .dependency-cruiser.cjs
+├── .fallowrc.jsonc
 ├── .gitignore
 ├── biome.jsonc                # Biome projects only
 ├── .oxfmtrc.json              # Oxlint + Oxfmt projects only
@@ -303,7 +303,7 @@ Generated packages include:
 - matching lint/format scripts and config files for the selected tooling
 - VS Code extension recommendations and format-on-save settings for the
   selected tooling
-- dependency-cruiser architecture checks
+- fallow architecture and dependency checks
 - Semgrep policy checks
 - Vitest with v8 coverage and 80% thresholds
 - SHA-pinned GitHub Actions CI and release workflows for pnpm projects, with

@@ -43,8 +43,6 @@ jobs:
       - run: pnpm run check
         env:
           SECURITY_LINT_FORCE_UVX: "1"
-      - name: TypeScript 7 compatibility probe
-        run: pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.typecheck.json --noEmit
       - run: pnpm run build
       - run: pnpm run publint
       - run: pnpm run types:lint

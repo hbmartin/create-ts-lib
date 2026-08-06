@@ -41,8 +41,15 @@ export const generatedPackageDependencies = {
 } as const satisfies Record<string, string>;
 
 const templateOnlyGeneratedPackageDevDependencies = {
-  // Used only in scaffolded projects; the generator does not import this at runtime.
-  tsdown: "^0.22.3",
+  // Used only in scaffolded projects; the generator neither imports nor runs
+  // these itself, so they are pinned here rather than installed as real
+  // devDependencies.
+  jsr: "^0.14.3",
+  tsdown: "^0.22.14",
+  // Generated projects declare `engines.node: ">=22"` and run CI on Node 22 and
+  // 24, so their type definitions stay on the 24.x line instead of tracking
+  // whichever @types/node major the generator itself builds against.
+  "@types/node": "^24.13.3",
 } as const satisfies DependencySection;
 
 export const generatedPackageDevDependencies = {
@@ -50,10 +57,8 @@ export const generatedPackageDevDependencies = {
   "@arethetypeswrong/cli": readDependencySpecifier(devDependencies, "@arethetypeswrong/cli"),
   "@biomejs/biome": readDependencySpecifier(devDependencies, "@biomejs/biome"),
   "@sindresorhus/tsconfig": readDependencySpecifier(devDependencies, "@sindresorhus/tsconfig"),
-  "@types/node": readDependencySpecifier(devDependencies, "@types/node"),
   "@vitest/coverage-v8": readDependencySpecifier(devDependencies, "@vitest/coverage-v8"),
-  "dependency-cruiser": readDependencySpecifier(devDependencies, "dependency-cruiser"),
-  jsr: readDependencySpecifier(devDependencies, "jsr"),
+  fallow: readDependencySpecifier(devDependencies, "fallow"),
   lefthook: readDependencySpecifier(devDependencies, "lefthook"),
   oxfmt: readDependencySpecifier(devDependencies, "oxfmt"),
   oxlint: readDependencySpecifier(devDependencies, "oxlint"),
@@ -75,7 +80,4 @@ export const githubActionRefs = {
   setupUv: "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
 } as const satisfies Record<string, string>;
 
-export const semgrepVersion = "1.165.0";
-
-export const tsgoProbeCommand =
-  "pnpm --package @typescript/native-preview@7.0.0-dev.20260421.2 dlx tsgo -p tsconfig.json --noEmit";
+export const semgrepVersion = "1.172.0";

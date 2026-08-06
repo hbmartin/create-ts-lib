@@ -1,0 +1,47 @@
+{
+  // Architecture gate for `deps:lint`. These five rules keep `source/` layered
+  // correctly: no import cycles, no unresolved or undeclared imports, no
+  // reaching into `test/`, and no devDependencies in shipped code. Fallow's
+  // dead-code, duplication, and complexity analyses are deliberately off so
+  // this stays a focused architecture check rather than a code-quality gate.
+  // Declared explicitly: the package entry points resolve into `dist/`, which is
+  // ignored below, so without this the source tree is unreachable and the
+  // boundary rules silently pass instead of failing.
+  "entry": [{{ENTRY_POINTS}}],
+  "ignorePatterns": ["dist/**", "coverage/**"],
+  "rules": {
+    "circular-dependencies": "error",
+    "unresolved-imports": "error",
+    "unlisted-dependencies": "error",
+    "dev-dependencies-in-production": "error",
+    "boundary-violation": "error",
+
+    // Not part of the architecture gate.
+    "unused-files": "off",
+    "unused-exports": "off",
+    "unused-types": "off",
+    "unused-dependencies": "off",
+    // Kept on: every scaffolded devDependency is executed by a script or wired
+    // into tsconfig/vitest, so an unused entry means something was added and
+    // never hooked up. Set to "warn" if that is too strict for your project.
+    "unused-dev-dependencies": "error",
+    "unused-optional-dependencies": "off",
+    "unused-enum-members": "off",
+    "unused-class-members": "off",
+    "duplicate-exports": "off",
+    "re-export-cycle": "off",
+    "type-only-dependencies": "off",
+    "test-only-dependencies": "off",
+    "stale-suppressions": "off"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "source", "patterns": ["source/**"] },
+      { "name": "test", "patterns": ["test/**"] }
+    ],
+    "rules": [
+      { "from": "source", "allow": [] },
+      { "from": "test", "allow": ["source"] }
+    ]
+  }
+}

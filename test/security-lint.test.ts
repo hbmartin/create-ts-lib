@@ -25,7 +25,7 @@ const semgrepScanArguments = [
   "source",
   "test",
 ];
-const semgrepVersion = "1.165.0";
+const semgrepVersion = "1.172.0";
 const semgrepScanTestTimeout = 20_000;
 
 interface SemgrepScanOutput {
@@ -177,14 +177,14 @@ describe("security-lint wrapper", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.commandLog).toEqual(["uvx", "semgrep@1.165.0", ...semgrepArguments]);
+    expect(result.commandLog).toEqual(["uvx", "semgrep@1.172.0", ...semgrepArguments]);
   });
 
   it("falls back to pinned uvx Semgrep when semgrep is missing", async () => {
     const result = await runSecurityLint(["uvx"]);
 
     expect(result.status).toBe(0);
-    expect(result.commandLog).toEqual(["uvx", "semgrep@1.165.0", ...semgrepArguments]);
+    expect(result.commandLog).toEqual(["uvx", "semgrep@1.172.0", ...semgrepArguments]);
   });
 
   it("warns when semgrep and uvx are both missing", async () => {
@@ -193,7 +193,7 @@ describe("security-lint wrapper", () => {
     expect(result.status).toBe(1);
     expect(result.commandLog).toEqual([]);
     expect(result.stderr).toContain(
-      "warning: security:lint requires semgrep on PATH or uvx for semgrep@1.165.0.",
+      "warning: security:lint requires semgrep on PATH or uvx for semgrep@1.172.0.",
     );
     expect(result.stderr).toContain(
       "warning: install Semgrep directly or install uv so uvx can run the pinned scan.",

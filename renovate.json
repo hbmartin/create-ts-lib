@@ -7,6 +7,12 @@
       "description": "Keep GitHub Actions pinned and updated deliberately.",
       "matchManagers": ["github-actions"],
       "pinDigests": true
+    },
+    {
+      "description": "Generated projects target Node 22/24, so the @types/node they receive stays on the 24.x line. This scopes only the template pin; the generator's own @types/node in package.json still tracks latest.",
+      "matchFileNames": ["source/templates/generated-versions.ts"],
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<25"
     }
   ],
   "customManagers": [
@@ -34,24 +40,19 @@
     },
     {
       "customType": "regex",
-      "description": "Track the template-only tsdown dependency emitted into generated package.json files.",
+      "description": "Track the template-only jsr dependency emitted into generated package.json files.",
       "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
-      "matchStrings": ["tsdown:\\s*\"\\^(?<currentValue>[^\"]+)\""],
-      "depNameTemplate": "tsdown",
+      "matchStrings": ["jsr:\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "jsr",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     },
     {
       "customType": "regex",
-      "description": "Track pinned TypeScript native-preview probes in CI workflows.",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yml$/",
-        "/^source/templates/files\\.ts$/"
-      ],
-      "matchStrings": [
-        "@typescript/native-preview@(?<currentValue>[^\\s]+)\\s+dlx\\s+tsgo"
-      ],
-      "depNameTemplate": "@typescript/native-preview",
+      "description": "Track the template-only tsdown dependency emitted into generated package.json files.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": ["tsdown:\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "tsdown",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     }

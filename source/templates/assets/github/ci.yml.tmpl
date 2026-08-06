@@ -37,8 +37,6 @@ jobs:
       - run: {{RUN_PREFIX}} check
         env:
           SECURITY_LINT_FORCE_UVX: "1"
-      - name: TypeScript 7 compatibility probe
-        run: {{TSGO_PROBE_COMMAND}}
       - run: {{BUILD_COMMAND}}
       - run: {{PUBLINT_COMMAND}}
 {{CODECOV_STEP}}

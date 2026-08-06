@@ -389,14 +389,12 @@ describe("cli entrypoint", () => {
   });
 
   it("can create a private GitHub repo from the missing-repository prompt", async () => {
-    const createGitHubRepository = vi.fn(
-      async (): Promise<CreateGitHubRepositoryResult> => ({
-        owner: "hbmartin",
-        repositoryName: "private-lib",
-        status: "created",
-        url: "https://github.com/hbmartin/private-lib",
-      }),
-    );
+    const createGitHubRepository = vi.fn(async (): Promise<CreateGitHubRepositoryResult> => ({
+      owner: "hbmartin",
+      repositoryName: "private-lib",
+      status: "created",
+      url: "https://github.com/hbmartin/private-lib",
+    }));
     const scaffoldProject = vi.fn(async () => undefined);
     const inspectPersonalGitHubRepository = vi.fn(
       async (): Promise<GitHubRepositoryLookupResult> => ({
@@ -1498,12 +1496,10 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   vi.doMock("../source/npm-registry.js", () => ({
     checkNpmPackageNameAvailability:
       options.checkNpmPackageNameAvailability ??
-      vi.fn(
-        async (packageName: string): Promise<NpmPackageNameAvailability> => ({
-          packageName,
-          status: "available",
-        }),
-      ),
+      vi.fn(async (packageName: string): Promise<NpmPackageNameAvailability> => ({
+        packageName,
+        status: "available",
+      })),
   }));
 
   if (options.scaffoldProject) {

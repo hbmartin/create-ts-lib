@@ -4,13 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { scaffoldProject } from "../dist/index.js";
-import { tsgoProbeCommand } from "../dist/templates/files.js";
 
 const packageManagers = new Set(["pnpm"]);
 const includeCliValues = new Set(["true", "false", "all"]);
 const lintFormatValues = new Set(["oxlint-oxfmt", "biome"]);
 const bundlerValues = new Set(["tsc", "tsdown"]);
-const [tsgoProbeExecutable, ...tsgoProbeArgs] = tsgoProbeCommand.trim().split(/\s+/u);
 
 const log = (message) => {
   process.stdout.write(`[smoke] ${message}\n`);
@@ -161,7 +159,6 @@ try {
         SECURITY_LINT_FORCE_UVX: "1",
       },
     });
-    await runCommand(tsgoProbeExecutable, tsgoProbeArgs, { cwd: targetDirectory });
   }
 
   smokeSucceeded = true;
