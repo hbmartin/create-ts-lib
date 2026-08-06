@@ -7,6 +7,7 @@ import type { PendingGitHubRepositoryCreation } from "./cli-prompts.js";
 import { formatLintFormatTooling } from "./lint-format-tooling.js";
 import { parseGitHubRepositoryUrl } from "./name-helpers.js";
 import type { PostScaffoldSetupError, ScaffoldProgress } from "./scaffold.js";
+import { featureInactiveReason } from "./templates/feature-activation.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
 import { hasGitHubWorkflows } from "./templates/readme.js";
 
@@ -17,19 +18,25 @@ export interface NextStepsOptions {
 }
 
 /**
- * Renders an answer that workspace mode makes inert, without discarding it.
+ * Renders an answer the current config makes inert, without discarding it.
  *
- * These three are gated behind files the workspace root owns -- Codecov and the
- * security workflows only ever edit or accompany `.github/workflows/**`, and the
- * community-health files are suppressed outright -- so reporting a plain "yes"
- * for a workspace package claims something the scaffold did not do. The answer
- * is still recorded in the state file and still applies if the package is later
- * lifted out, so it is qualified rather than hidden.
+ * Only a `yes` is qualified: that is the only case where a bare value would
+ * claim something the scaffold did not do. The answer stays visible rather than
+ * being blanked, because it is recorded in the state file and applies again as
+ * soon as whatever suppresses it changes.
  */
-const formatRootOwnedAnswer = (config: ScaffoldConfig, answer: boolean): string => {
-  const value = answer ? "yes" : "no";
+const formatFeatureAnswer = (
+  config: ScaffoldConfig,
+  resolveInactiveReason: (config: ScaffoldConfig) => string | undefined,
+  answer: boolean,
+): string => {
+  if (!answer) {
+    return "no";
+  }
 
-  return config.workspaceMode ? `${value} (root-owned)` : value;
+  const inactiveReason = resolveInactiveReason(config);
+
+  return inactiveReason === undefined ? "yes" : `yes (${inactiveReason})`;
 };
 
 export const printSummary = (
@@ -49,9 +56,26 @@ export const printSummary = (
     ["Node target", `${config.nodeTarget}+`],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
-    ["Codecov", formatRootOwnedAnswer(config, config.includeCodecov)],
-    ["Security workflows", formatRootOwnedAnswer(config, config.includeSecurityWorkflows)],
-    ["Community files", formatRootOwnedAnswer(config, config.includeCommunityFiles)],
+    [
+      "Codecov",
+      formatFeatureAnswer(config, featureInactiveReason.includeCodecov, config.includeCodecov),
+    ],
+    [
+      "Security workflows",
+      formatFeatureAnswer(
+        config,
+        featureInactiveReason.includeSecurityWorkflows,
+        config.includeSecurityWorkflows,
+      ),
+    ],
+    [
+      "Community files",
+      formatFeatureAnswer(
+        config,
+        featureInactiveReason.includeCommunityFiles,
+        config.includeCommunityFiles,
+      ),
+    ],
     ["Workspace package", config.workspaceMode ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
     ["Zod", config.includeZod ? "yes" : "no"],
@@ -153,10 +177,11 @@ workspace globs match this package, then install from the workspace root:
 };
 
 const buildCodecovSetupStep = (config: ScaffoldConfig): string => {
-  // The upload step lives in the generated CI workflow, which workspace mode
-  // does not emit -- so there is nothing here for Codecov to receive, and the
-  // URL would point at the parent repository the scaffold does not own.
-  if (config.workspaceMode || !config.includeCodecov || config.packageManager !== "pnpm") {
+  // Gated on the same declaration the summary uses, rather than a second
+  // hand-written copy of the conditions. The upload step lives in the generated
+  // CI workflow, so wherever that is not emitted there is nothing for Codecov to
+  // receive and the URL would name a repository this scaffold does not own.
+  if (!config.includeCodecov || featureInactiveReason.includeCodecov(config) !== undefined) {
     return "";
   }
 
