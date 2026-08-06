@@ -63,7 +63,7 @@ export type ConfigAction = "get" | "path" | "set" | "unset";
  */
 const configActions: readonly ConfigAction[] = ["get", "path", "set", "unset"];
 const configActionSet = new Set<ConfigAction>(configActions);
-const configActionList = configActions.join(", ");
+export const configActionList = configActions.join(", ");
 
 export type WarningSink = (message: string) => void;
 type CliBooleanFlag =

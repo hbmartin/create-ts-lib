@@ -65,6 +65,7 @@ describe("detectWorkspaceRoot", () => {
     ["comment before the sequence", 'packages:\n  # our packages\n  - "packages/*"\n'],
     ["comment between entries", 'packages:\n  - "apps/*"\n  # and the rest\n  - "packages/*"\n'],
     ["trailing comment on an entry", 'packages:\n  - "packages/*" # everything\n'],
+    ["multi-line flow sequence", 'packages: [\n  "packages/*",\n  "apps/*"\n]\n'],
   ])("finds a pnpm workspace declared as a %s", async (_name, pnpmWorkspace) => {
     const { packagesDirectory } = await createFixture({ pnpmWorkspace });
 
@@ -78,6 +79,16 @@ describe("detectWorkspaceRoot", () => {
     ["comment before the sequence", 'packages:\n  # just this one\n  - "."\n'],
   ])("still ignores the single-package idiom declared as a %s", async (_name, pnpmWorkspace) => {
     const { packagesDirectory } = await createFixture({ pnpmWorkspace });
+
+    await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
+  });
+
+  it("does not read a commented-out entry as a package pattern", async () => {
+    // `cleanSequenceItem` reduces `- # nothing yet` to the empty string, which
+    // `hasNestedPackagePattern` would otherwise accept as a nested pattern.
+    const { packagesDirectory } = await createFixture({
+      pnpmWorkspace: "packages:\n  - # nothing yet\n",
+    });
 
     await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
   });
