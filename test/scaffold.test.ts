@@ -35,6 +35,12 @@ import {
 } from "../source/templates/generated-versions.js";
 import { createTempDirectory } from "./helpers/temp-directory.js";
 
+// Two tests spawn a real `pnpm`, whose start-up alone can pass the 5s default
+// on a loaded machine. Measured failing at the default here while passing in
+// under 2s on an idle one, so the budget was deciding on machine load rather
+// than on behaviour.
+const packageManagerSpawnTimeout = 30_000;
+
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
@@ -1458,27 +1464,35 @@ describe("runPackageManagerCommand", () => {
     expect(getPackageManagerExecutable("npm", "linux")).toBe("npm");
   });
 
-  it("resolves when the package manager exits successfully", async () => {
-    const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
-    await writeFile(
-      join(tempDirectory, "package.json"),
-      JSON.stringify({ scripts: { ok: 'node -e ""' } }),
-      "utf8",
-    );
+  it(
+    "resolves when the package manager exits successfully",
+    async () => {
+      const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
+      await writeFile(
+        join(tempDirectory, "package.json"),
+        JSON.stringify({ scripts: { ok: 'node -e ""' } }),
+        "utf8",
+      );
 
-    await expect(
-      runPackageManagerCommand("pnpm", ["--silent", "run", "ok"], tempDirectory),
-    ).resolves.toBeUndefined();
-  });
+      await expect(
+        runPackageManagerCommand("pnpm", ["--silent", "run", "ok"], tempDirectory),
+      ).resolves.toBeUndefined();
+    },
+    packageManagerSpawnTimeout,
+  );
 
-  it("rejects when the package manager exits with a failure", async () => {
-    const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
-    await writeFile(join(tempDirectory, "package.json"), JSON.stringify({ scripts: {} }), "utf8");
+  it(
+    "rejects when the package manager exits with a failure",
+    async () => {
+      const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
+      await writeFile(join(tempDirectory, "package.json"), JSON.stringify({ scripts: {} }), "utf8");
 
-    await expect(
-      runPackageManagerCommand("pnpm", ["--silent", "run", "missing"], tempDirectory),
-    ).rejects.toThrow("pnpm --silent run missing exited with code");
-  });
+      await expect(
+        runPackageManagerCommand("pnpm", ["--silent", "run", "missing"], tempDirectory),
+      ).rejects.toThrow("pnpm --silent run missing exited with code");
+    },
+    packageManagerSpawnTimeout,
+  );
 });
 
 const findGeneratedFile = (files: ReturnType<typeof buildProjectFiles>, path: string) => {

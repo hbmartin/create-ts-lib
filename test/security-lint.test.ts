@@ -26,13 +26,18 @@ const semgrepScanArguments = [
   "source",
   "test",
 ];
-// Semgrep is a Python front end: even warm, interpreter start-up and rule
-// loading cost several seconds before a single fixture is read, and the scan
-// competes with the rest of the suite plus coverage instrumentation. The old
-// 20s budget was roughly 4x that floor, which is a coin flip rather than a
-// timeout. `spawnSync` cannot be preempted anyway, so vitest's timeout is a
-// verdict rather than a budget -- a healthy run never spends the extra.
-const semgrepScanTestTimeout = 60_000;
+// Semgrep is a Python front end: interpreter start-up and rule loading dominate,
+// and the cost swings enormously with what else the machine is doing. Measured
+// for this one scan: ~4s through the `semgrep` binary on an idle machine, ~19s
+// through `uvx` with an already-warm cache, and ~63s on a loaded machine under
+// coverage. The old 20s budget sat inside that spread, so the verdict depended
+// on the runner and the load rather than on the rules.
+//
+// `spawnSync` cannot be preempted, so vitest's timeout is a verdict rather than
+// a budget: the scan runs to completion either way and a healthy run never
+// spends the headroom. Sized above the worst honest run seen, not the typical
+// one.
+const semgrepScanTestTimeout = 120_000;
 // `uvx semgrep@<pinned>` resolves, downloads, and installs on first use, which
 // is tens of seconds cold. Paid in `beforeAll` so it is not charged to the scan
 // test, and so a broken or offline uv reports itself as a warm-up failure
