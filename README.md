@@ -67,9 +67,9 @@ The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** wit
 
 ## Requirements
 
-- **Node.js 22 or newer** to run the generator. Generated projects declare
-  `engines.node: ">=24"` and are CI-tested on Node 24, so scaffolding from Node 22
-  works but emits an unsupported-engine warning on install.
+- **Node.js 24 or newer** — both to run the generator and to work in the projects
+  it generates, which declare the same `engines.node: ">=24"` floor and are
+  CI-tested on Node 24 and 26.
 - A package manager: **pnpm** (recommended), npm, or yarn.
 
 ## Usage
@@ -585,8 +585,9 @@ without CLI support, installs them from a frozen lockfile, and runs their genera
 release checks. Set `SMOKE_INCLUDE_CLI=true` or `false` to run one variant,
 `SMOKE_LINT_FORMAT=biome` to exercise the Biome stack, `SMOKE_BUNDLER=tsdown`
 to exercise the tsdown build, and `SMOKE_DIR` to choose the generated project
-directory. CI runs the oxlint-oxfmt/tsc matrix plus Biome and tsdown variants on
-Node 24, matching the `engines.node` floor of the projects it generates.
+directory. CI runs the oxlint-oxfmt/tsc matrix on Node 24 and 26, plus Biome and
+tsdown variants on Node 24, matching the `engines.node` floor of the projects it
+generates.
 
 Template assets live under `source/templates/assets` and are copied into `dist/templates/assets` during `pnpm build`.
 

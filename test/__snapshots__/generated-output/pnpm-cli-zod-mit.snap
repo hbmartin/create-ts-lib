@@ -803,7 +803,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["24"]
+        node-version: ["24", "26"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -956,7 +956,7 @@ executable: false
     "source/cli.ts": "9440c0c627df4329f3162643fbe6121aea8f9ccb5901f40fcbc7790364475fb3",
     "test/cli.test.ts": "fa6f11f1f26f6073c3597272ea0da8484a5f8facac1bbf7b0afa885c33b106a4",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "0efad446325b35832c540f239480cfa10e891f4525477b6a1cd30084039b2ab6",
+    ".github/workflows/ci.yml": "85e46689238f8527c2852629fac7fbbb3bcefadf092bf1a9bb0ff045cb167217",
     ".github/workflows/release.yml": "e63b094cd60567c9c63daa78f5fc1a96c7768d09730060fdcdc9ae5a5ebbe32e"
   },
   "generator": "@hbmartin/create-ts-lib",

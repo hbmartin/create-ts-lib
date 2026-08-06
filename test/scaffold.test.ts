@@ -218,7 +218,7 @@ describe("buildProjectFiles", () => {
     expect(ciWorkflow?.content).toContain(`version: ${pnpmVersion}`);
     expect(ciWorkflow?.content).toContain("persist-credentials: false");
     expect(ciWorkflow?.content).toContain("fail-fast: false");
-    expect(ciWorkflow?.content).toContain('node-version: ["24"]');
+    expect(ciWorkflow?.content).toContain('node-version: ["24", "26"]');
     expect(ciWorkflow?.content).toContain("node-version: $" + "{{ matrix.node-version }}");
     expect(ciWorkflow?.content).toContain(githubActionRefs.setupUv);
     expect(ciWorkflow?.content).toContain("enable-cache: true");

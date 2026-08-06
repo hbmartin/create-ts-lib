@@ -1033,7 +1033,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["24"]
+        node-version: ["24", "26"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -1258,7 +1258,7 @@ executable: false
     "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
     "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "0efad446325b35832c540f239480cfa10e891f4525477b6a1cd30084039b2ab6",
+    ".github/workflows/ci.yml": "85e46689238f8527c2852629fac7fbbb3bcefadf092bf1a9bb0ff045cb167217",
     ".github/workflows/release.yml": "f48ce64b55a54f87a49b741d8c6ec0749f34ec88c6b836d77ab066217cef7d2d",
     ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
     ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
