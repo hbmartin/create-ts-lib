@@ -60,16 +60,20 @@ export type ScaffoldState = z.infer<typeof scaffoldStateSchema>;
 
 /**
  * Guards the public entry points, which JavaScript callers can reach with any
- * object at all. Without this a bad `packageManager` surfaces as a TypeError
- * from a lookup table several frames later instead of a message naming the
- * field. Deliberately asserts rather than returning `result.data`: substituting
- * the parsed object would reorder the caller's keys in the state file and
- * silently repair configs instead of reporting them.
+ * object at all. Without it a bad `packageManager` surfaces as a TypeError from
+ * a lookup table several frames later instead of a message naming the field.
+ *
+ * Returns the parsed config rather than merely asserting, because the fields
+ * carrying a `.default()` -- present for state-file compatibility -- make a
+ * partial object *validate* while still being partial. Rendering the caller's
+ * object then wrote `Copyright (c) undefined` into LICENSE and recorded its hash
+ * as gospel, since `renderTemplate` substitutes through a replacer function and
+ * so never sees an unresolved placeholder to complain about.
  */
-export const assertValidScaffoldConfig = (config: ScaffoldConfig): void => {
+export const parseScaffoldConfig = (config: ScaffoldConfig): ScaffoldConfig => {
   const result = scaffoldConfigSchema.safeParse(config);
   if (result.success) {
-    return;
+    return result.data;
   }
 
   throw new Error(
