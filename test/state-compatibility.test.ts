@@ -86,6 +86,10 @@ describe("scaffold state compatibility", () => {
 
     const state = await readScaffoldState(targetDirectory);
 
+    // Behavioural continuity, not just schema hygiene: projects scaffolded
+    // before `nodeTarget` existed were emitted with a >=24 floor, so `update`
+    // has to re-render them unchanged rather than migrate them to a newer Node.
+    expect(state.config.nodeTarget).toBe("24");
     expect(state.config.copyrightYear).toMatch(/^\d{4}$/u);
     expect(state.config.includeCommunityFiles).toBe(false);
     expect(state.config.workspaceMode).toBe(false);

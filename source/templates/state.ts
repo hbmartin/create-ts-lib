@@ -5,6 +5,7 @@ import { z } from "zod";
 import packageJson from "../../package.json" with { type: "json" };
 
 import { lintFormatToolingSchema } from "../lint-format-tooling.js";
+import { defaultNodeTarget, nodeTargetSchema } from "../node-target.js";
 import {
   currentCopyrightYear,
   type GeneratedFile,
@@ -39,6 +40,10 @@ export const scaffoldConfigSchema = z.object({
   includeZod: z.boolean(),
   license: licenseNameSchema,
   lintFormatTooling: lintFormatToolingSchema,
+  // Every project scaffolded before this field existed was emitted with a >=24
+  // floor, so this default is behavioural continuity: `update` re-renders those
+  // projects byte-identically rather than migrating them to a newer Node.
+  nodeTarget: nodeTargetSchema.default(defaultNodeTarget),
   packageManager: packageManagerSchema,
   projectName: z.string(),
   workspaceMode: z.boolean().default(false),

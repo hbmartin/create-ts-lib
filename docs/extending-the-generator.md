@@ -72,10 +72,17 @@ versions in generated projects. Most specifiers are read out of this repo's own
 cannot drift apart.
 
 The exceptions are pinned inline as **template-only**, because this repo neither
-imports nor runs them: `meow` (a generated project's CLI dependency), and `jsr`,
-`tsdown`, and `@types/node` among the dev dependencies. `@types/node` must stay
-on the same major as the `engines.node` floor in `package-json.ts` — the
-comment beside it explains why the CI matrix cannot catch a mismatch.
+imports nor runs them: `meow` (a generated project's CLI dependency), and `jsr`
+and `tsdown` among the dev dependencies.
+
+`@types/node` is template-only too, but keyed by Node target rather than flat:
+`nodeTypesVersionByTarget` holds one caret range per `NodeTarget`, and
+`nodeTypesVersion(target)` resolves it. A module-load assertion rejects any
+specifier whose major disagrees with its own key, so a pin can never drift off
+the `engines.node` floor that `source/node-target.ts` derives from the same
+target — and Node 25 stays unreachable without a visible change to the union.
+The comment beside the table explains why a generated project's CI matrix cannot
+catch a mismatch on its own.
 
 The same module holds `semgrepVersion` and `githubActionRefs`, the SHA-pinned
 GitHub Action references. `test/workflow-action-refs.test.ts` fails when this

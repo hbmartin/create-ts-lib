@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { gitReadCommandOptions } from "./git-repository.js";
 import { type LintFormatTooling, lintFormatToolingSchema } from "./lint-format-tooling.js";
 import { normalizeGitHubUrl, stripPackageScope } from "./name-helpers.js";
+import { type NodeTarget, nodeTargetSchema } from "./node-target.js";
 import type { Bundler, LicenseName, PackageManager } from "./templates/scaffold-config.js";
 import { bundlerSchema, licenseNameSchema, packageManagerSchema } from "./templates/state.js";
 
@@ -27,6 +28,7 @@ export interface CliArguments {
   jsr?: boolean;
   license?: LicenseName;
   lintFormatTooling?: LintFormatTooling;
+  nodeTarget?: NodeTarget;
   packageManager?: PackageManager;
   projectName?: string;
   repoUrl?: string;
@@ -163,6 +165,7 @@ const createEnumValueParser =
 const parseBundlerValue = createEnumValueParser(bundlerSchema.options);
 const parseLicenseValue = createEnumValueParser(licenseNameSchema.options);
 const parseLintFormatValue = createEnumValueParser(lintFormatToolingSchema.options);
+const parseNodeTargetValue = createEnumValueParser(nodeTargetSchema.options);
 const parsePackageManagerValue = createEnumValueParser(packageManagerSchema.options);
 
 const cliValueOptions = new Map<string, CliValueOptionConfig>([
@@ -219,6 +222,14 @@ const cliValueOptions = new Map<string, CliValueOptionConfig>([
     {
       apply: (parsed, value) => {
         parsed.projectName = value;
+      },
+    },
+  ],
+  [
+    "--node-target",
+    {
+      apply: (parsed, value, optionName) => {
+        parsed.nodeTarget = parseNodeTargetValue(value, optionName);
       },
     },
   ],

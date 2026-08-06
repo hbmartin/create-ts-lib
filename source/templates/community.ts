@@ -54,6 +54,7 @@ export const buildCommunityFiles = (config: ScaffoldConfig): GeneratedFile[] => 
     },
     {
       content: renderTemplate("community/CONTRIBUTING.md.tmpl", {
+        NODE_TARGET: config.nodeTarget,
         PACKAGE_MANAGER: config.packageManager,
         PROJECT_NAME: config.projectName,
         RUN_PREFIX: pmConfig.runPrefix,

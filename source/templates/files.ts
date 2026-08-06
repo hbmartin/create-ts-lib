@@ -68,6 +68,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       content: renderTemplate("agents.md.tmpl", {
         CLI_GUIDANCE: buildCliAgentGuidance(config.includeCli),
         LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
+        NODE_TARGET: config.nodeTarget,
         PACKAGE_MANAGER: config.packageManager,
         RUN_PREFIX: pmConfig.runPrefix,
         ZOD_GUIDANCE: buildZodAgentGuidance(config.includeZod),

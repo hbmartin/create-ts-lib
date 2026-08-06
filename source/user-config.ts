@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { WarningSink } from "./cli-helpers.js";
 import { formatErrorMessage, isFileNotFoundError } from "./filesystem-errors.js";
 import { lintFormatToolingSchema } from "./lint-format-tooling.js";
+import { nodeTargetSchema } from "./node-target.js";
 import { bundlerSchema, licenseNameSchema, packageManagerSchema } from "./templates/state.js";
 
 /**
@@ -25,6 +26,7 @@ export const userConfigSchema = z.strictObject({
   includeZod: z.boolean().optional(),
   license: licenseNameSchema.optional(),
   lintFormatTooling: lintFormatToolingSchema.optional(),
+  nodeTarget: nodeTargetSchema.optional(),
   packageManager: packageManagerSchema.optional(),
 });
 
@@ -76,6 +78,7 @@ const userConfigValueParsers = {
   includeZod: parseBooleanValue,
   license: identity,
   lintFormatTooling: identity,
+  nodeTarget: identity,
   packageManager: identity,
 } satisfies Record<UserConfigKey, (raw: string, key: string) => unknown>;
 

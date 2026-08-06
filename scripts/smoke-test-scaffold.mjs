@@ -9,6 +9,7 @@ const packageManagers = new Set(["pnpm"]);
 const includeCliValues = new Set(["true", "false", "all"]);
 const lintFormatValues = new Set(["oxlint-oxfmt", "biome"]);
 const bundlerValues = new Set(["tsc", "tsdown"]);
+const nodeTargetValues = new Set(["24", "26"]);
 
 const log = (message) => {
   process.stdout.write(`[smoke] ${message}\n`);
@@ -108,6 +109,9 @@ const includeCliVariants = parseIncludeCliEnv("SMOKE_INCLUDE_CLI");
 const packageManager = parsePackageManagerEnv("SMOKE_PACKAGE_MANAGER");
 const lintFormatTooling = parseChoiceEnv("SMOKE_LINT_FORMAT", lintFormatValues, "oxlint-oxfmt");
 const bundler = parseChoiceEnv("SMOKE_BUNDLER", bundlerValues, "tsc");
+// The only check that actually installs the target's @types/node and
+// typechecks a real project against it.
+const nodeTarget = parseChoiceEnv("SMOKE_NODE_TARGET", nodeTargetValues, "24");
 const configuredSmokeDirectory = process.env.SMOKE_DIR;
 const baseDirectory =
   configuredSmokeDirectory || (await mkdtemp(join(tmpdir(), "create-ts-lib-smoke-")));
@@ -138,6 +142,7 @@ try {
         includeZod: false,
         license: "MIT",
         lintFormatTooling,
+        nodeTarget,
         packageManager,
         projectName,
       },

@@ -673,6 +673,7 @@ executable: false
     "includeZod": false,
     "license": "UNLICENSED",
     "lintFormatTooling": "oxlint-oxfmt",
+    "nodeTarget": "24",
     "packageManager": "npm",
     "projectName": "npm-minimal",
     "workspaceMode": false

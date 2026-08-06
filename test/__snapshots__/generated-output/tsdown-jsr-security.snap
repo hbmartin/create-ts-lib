@@ -1227,6 +1227,7 @@ executable: false
     "includeZod": false,
     "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
+    "nodeTarget": "24",
     "packageManager": "pnpm",
     "projectName": "@hbmartin/full-featured-lib",
     "workspaceMode": false

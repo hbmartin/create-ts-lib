@@ -48,6 +48,7 @@ const baseConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "example-lib",
   workspaceMode: false,

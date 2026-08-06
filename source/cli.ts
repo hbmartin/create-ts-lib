@@ -65,6 +65,7 @@ Options:
   --package-manager <pm>    Choose pnpm, npm, or yarn
   --lint-format <tooling>   Choose oxlint-oxfmt or biome
   --bundler <bundler>       Choose tsc or tsdown
+  --node-target <major>     Choose Node 24 or 26 as the generated engines floor
   --[no-]cli                Include or omit the CLI entry point
   --[no-]codecov            Include or omit Codecov upload in generated CI
   --[no-]community-files    Include or omit CONTRIBUTING, CODE_OF_CONDUCT, SECURITY
@@ -154,6 +155,7 @@ const buildProvidedOverrides = (cliArguments: CliArguments): Partial<ScaffoldCon
     includeZod: cliArguments.zod,
     license: cliArguments.license,
     lintFormatTooling: cliArguments.lintFormatTooling,
+    nodeTarget: cliArguments.nodeTarget,
     packageManager: cliArguments.packageManager,
     projectName: cliArguments.projectName,
     workspaceMode: cliArguments.workspace,
@@ -182,6 +184,7 @@ const saveDefaultsFromConfig = async (
       includeZod: config.includeZod,
       license: config.license,
       lintFormatTooling: config.lintFormatTooling,
+      nodeTarget: config.nodeTarget,
       packageManager: config.packageManager,
     },
     configPath,

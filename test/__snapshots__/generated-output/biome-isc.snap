@@ -1070,6 +1070,7 @@ executable: false
     "includeZod": false,
     "license": "ISC",
     "lintFormatTooling": "biome",
+    "nodeTarget": "24",
     "packageManager": "pnpm",
     "projectName": "biome-library",
     "workspaceMode": false

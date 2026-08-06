@@ -452,6 +452,10 @@ describe("cli entrypoint", () => {
           return "tsdown";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -470,7 +474,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("JSR: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
     expect(promptModule.confirm).toHaveBeenCalledTimes(6);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("uses an existing personal GitHub repository as the URL prompt default", async () => {
@@ -548,6 +552,10 @@ describe("cli entrypoint", () => {
 
         if (message === "Build tool") {
           return "tsc";
+        }
+
+        if (message === "Minimum Node version") {
+          return "24";
         }
 
         return "pnpm";
@@ -804,6 +812,7 @@ describe("cli entrypoint", () => {
       expect.objectContaining({
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         projectName: "demo-lib",
       }),
       expect.not.objectContaining({
@@ -865,6 +874,10 @@ describe("cli entrypoint", () => {
           return "tsc";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -882,7 +895,7 @@ describe("cli entrypoint", () => {
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
     expect(promptModule.input).toHaveBeenCalledTimes(5);
-    expect(promptModule.select).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(6);
   });
 
   it("lets interactive users keep an existing npm package name", async () => {
@@ -936,6 +949,10 @@ describe("cli entrypoint", () => {
           return "tsc";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -950,7 +967,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: react");
     expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.select).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(6);
   });
 
   it("warns and continues when interactive npm availability cannot be checked", async () => {
@@ -999,6 +1016,10 @@ describe("cli entrypoint", () => {
 
         if (message === "Build tool") {
           return "tsc";
+        }
+
+        if (message === "Minimum Node version") {
+          return "24";
         }
 
         return "pnpm";
@@ -1084,6 +1105,7 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         packageManager: "pnpm",
         projectName: "demo-lib",
       }),
@@ -1366,6 +1388,8 @@ describe("cli entrypoint", () => {
         "biome",
         "--bundler",
         "tsc",
+        "--node-target",
+        "26",
         "--package-manager",
         "pnpm",
         "--repo-url",
@@ -1387,6 +1411,7 @@ describe("cli entrypoint", () => {
         githubRepoUrl: "https://github.com/hbmartin/flag-lib",
         license: "ISC",
         lintFormatTooling: "biome",
+        nodeTarget: "26",
         projectName: "flag-lib",
       }),
       expect.objectContaining({
@@ -1539,6 +1564,7 @@ describe("cli entrypoint", () => {
         includeZod: false,
         license: "MIT",
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         packageManager: "pnpm",
         projectName: "update-lib",
         workspaceMode: false,
@@ -1732,6 +1758,10 @@ const buildGitHubPromptModule = ({
 
     if (message === "Build tool") {
       return "tsc";
+    }
+
+    if (message === "Minimum Node version") {
+      return "24";
     }
 
     return packageManager;

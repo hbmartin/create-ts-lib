@@ -697,6 +697,7 @@ executable: false
     "includeZod": false,
     "license": "Apache-2.0",
     "lintFormatTooling": "oxlint-oxfmt",
+    "nodeTarget": "24",
     "packageManager": "pnpm",
     "projectName": "apache-library",
     "workspaceMode": false

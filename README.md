@@ -39,7 +39,7 @@ For a guided walkthrough of everything a scaffolded project contains, see the
 
 Setting up a publishable TypeScript library means making the same dozen decisions every time: module format, build output, lint and format tooling, test runner and coverage, git hooks, and packaging validation. `create-ts-lib` makes those decisions for you with a single, modern, opinionated stack:
 
-- **ESM-only, Node 24+** — no dual-format build complexity.
+- **ESM-only, Node 24+ (or 26)** — no dual-format build complexity.
 - **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
 - **fallow + Semgrep** for lightweight architecture and security policy checks.
@@ -54,7 +54,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 
 | Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
 | ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
-| Output format                 | ESM-only (Node 24+)                     | CJS + ESM            | You decide           |
+| Output format                 | ESM-only (Node 24+ or 26+)              | CJS + ESM            | You decide           |
 | Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
 | Architecture + security gates | fallow + Semgrep                        | —                    | —                    |
@@ -67,9 +67,9 @@ The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** wit
 
 ## Requirements
 
-- **Node.js 24 or newer** — both to run the generator and to work in the projects
-  it generates, which declare the same `engines.node: ">=24"` floor and are
-  CI-tested on Node 24 and 26.
+- **Node.js 24 or newer** to run the generator. Generated projects choose their
+  own floor — `engines.node: ">=24"` (the default, CI-tested on 24 and 26) or
+  `">=26"` (CI-tested on 26) — via the `--node-target` flag.
 - A package manager: **pnpm** (recommended), npm, or yarn.
 
 ## Usage
@@ -133,6 +133,7 @@ npx @hbmartin/create-ts-lib my-lib --yes \
   --package-manager pnpm \
   --lint-format biome \
   --bundler tsdown \
+  --node-target 24 \
   --no-codecov --jsr --security-workflows
 ```
 
@@ -177,6 +178,7 @@ create-ts-lib config unset <key>
 | `--package-manager <pm>`    | Choose `pnpm`, `npm`, or `yarn`                       |
 | `--lint-format <tooling>`   | Choose `oxlint-oxfmt` or `biome`                      |
 | `--bundler <bundler>`       | Choose `tsc` or `tsdown`                              |
+| `--node-target <major>`     | Choose Node `24` or `26` as the generated engines floor |
 | `--[no-]cli`                | Include or omit the CLI entry point                   |
 | `--[no-]codecov`            | Include or omit Codecov upload in generated CI        |
 | `--[no-]zod`                | Include or omit Zod in the generated project          |
@@ -205,13 +207,14 @@ defaults and the `--yes` answers; CLI flags always win over the config file.
   "license": "MIT",
   "lintFormatTooling": "biome",
   "bundler": "tsdown",
+  "nodeTarget": "26",
   "packageManager": "pnpm",
   "includeCodecov": false
 }
 ```
 
 Supported keys: `author`, `license`, `lintFormatTooling`, `bundler`,
-`packageManager`, `includeCli`, `includeCodecov`, `includeCommunityFiles`,
+`nodeTarget`, `packageManager`, `includeCli`, `includeCodecov`, `includeCommunityFiles`,
 `includeJsr`, `includeSecurityWorkflows`, and `includeZod`. Per-project answers (name,
 description, repo URL, workspace mode) are deliberately not configurable here.
 Invalid config files are reported and ignored.
@@ -256,6 +259,7 @@ The generator asks for:
 | License                                                    | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`; `--license` skips the prompt                                                     |
 | Lint and format tooling                                    | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                     |
 | Build tool                                                 | `tsc`                                            | `tsc` or `tsdown`; automation can pass `--bundler tsc` or `--bundler tsdown`                                               |
+| Minimum Node version                                       | `24`                                             | `24` or `26`; sets `engines.node`, the `@types/node` major, and the CI matrix; `--node-target` skips the prompt            |
 | GitHub repo URL                                            | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH remotes; `--repo-url` skips the flow       |
 | Include Codecov?                                           | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI; automation can pass `--no-codecov` to omit it                             |
 | Include CodeQL and Scorecard workflows?                    | `no`                                             | Adds SHA-pinned `codeql.yml` and `scorecard.yml` for pnpm + GitHub projects; automation can pass `--security-workflows`    |
@@ -341,7 +345,8 @@ Generated packages include:
 - a package-manager-specific `@types/node` pin via `overrides`,
   `pnpm.overrides`, or `resolutions`
 - `exports` pointing at `dist/index.js` and `dist/index.d.ts`
-- `engines.node: ">=24"`
+- `engines.node: ">=24"` by default, or `">=26"` with `--node-target 26`, with
+  `@types/node` pinned to the matching major
 - `@sindresorhus/tsconfig`
 - a `tsc` build by default, or a `tsdown` bundler build when selected
 - `oxlint` and `oxfmt` by default, or `@biomejs/biome` when selected
@@ -525,7 +530,7 @@ The package exports:
 - `readScaffoldState(targetDirectory)`
 - `planUpdate(targetDirectory, state)`
 - `applyUpdatePlan(targetDirectory, plan, options?)`
-- `Bundler`, `LicenseName`, `PackageManager`
+- `Bundler`, `LicenseName`, `NodeTarget`, `PackageManager`
 - `GeneratedFile`
 - `ScaffoldConfig`
 - `ScaffoldConfigOverrides`
@@ -600,9 +605,10 @@ without CLI support, installs them from a frozen lockfile, and runs their genera
 release checks. Set `SMOKE_INCLUDE_CLI=true` or `false` to run one variant,
 `SMOKE_LINT_FORMAT=biome` to exercise the Biome stack, `SMOKE_BUNDLER=tsdown`
 to exercise the tsdown build, and `SMOKE_DIR` to choose the generated project
-directory. CI runs the oxlint-oxfmt/tsc matrix on Node 24 and 26, plus Biome and
-tsdown variants on Node 24, matching the `engines.node` floor of the projects it
-generates.
+directory. `SMOKE_NODE_TARGET` picks the generated project's Node floor. CI runs
+the oxlint-oxfmt/tsc matrix on Node 24 and 26 — each leg scaffolding for the major
+it runs on, so both `@types/node` pins get installed and typechecked — plus Biome
+and tsdown variants on Node 24.
 
 Template assets live under `source/templates/assets` and are copied into `dist/templates/assets` during `pnpm build`.
 

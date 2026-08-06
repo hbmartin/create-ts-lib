@@ -10,6 +10,7 @@ import {
   inspectPersonalGitHubRepository,
 } from "./github-cli.js";
 import type { LintFormatTooling } from "./lint-format-tooling.js";
+import type { NodeTarget } from "./node-target.js";
 import { checkNpmPackageNameAvailability } from "./npm-registry.js";
 import { validatePackageName } from "./package-name.js";
 import type { PromptModule } from "./prompts.js";
@@ -67,6 +68,7 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
   const license = await resolveLicense(provided, promptModule, defaults);
   const lintFormatTooling = await resolveLintFormatTooling(provided, promptModule, defaults);
   const bundler = await resolveBundler(provided, promptModule, defaults);
+  const nodeTarget = await resolveNodeTarget(provided, promptModule, defaults);
   const githubRepositoryAnswer = await resolveGitHubRepository(
     provided,
     githubRepositoryLookup,
@@ -103,6 +105,7 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
       ...featureAnswers,
       license,
       lintFormatTooling,
+      nodeTarget,
       packageManager,
       projectName,
       workspaceMode,
@@ -167,6 +170,21 @@ const resolveBundler = async (
     ],
     default: defaults.bundler,
     message: "Build tool",
+  }));
+
+const resolveNodeTarget = async (
+  provided: ScaffoldConfigOverrides,
+  promptModule: PromptModule,
+  defaults: ScaffoldConfig,
+): Promise<NodeTarget> =>
+  provided.nodeTarget ??
+  (await promptModule.select<NodeTarget>({
+    choices: [
+      { name: "Node 24 (LTS; CI on 24 and 26)", value: "24" },
+      { name: "Node 26 (CI on 26 only)", value: "26" },
+    ],
+    default: defaults.nodeTarget,
+    message: "Minimum Node version",
   }));
 
 interface FeatureAnswers {

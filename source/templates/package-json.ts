@@ -1,8 +1,10 @@
 import type { LintFormatTooling } from "../lint-format-tooling.js";
 import { normalizeGitHubUrl } from "../name-helpers.js";
+import { type NodeTarget, nodeEnginesRange } from "../node-target.js";
 import {
   generatedPackageDependencies,
   generatedPackageDevDependencies,
+  nodeTypesVersion,
   pnpmVersion,
 } from "./generated-versions.js";
 import {
@@ -120,7 +122,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
     devDependencies: {
       "@arethetypeswrong/cli": generatedPackageDevDependencies["@arethetypeswrong/cli"],
       "@sindresorhus/tsconfig": generatedPackageDevDependencies["@sindresorhus/tsconfig"],
-      "@types/node": generatedPackageDevDependencies["@types/node"],
+      "@types/node": nodeTypesVersion(config.nodeTarget),
       "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
       fallow: generatedPackageDevDependencies.fallow,
       ...(config.includeJsr ? { jsr: generatedPackageDevDependencies.jsr } : {}),
@@ -131,43 +133,43 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       typescript: generatedPackageDevDependencies.typescript,
       vitest: generatedPackageDevDependencies.vitest,
     },
-    ...buildPackageManagerOverrideFields(config.packageManager),
+    ...buildPackageManagerOverrideFields(config.packageManager, config.nodeTarget),
     engines: {
-      node: ">=24",
+      node: nodeEnginesRange(config.nodeTarget),
     },
   };
 
   return `${JSON.stringify(packageJson, null, 2)}\n`;
 };
 
+/**
+ * Force-pins @types/node for the whole dependency tree, so a transitive
+ * dependency cannot pull in a major that disagrees with `engines.node`. Each
+ * package manager spells that differently; the pin itself is the same value the
+ * project's own devDependencies carry.
+ */
 const buildPackageManagerOverrideFields = (
   packageManager: PackageManager,
-): PackageManagerOverrideFields => packageManagerOverrideFields[packageManager];
+  nodeTarget: NodeTarget,
+): PackageManagerOverrideFields =>
+  packageManagerOverrideBuilders[packageManager]({
+    "@types/node": nodeTypesVersion(nodeTarget),
+  });
+
+interface NodeTypesPin {
+  "@types/node": string;
+}
 
 type PackageManagerOverrideFields =
-  | { overrides: { "@types/node": string } }
-  | { pnpm: { overrides: { "@types/node": string } } }
-  | { resolutions: { "@types/node": string } };
+  | { overrides: NodeTypesPin }
+  | { pnpm: { overrides: NodeTypesPin } }
+  | { resolutions: NodeTypesPin };
 
-const packageManagerOverrideFields = {
-  npm: {
-    overrides: {
-      "@types/node": generatedPackageDevDependencies["@types/node"],
-    },
-  },
-  pnpm: {
-    pnpm: {
-      overrides: {
-        "@types/node": generatedPackageDevDependencies["@types/node"],
-      },
-    },
-  },
-  yarn: {
-    resolutions: {
-      "@types/node": generatedPackageDevDependencies["@types/node"],
-    },
-  },
-} satisfies Record<PackageManager, PackageManagerOverrideFields>;
+const packageManagerOverrideBuilders = {
+  npm: (nodeTypes: NodeTypesPin) => ({ overrides: nodeTypes }),
+  pnpm: (nodeTypes: NodeTypesPin) => ({ pnpm: { overrides: nodeTypes } }),
+  yarn: (nodeTypes: NodeTypesPin) => ({ resolutions: nodeTypes }),
+} satisfies Record<PackageManager, (nodeTypes: NodeTypesPin) => PackageManagerOverrideFields>;
 
 const lintFormatScripts = {
   biome: {

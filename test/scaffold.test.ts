@@ -6,6 +6,7 @@ import { type ParseError, parse as parseJsoncText, printParseErrorCode } from "j
 import { describe, expect, it } from "vitest";
 
 import generatorPackageJson from "../package.json" with { type: "json" };
+import { ciNodeVersions, nodeTargetOptions } from "../source/node-target.js";
 import {
   getPackageManagerExecutable,
   initializeGitRepositoryIfNeeded,
@@ -28,6 +29,8 @@ import {
   generatedPackageDependencies,
   generatedPackageDevDependencies,
   githubActionRefs,
+  nodeTypesVersion,
+  nodeTypesVersionByTarget,
   pnpmVersion,
   semgrepVersion,
 } from "../source/templates/generated-versions.js";
@@ -46,6 +49,7 @@ const baseConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "example-lib",
   workspaceMode: false,
@@ -175,6 +179,7 @@ describe("renderTemplate", () => {
     expect(message).toContain("{{ZOD_GUIDANCE}}");
     expect(message).toContain("{{CLI_GUIDANCE}}");
     expect(message).toContain("{{RUN_PREFIX}}");
+    expect(message).toContain("{{NODE_TARGET}}");
   });
 
   it("allows GitHub Actions expressions in templates", () => {
@@ -184,6 +189,7 @@ describe("renderTemplate", () => {
       ACTION_SETUP_NODE: githubActionRefs.setupNode,
       ACTION_SETUP_UV: githubActionRefs.setupUv,
       JSR_PUBLISH_STEP: "",
+      NODE_TARGET: "24",
       PNPM_VERSION: pnpmVersion,
     });
 
@@ -194,12 +200,47 @@ describe("renderTemplate", () => {
     const agents = renderTemplate("agents.md.tmpl", {
       CLI_GUIDANCE: "",
       LINT_FORMAT_GUIDANCE: "literal $& value",
+      NODE_TARGET: "24",
       PACKAGE_MANAGER: "pnpm",
       RUN_PREFIX: "pnpm run",
       ZOD_GUIDANCE: "",
     });
 
     expect(agents).toContain("literal $& value");
+  });
+});
+
+describe("Node target pins", () => {
+  it("offers only even LTS majors", () => {
+    // Node 25 is an odd, short-lived line that never becomes LTS. Offering it
+    // would stamp an `engines.node: ">=25"` promise and 25.x types into a
+    // package that outlives the runtime. Every other guarantee here hangs off
+    // this union, so it is the thing worth pinning down.
+    expect<readonly string[]>(nodeTargetOptions).not.toContain("25");
+    expect(nodeTargetOptions.every((nodeTarget) => Number(nodeTarget) % 2 === 0)).toBe(true);
+    // Guards the guard: an emptied union makes every it.each here vacuous.
+    expect(nodeTargetOptions.length).toBeGreaterThan(1);
+  });
+
+  it("resolves every pin onto its own target's major", () => {
+    const resolvedMajors = nodeTargetOptions.map(
+      (nodeTarget) => /^\^(\d+)\./.exec(nodeTypesVersion(nodeTarget))?.[1],
+    );
+
+    expect(resolvedMajors).toEqual([...nodeTargetOptions]);
+    expect(resolvedMajors).not.toContain("25");
+    // The table covers the union exactly: no orphan entry no target can reach,
+    // and no target falling through to the lookup's throw.
+    expect(Object.keys(nodeTypesVersionByTarget)).toEqual([...nodeTargetOptions]);
+  });
+
+  it("lists targets in ascending order", () => {
+    // `ciNodeVersions` slices forward from the chosen target to build
+    // "floor + next major". Out of order, it would silently emit a matrix that
+    // omits the next major, or one testing below the declared floor.
+    expect([...nodeTargetOptions]).toEqual(
+      [...nodeTargetOptions].sort((left, right) => Number(left) - Number(right)),
+    );
   });
 });
 
@@ -259,6 +300,43 @@ describe("buildProjectFiles", () => {
     );
   });
 
+  it.each([
+    ["24", '["24", "26"]'],
+    ["26", '["26"]'],
+  ] as const)("emits the floor-plus-next CI matrix for target %s", (nodeTarget, expectedMatrix) => {
+    // Literal expectations on purpose: a test that rebuilds the matrix with the
+    // same helper it is checking passes for any helper, broken ones included.
+    const ciWorkflow = findGeneratedFile(
+      buildProjectFiles({ ...baseConfig, nodeTarget }),
+      ".github/workflows/ci.yml",
+    );
+
+    expect(ciWorkflow.content).toContain(`node-version: ${expectedMatrix}`);
+  });
+
+  it.each(nodeTargetOptions)("wires workflows and prose to target %s", (nodeTarget) => {
+    const files = buildProjectFiles({
+      ...baseConfig,
+      includeCommunityFiles: true,
+      nodeTarget,
+    });
+    const ciWorkflow = findGeneratedFile(files, ".github/workflows/ci.yml");
+    const releaseWorkflow = findGeneratedFile(files, ".github/workflows/release.yml");
+
+    // Coverage uploads once per push, from the floor the project declares. A
+    // leg naming a major the matrix never runs uploads nothing, silently.
+    expect(ciWorkflow.content).toContain(`if: matrix.node-version == '${nodeTarget}'`);
+    expect(ciNodeVersions(nodeTarget)[0]).toBe(nodeTarget);
+    expect(releaseWorkflow.content).toContain(`node-version: '${nodeTarget}.x'`);
+    expect(findGeneratedFile(files, "AGENTS.md").content).toContain(
+      `Node ${nodeTarget}+ and ESM-only`,
+    );
+    expect(findGeneratedFile(files, "CONTRIBUTING.md").content).toContain(
+      `Use Node ${nodeTarget} or newer.`,
+    );
+    expect(ciWorkflow.content).not.toContain('"25"');
+  });
+
   it.each<[string, ScaffoldConfig]>([
     ["pnpm GitHub project", baseConfig],
     ["pnpm project without GitHub workflows", { ...baseConfig, githubRepoUrl: "" }],
@@ -300,6 +378,7 @@ describe("buildProjectFiles", () => {
       includeCodecov: true,
       includeZod: false,
       lintFormatTooling: "oxlint-oxfmt",
+      nodeTarget: "24",
       packageManager: "pnpm",
     });
     expect(filePaths).toContain(".oxfmtrc.json");
@@ -354,7 +433,7 @@ describe("buildProjectFiles", () => {
       }),
       "package.json",
     );
-    const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
+    const expectedNodeTypesVersion = nodeTypesVersion(baseConfig.nodeTarget);
 
     // Template-only pins: emitted into generated projects but never installed
     // here, because the generator neither imports nor runs them.
@@ -400,57 +479,76 @@ describe("buildProjectFiles", () => {
     expect(packageJson.pnpm?.overrides["@types/node"]).toBe(expectedNodeTypesVersion);
   });
 
-  it("pins @types/node to the same major as the engines.node floor", () => {
-    // Two hand-maintained literals in two files with nothing linking them:
-    // `engines.node` in package-json.ts and `@types/node` in
-    // generated-versions.ts. Left to drift they produce a project that
-    // typechecks against a newer Node than it claims to support, and because
-    // typecheck runs once the CI matrix never notices. This is the link.
-    const packageJson = parseGeneratedJson<GeneratedPackageJson>(
-      buildProjectFiles(baseConfig),
-      "package.json",
-    );
+  it.each(nodeTargetOptions)(
+    "pins @types/node to the same major as the engines.node floor for target %s",
+    (nodeTarget) => {
+      // Two hand-maintained values with nothing linking them: the `@types/node`
+      // pin in generated-versions.ts and the `engines.node` range derived in
+      // node-target.ts. Left to drift they produce a project that typechecks
+      // against a newer Node than it claims to support, and because a project's
+      // typecheck runs once its CI matrix never notices. This is the link.
+      const packageJson = parseGeneratedJson<GeneratedPackageJson>(
+        buildProjectFiles({ ...baseConfig, nodeTarget }),
+        "package.json",
+      );
 
-    const engineFloorMajor = /^>=(\d+)$/.exec(packageJson.engines.node)?.[1];
-    const nodeTypesMajor = /^\^(\d+)\./.exec(packageJson.devDependencies["@types/node"] ?? "")?.[1];
+      const engineFloorMajor = /^>=(\d+)$/.exec(packageJson.engines.node)?.[1];
+      const nodeTypesMajor = /^\^(\d+)\./.exec(
+        packageJson.devDependencies["@types/node"] ?? "",
+      )?.[1];
 
-    expect(engineFloorMajor, `unparseable engines.node: ${packageJson.engines.node}`).toBeDefined();
-    expect(
-      nodeTypesMajor,
-      `unparseable @types/node: ${packageJson.devDependencies["@types/node"]}`,
-    ).toBeDefined();
-    expect(nodeTypesMajor).toBe(engineFloorMajor);
-  });
+      expect(
+        engineFloorMajor,
+        `unparseable engines.node: ${packageJson.engines.node}`,
+      ).toBeDefined();
+      expect(
+        nodeTypesMajor,
+        `unparseable @types/node: ${packageJson.devDependencies["@types/node"]}`,
+      ).toBeDefined();
+      // Anchored to the config, not only to each other: two values derived from
+      // one wrong source would otherwise agree and pass.
+      expect(engineFloorMajor).toBe(nodeTarget);
+      expect(nodeTypesMajor).toBe(engineFloorMajor);
+    },
+  );
 
-  it.each(["npm", "pnpm", "yarn"] as const)(
-    "emits @types/node package-manager override fields for %s",
-    (packageManager) => {
+  it.each(
+    (["npm", "pnpm", "yarn"] as const).flatMap((packageManager) =>
+      nodeTargetOptions.map((nodeTarget) => [packageManager, nodeTarget] as const),
+    ),
+  )(
+    "emits @types/node package-manager override fields for %s on target %s",
+    (packageManager, nodeTarget) => {
+      // The override tables force-pin the whole dependency tree, so they are
+      // exactly where a target-keyed pin can silently regress to the other
+      // target's major while devDependencies stays right.
       const packageJson = parseGeneratedJson<GeneratedPackageJson>(
         buildProjectFiles({
           ...baseConfig,
+          nodeTarget,
           packageManager,
         }),
         "package.json",
       );
-      const expectedNodeTypesVersion = generatedPackageDevDependencies["@types/node"];
+      const expectedPin = { "@types/node": nodeTypesVersion(nodeTarget) };
 
-      expect(packageJson.devDependencies["@types/node"]).toBe(expectedNodeTypesVersion);
+      expect(packageJson.devDependencies["@types/node"]).toBe(expectedPin["@types/node"]);
 
       switch (packageManager) {
         case "npm":
-          expect(packageJson.overrides).toEqual({ "@types/node": expectedNodeTypesVersion });
+          expect(packageJson.overrides).toEqual(expectedPin);
           expect(packageJson.pnpm).toBeUndefined();
           expect(packageJson.resolutions).toBeUndefined();
           break;
         case "pnpm":
           expect(packageJson.overrides).toBeUndefined();
-          expect(packageJson.pnpm?.overrides).toEqual({ "@types/node": expectedNodeTypesVersion });
+          expect(packageJson.pnpm?.overrides).toEqual(expectedPin);
           expect(packageJson.resolutions).toBeUndefined();
           break;
         case "yarn":
           expect(packageJson.overrides).toBeUndefined();
           expect(packageJson.pnpm).toBeUndefined();
-          expect(packageJson.resolutions).toEqual({ "@types/node": expectedNodeTypesVersion });
+          expect(packageJson.resolutions).toEqual(expectedPin);
           break;
       }
     },

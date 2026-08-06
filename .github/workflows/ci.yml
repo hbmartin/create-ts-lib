@@ -104,5 +104,8 @@ jobs:
           SMOKE_DIR: ${{ runner.temp }}/e2e-node-${{ matrix.node-version }}-cli-${{ matrix.include-cli }}-${{ matrix.lint-format }}-${{ matrix.bundler }}
           SMOKE_INCLUDE_CLI: ${{ matrix.include-cli }}
           SMOKE_LINT_FORMAT: ${{ matrix.lint-format }}
+          # Scaffold for the same major the runner is on, so each leg installs
+          # that target's @types/node and typechecks a real project against it.
+          SMOKE_NODE_TARGET: ${{ matrix.node-version }}
           SMOKE_PACKAGE_MANAGER: pnpm
         run: pnpm run smoke:scaffold

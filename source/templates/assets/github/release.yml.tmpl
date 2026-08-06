@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: {{ACTION_SETUP_NODE}}
         with:
-          node-version: '24.x'
+          node-version: '{{NODE_TARGET}}.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'

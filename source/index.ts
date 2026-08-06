@@ -1,4 +1,5 @@
 export type { LintFormatTooling } from "./lint-format-tooling.js";
+export type { NodeTarget } from "./node-target.js";
 export type { ScaffoldOptions, ScaffoldProgress } from "./scaffold.js";
 export { scaffoldProject } from "./scaffold.js";
 export type {
