@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -15,6 +14,7 @@ import {
   readScaffoldState,
   type UpdatePlanEntry,
 } from "../source/update.js";
+import { createTempDirectory, createTempPath } from "./helpers/temp-directory.js";
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
@@ -37,8 +37,7 @@ const baseConfig: ScaffoldConfig = {
 };
 
 const scaffoldFixtureProject = async (): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-update-"));
-  const targetDirectory = join(tempDirectory, "example-lib");
+  const targetDirectory = await createTempPath("create-ts-lib-update-", "example-lib");
 
   await scaffoldProject(baseConfig, {
     postScaffold: false,
@@ -91,7 +90,7 @@ describe("readScaffoldState", () => {
   });
 
   it("rejects directories without a state file", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-no-state-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-no-state-");
 
     await expect(readScaffoldState(tempDirectory)).rejects.toThrow(
       `No ${stateFileName} found in ${tempDirectory}`,
@@ -99,7 +98,7 @@ describe("readScaffoldState", () => {
   });
 
   it("reports missing state when a path component is a regular file", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-notdir-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-state-notdir-");
     const targetDirectory = join(tempDirectory, "not-a-directory");
     await writeFile(targetDirectory, "plain file\n", "utf8");
 
@@ -109,7 +108,7 @@ describe("readScaffoldState", () => {
   });
 
   it("does not report unreadable state paths as missing state files", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-directory-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-state-directory-");
     await mkdir(join(tempDirectory, stateFileName));
 
     let thrownError: unknown;
@@ -124,7 +123,7 @@ describe("readScaffoldState", () => {
   });
 
   it("rejects state files that are not valid JSON", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-bad-json-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-bad-json-");
     await writeFile(join(tempDirectory, stateFileName), "not json\n", "utf8");
 
     await expect(readScaffoldState(tempDirectory)).rejects.toThrow("as JSON");

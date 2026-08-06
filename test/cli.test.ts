@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +14,7 @@ import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
 import { PostScaffoldSetupError, type ScaffoldProgress } from "../source/scaffold.js";
 import type { UserConfig } from "../source/user-config.js";
 import type { DetectedWorkspace } from "../source/workspace-detection.js";
+import { createTempDirectory, createTempPath } from "./helpers/temp-directory.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -104,7 +104,7 @@ describe("cli entrypoint", () => {
   });
 
   it("prints the resolved personal-defaults path", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const result = await runCli(["config", "path", "--config", configPath]);
 
@@ -113,7 +113,7 @@ describe("cli entrypoint", () => {
   });
 
   it("round-trips config set, get, and unset", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const empty = await runCli(["config", "get", "--config", configPath]);
     expect(empty.stdout).toContain("No personal defaults are set.");
@@ -136,7 +136,7 @@ describe("cli entrypoint", () => {
   });
 
   it("applies a saved default to a later scaffold", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
     await runCli(["config", "set", "license", "MIT", "--config", configPath]);
 
     const result = await runCli(["demo-lib", "--yes", "--dry-run", "--config", configPath]);
@@ -145,7 +145,7 @@ describe("cli entrypoint", () => {
   });
 
   it("reports invalid config keys and values without writing", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const badKey = await runCli(["config", "set", "nope", "x", "--config", configPath]);
     expect(badKey.exitCode).toBe(1);
@@ -167,7 +167,7 @@ describe("cli entrypoint", () => {
   });
 
   it("does not save defaults during a dry run", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const result = await runCli([
       "demo-lib",
@@ -187,7 +187,7 @@ describe("cli entrypoint", () => {
   });
 
   it("persists reusable answers with --save-defaults", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
     const scaffoldProject = vi.fn(async () => undefined);
 
     const result = await runCli(
@@ -733,7 +733,7 @@ describe("cli entrypoint", () => {
   });
 
   it("does not create a GitHub repo when the target directory preflight fails", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-non-empty-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-non-empty-");
     const targetDirectory = join(tempDirectory, "new-lib");
     await mkdir(targetDirectory);
     await writeFile(join(targetDirectory, "existing.txt"), "existing\n", "utf8");
@@ -1455,7 +1455,7 @@ describe("cli entrypoint", () => {
 
   it("prints a full escaped cd target and omits publish steps when git is skipped", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-spaced-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-spaced-");
     const targetDirectory = join(tempDirectory, "nested path", "demo lib");
 
     const result = await runCli(
@@ -1493,7 +1493,7 @@ describe("cli entrypoint", () => {
 
   it("uses personal defaults from the user config file in --yes mode", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    const configDirectory = await createTempDirectory("create-ts-lib-config-");
     await mkdir(join(configDirectory, "create-ts-lib"));
     await writeFile(
       join(configDirectory, "create-ts-lib", "config.json"),
@@ -1526,7 +1526,7 @@ describe("cli entrypoint", () => {
 
   it("warns and ignores an invalid user config file", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    const configDirectory = await createTempDirectory("create-ts-lib-config-");
     await mkdir(join(configDirectory, "create-ts-lib"));
     await writeFile(join(configDirectory, "create-ts-lib", "config.json"), "not json", "utf8");
 
@@ -1544,7 +1544,7 @@ describe("cli entrypoint", () => {
   });
 
   it("runs the update command against a scaffolded project", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-update-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-update-");
     const targetDirectory = join(tempDirectory, "update-lib");
     vi.doUnmock("../source/scaffold.js");
     vi.resetModules();
@@ -1688,7 +1688,7 @@ describe("cli entrypoint", () => {
   });
 
   it("reports an error when update runs outside a scaffolded project", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-no-state-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-no-state-");
 
     const result = await runCli(["update", tempDirectory]);
 
@@ -1771,8 +1771,7 @@ const buildGitHubPromptModule = ({
 const staleContent = "# replaced by the test\n";
 
 const scaffoldUpdateFixture = async (prefix: string): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), prefix));
-  const targetDirectory = join(tempDirectory, "update-lib");
+  const targetDirectory = await createTempPath(prefix, "update-lib");
   vi.doUnmock("../source/scaffold.js");
   vi.resetModules();
   const { scaffoldProject } = await import("../source/scaffold.js");
@@ -1951,7 +1950,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   // Point user-config loading at an isolated directory so developer machines
   // with a real ~/.config/create-ts-lib/config.json do not affect tests.
   process.env[xdgConfigHomeEnvironmentVariable] =
-    options.xdgConfigHome ?? (await mkdtemp(join(tmpdir(), "create-ts-lib-xdg-")));
+    options.xdgConfigHome ?? (await createTempDirectory("create-ts-lib-xdg-"));
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,

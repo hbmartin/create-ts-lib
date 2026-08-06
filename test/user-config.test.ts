@@ -1,5 +1,5 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -13,13 +13,14 @@ import {
   unsetUserConfigValue,
   userConfigKeys,
 } from "../source/user-config.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const neverWarn = (): void => {
   throw new Error("Did not expect a warning");
 };
 
 const writeUserConfig = async (content: string): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-user-config-"));
+  const tempDirectory = await createTempDirectory("create-ts-lib-user-config-");
   const configDirectory = join(tempDirectory, "create-ts-lib");
   await mkdir(configDirectory);
   const configPath = join(configDirectory, "config.json");
@@ -55,7 +56,7 @@ describe("loadUserConfig", () => {
 
   it("returns an empty config when a path component is a regular file", async () => {
     const warnings: string[] = [];
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-user-config-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-user-config-");
     const filePath = join(tempDirectory, "not-a-directory");
     await writeFile(filePath, "plain file\n", "utf8");
 
@@ -67,7 +68,7 @@ describe("loadUserConfig", () => {
 
   it("warns and ignores config paths that cannot be read", async () => {
     const warnings: string[] = [];
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-user-config-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-user-config-");
     const configPath = join(tempDirectory, "config.json");
     await mkdir(configPath);
 
@@ -132,7 +133,7 @@ describe("loadUserConfig", () => {
 
 describe("saveUserConfig", () => {
   const configPathIn = async (): Promise<string> => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-save-config-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-save-config-");
 
     // Nested directory that does not exist yet, so the write has to create it.
     return join(tempDirectory, "create-ts-lib", "config.json");

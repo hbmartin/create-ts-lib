@@ -1,5 +1,4 @@
-import { access, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from "jsonc-parser";
@@ -34,6 +33,7 @@ import {
   pnpmVersion,
   semgrepVersion,
 } from "../source/templates/generated-versions.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
@@ -1342,7 +1342,7 @@ describe("renderBiomeJsonc", () => {
 
 describe("scaffoldProject", () => {
   it("writes the generated files to disk", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-");
 
     await scaffoldProject(
       {
@@ -1363,7 +1363,7 @@ describe("scaffoldProject", () => {
   });
 
   it("writes into an existing empty target directory", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-empty-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-empty-");
     const targetDirectory = join(tempDirectory, "example-lib");
     await mkdir(targetDirectory);
 
@@ -1384,7 +1384,7 @@ describe("scaffoldProject", () => {
   });
 
   it("rejects non-empty target directories unless force is enabled", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-non-empty-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-non-empty-");
     const targetDirectory = join(tempDirectory, "example-lib");
     await mkdir(targetDirectory);
     await writeFile(join(targetDirectory, "package.json"), '{"name":"existing"}\n', "utf8");
@@ -1402,7 +1402,7 @@ describe("scaffoldProject", () => {
   });
 
   it("allows overwriting generated paths in non-empty targets when force is enabled", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-force-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-force-");
     const targetDirectory = join(tempDirectory, "example-lib");
     await mkdir(targetDirectory);
     await writeFile(join(targetDirectory, "package.json"), '{"name":"existing"}\n', "utf8");
@@ -1419,7 +1419,7 @@ describe("scaffoldProject", () => {
   });
 
   it("rejects invalid project names through the programmatic API", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-invalid-name-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-invalid-name-");
 
     await expect(
       scaffoldProject(
@@ -1438,7 +1438,7 @@ describe("scaffoldProject", () => {
 
 describe("initializeGitRepositoryIfNeeded", () => {
   it("initializes git when the target is not already inside a repository", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-git-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-git-");
 
     await initializeGitRepositoryIfNeeded(tempDirectory);
 
@@ -1459,7 +1459,7 @@ describe("runPackageManagerCommand", () => {
   });
 
   it("resolves when the package manager exits successfully", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-pm-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
     await writeFile(
       join(tempDirectory, "package.json"),
       JSON.stringify({ scripts: { ok: 'node -e ""' } }),
@@ -1472,7 +1472,7 @@ describe("runPackageManagerCommand", () => {
   });
 
   it("rejects when the package manager exits with a failure", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-pm-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-pm-");
     await writeFile(join(tempDirectory, "package.json"), JSON.stringify({ scripts: {} }), "utf8");
 
     await expect(

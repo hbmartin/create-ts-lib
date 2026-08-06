@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
 import { detectWorkspaceRoot } from "../source/workspace-detection.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +21,7 @@ interface WorkspaceFixtureOptions {
 const createFixture = async (
   options: WorkspaceFixtureOptions = {},
 ): Promise<{ packagesDirectory: string; repositoryRoot: string }> => {
-  const repositoryRoot = await mkdtemp(join(tmpdir(), "create-ts-lib-workspace-"));
+  const repositoryRoot = await createTempDirectory("create-ts-lib-workspace-");
   const packagesDirectory = join(repositoryRoot, "packages");
   await mkdir(packagesDirectory, { recursive: true });
 
@@ -143,7 +143,7 @@ describe("detectWorkspaceRoot", () => {
   it("does not search above the repository root", async () => {
     // The workspace manifest sits outside the repository, so it must not match
     // even though it is an ancestor directory.
-    const outerDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-outer-"));
+    const outerDirectory = await createTempDirectory("create-ts-lib-outer-");
     await writeFile(
       join(outerDirectory, "pnpm-workspace.yaml"),
       'packages:\n  - "packages/*"\n',
