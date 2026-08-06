@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { isErrorWithCode, isFileNotFoundError } from "./filesystem-errors.js";
@@ -266,12 +266,32 @@ const backupExistingFile = async (fullPath: string): Promise<string | undefined>
 /** Bounds the `.orig.N` search so a directory of stale backups cannot spin. */
 const maximumBackupAttempts = 100;
 
+export interface OrphanRemovalResult {
+  /**
+   * `removed` — deleted.
+   * `skipped-changed` — the contents changed between the plan and the delete.
+   * `skipped-external` — the recorded path escapes the target directory.
+   * `skipped-missing` — already gone; the goal state held either way.
+   */
+  outcome: "removed" | "skipped-changed" | "skipped-external" | "skipped-missing";
+  path: string;
+}
+
 export interface ApplyUpdateOptions {
   /** Write a `<path>.orig` copy before overwriting a user-modified file. */
   backup?: boolean;
   force?: boolean;
-  /** Restrict the write to these paths; omit to write every writable entry. */
+  /**
+   * Called once per orphan this run tried to remove. A callback rather than a
+   * second return value: `applyUpdatePlan` is public API, and the TOCTOU check
+   * means "requested" and "removed" differ by construction, so the caller
+   * cannot infer this from what it asked for.
+   */
+  onOrphan?: (result: OrphanRemovalResult) => void;
+  /** Restrict writes *and* removals to these paths; omit for every eligible one. */
   only?: readonly string[];
+  /** Delete unmodified orphans. Ignored unless `force` is also true. */
+  removeOrphans?: boolean;
 }
 
 /** Suffix for the copy kept when `--force` overwrites a file you changed. */
@@ -314,24 +334,103 @@ export const applyUpdatePlan = async (
     written.push(backupPath === undefined ? entry : { ...entry, backupPath });
   }
 
+  // Writes first, so a failing write aborts before anything is destroyed.
+  const clearedOrphanPaths = await clearOrphans(resolvedTarget, plan, options, selectedPaths);
+
   const statePath = join(resolvedTarget, plan.stateFile.path);
   const writtenPaths = new Set(written.map((entry) => entry.path));
-  const clearedOrphanPaths = clearedOrphans(plan);
   await writeFile(statePath, mergeStateFileContent(plan, writtenPaths, clearedOrphanPaths), "utf8");
 
   return written;
 };
 
 /**
- * Orphan paths whose key should leave the state file. Only the ones already
- * absent from disk for now: nothing is deleted to establish that, and without
- * it a file the user removed by hand is re-reported on every run for the life
- * of the project.
+ * Removes the orphans this run is allowed to, and returns every path whose key
+ * should leave the state file.
+ *
+ * Two independent opt-ins, because `--force` means "overwrite my edits", which
+ * is not the same permission as "delete files a config toggle turned off" -- and
+ * `--yes --force` is a documented, scripted combination that is non-destructive
+ * today.
  */
-const clearedOrphans = (plan: UpdatePlan): ReadonlySet<string> =>
-  new Set(
+const clearOrphans = async (
+  resolvedTarget: string,
+  plan: UpdatePlan,
+  options: ApplyUpdateOptions,
+  selectedPaths: ReadonlySet<string> | undefined,
+): Promise<ReadonlySet<string>> => {
+  // Seeded with no flag gate: an `orphan-gone` key is a claim about a file
+  // nobody can find, nothing is deleted to establish that, and without it a file
+  // the user removed by hand is re-reported on every run for the life of the
+  // project.
+  const cleared = new Set(
     plan.orphans.filter((orphan) => orphan.status === "orphan-gone").map((orphan) => orphan.path),
   );
+
+  if (options.force !== true || options.removeOrphans !== true) {
+    return cleared;
+  }
+
+  for (const orphan of plan.orphans) {
+    if (orphan.status !== "orphan-unmodified" || selectedPaths?.has(orphan.path) === false) {
+      continue;
+    }
+
+    const recordedHash = plan.state.files[orphan.path];
+    if (recordedHash === undefined) {
+      continue;
+    }
+
+    const outcome = await removeUnmodifiedOrphan(resolvedTarget, orphan.path, recordedHash);
+    // `skipped-missing` counts as cleared: the goal state holds, and
+    // re-recording the key would make the next run rediscover it as gone.
+    if (outcome === "removed" || outcome === "skipped-missing") {
+      cleared.add(orphan.path);
+    }
+
+    options.onOrphan?.({ outcome, path: orphan.path });
+  }
+
+  return cleared;
+};
+
+const removeUnmodifiedOrphan = async (
+  resolvedTarget: string,
+  path: string,
+  recordedHash: string,
+): Promise<OrphanRemovalResult["outcome"]> => {
+  const fullPath = resolve(resolvedTarget, path);
+  // Re-checked rather than trusted from the plan: a programmatic caller can pass
+  // any plan at all, and defence in depth on a delete is close to free.
+  if (!isInsideDirectory(resolvedTarget, fullPath)) {
+    return "skipped-external";
+  }
+
+  let diskContent: string;
+  try {
+    diskContent = await readFile(fullPath, "utf8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return "skipped-missing";
+    }
+
+    // Could not confirm it is untouched, so it is not removed.
+    return "skipped-changed";
+  }
+
+  // The plan was built before the prompt and an editor can save in between. A
+  // stale hash here means user work now exists that no backup was taken for,
+  // because the "nothing to lose" premise for skipping the backup just expired.
+  if (hashFileContent(diskContent) !== recordedHash) {
+    return "skipped-changed";
+  }
+
+  // `force` so a concurrent delete counts as success rather than ENOENT: the
+  // goal state is that this file is gone, and it is.
+  await rm(fullPath, { force: true });
+
+  return "removed";
+};
 
 /**
  * The state file records what is on disk, so a partial apply must keep the

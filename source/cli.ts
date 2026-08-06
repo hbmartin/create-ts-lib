@@ -48,6 +48,7 @@ const helpText = `create-ts-lib
 Usage:
   create-ts-lib [directory] [options]
   create-ts-lib update [directory] [--dry-run] [--force] [--yes] [--no-backup]
+                            [--remove-orphans]
   create-ts-lib config path
   create-ts-lib config get [key]
   create-ts-lib config set <key> <value>
@@ -74,6 +75,7 @@ Options:
   --[no-]security-workflows Include or omit CodeQL and Scorecard workflows
   --[no-]workspace          Scaffold as a package inside an existing workspace
   --no-backup               Skip <file>.orig backups when update overwrites edits
+  --remove-orphans          With --force, delete unmodified files the templates no longer generate
   --save-defaults           Save this run's reusable answers as personal defaults
   --config <path>           Read and write personal defaults at this path
   --skip-git                Skip git init and git remote setup

@@ -107,13 +107,50 @@ Because state files on disk were written by older releases, the schema is a
 compatibility surface — see step 2 of
 [Adding a `ScaffoldConfig` field](#adding-a-scaffoldconfig-field).
 
-Two rules keep the classifier honest across runs. `applyUpdatePlan` rewrites the
-state file to describe **what is on disk**, so a partial apply (`options.only`,
-the interactive "choose files" path) keeps the previously recorded hash for every
-entry it did not write — recording the freshly rendered hash for a skipped file
-would make the next run read it as a user edit. And backups never overwrite: a
-taken `<file>.orig` steps to `.orig.1`, and the path actually used comes back on
-`UpdatePlanEntry.backupPath` for the CLI to print.
+Paths the state file records that the render no longer produces come back
+separately as `plan.orphans`, with their own `OrphanStatus`:
+
+| Status              | Meaning                                    | Removable  |
+| ------------------- | ------------------------------------------ | ---------- |
+| `orphan-unmodified` | On disk, still matches the recorded hash    | yes, gated |
+| `orphan-modified`   | On disk, edited or unreadable               | never      |
+| `orphan-gone`       | Not on disk; the key is dropped             | n/a        |
+| `orphan-external`   | The recorded path escapes the target        | never      |
+
+They are a separate array rather than new `UpdateFileStatus` members for three
+reasons: an orphan has no rendered content to put in
+`UpdatePlanEntry.newContent`; `cli-update.ts` selects pending work with
+`status !== "up-to-date"`, so a new member would be opted into "files to write"
+by a filter that reads as already correct; and the union is exported from
+`index.ts`, so widening it breaks exhaustive consumers.
+
+`orphan-external` exists because a `state.files` key is the one place a
+user-editable string becomes a path something may delete. `resolve` restarts at
+an absolute segment, so joining a recorded key onto the target proves nothing
+about where it lands — `isInsideDirectory` checks the result, at plan time and
+again immediately before the delete.
+
+Three rules keep the classifier honest across runs:
+
+1. `applyUpdatePlan` rewrites the state file to describe **what is on disk**, so
+   a partial apply (`options.only`, the interactive "choose files" path) keeps
+   the previously recorded hash for every entry it did not write — recording the
+   freshly rendered hash for a skipped file would make the next run read it as a
+   user edit.
+2. A surviving orphan has to be *added back* to that map, not merely left alone.
+   The rendered map cannot contain an orphan — being absent from the render is
+   what makes it one — so the merge loop, which only overwrites or deletes keys
+   already present, used to erase the record on the first apply of any kind.
+   That add is what makes removal resumable across partial applies.
+3. Backups never overwrite: a taken `<file>.orig` steps to `.orig.1`, and the
+   path actually used comes back on `UpdatePlanEntry.backupPath` for the CLI to
+   print.
+
+A file also disappears from a render when a config option is *toggled*, which is
+why removal needs `--force` and `--remove-orphans` together and never touches a
+file whose contents have changed. `test/update.test.ts` pins the widest case:
+flipping `workspaceMode` orphans `.gitignore`, `lefthook.yml`, and
+`pnpm-workspace.yaml` at once, and all three must stay on disk and stay recorded.
 
 ## Workspace mode
 

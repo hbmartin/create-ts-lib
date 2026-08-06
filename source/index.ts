@@ -14,6 +14,7 @@ export { buildProjectFiles, defaultScaffoldConfig } from "./templates/files.js";
 export type { ScaffoldState } from "./templates/state.js";
 export type {
   OrphanedFile,
+  OrphanRemovalResult,
   OrphanStatus,
   UpdateFileStatus,
   UpdatePlan,

@@ -31,6 +31,7 @@ export interface CliArguments {
   nodeTarget?: NodeTarget;
   packageManager?: PackageManager;
   projectName?: string;
+  removeOrphans?: boolean;
   repoUrl?: string;
   securityWorkflows?: boolean;
   command: CliCommand;
@@ -81,6 +82,7 @@ type CliToggleFlag =
   | "codecov"
   | "communityFiles"
   | "jsr"
+  | "removeOrphans"
   | "securityWorkflows"
   | "workspace"
   | "zod";
@@ -117,6 +119,7 @@ const cliToggleFlags = new Map<string, { key: CliToggleFlag; value: boolean }>([
   ["--no-security-workflows", { key: "securityWorkflows", value: false }],
   ["--no-zod", { key: "zod", value: false }],
   ["--no-workspace", { key: "workspace", value: false }],
+  ["--remove-orphans", { key: "removeOrphans", value: true }],
   ["--security-workflows", { key: "securityWorkflows", value: true }],
   ["--workspace", { key: "workspace", value: true }],
   ["--zod", { key: "zod", value: true }],
@@ -142,7 +145,7 @@ const updateCompatibleFlags = new Set<CliBooleanFlag>([
  */
 const commandCompatibleOptions = {
   config: new Set(["--config"]),
-  update: new Set(["--no-backup"]),
+  update: new Set(["--no-backup", "--remove-orphans"]),
 } satisfies Record<Exclude<CliCommand, "scaffold">, ReadonlySet<string>>;
 
 interface CliValueOptionConfig {
@@ -313,8 +316,19 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 
   applyPositionals(parsed, positionals);
   validateUpdateArguments(parsed, scaffoldOnlyOptions);
+  validateFlagCombinations(parsed);
 
   return parsed;
+};
+
+const validateFlagCombinations = (parsed: CliArguments): void => {
+  // Two independent opt-ins for a destructive action. `--force` authorises
+  // overwriting your edits, which is not the same as authorising deletion of
+  // files a config toggle turned off. Rejected rather than ignored, so a command
+  // that cannot do what it says does not look like it worked.
+  if (parsed.removeOrphans === true && !parsed.force) {
+    throw new Error("Option --remove-orphans requires --force.");
+  }
 };
 
 const validateUpdateArguments = (parsed: CliArguments, scaffoldOnlyOptions: string[]): void => {
