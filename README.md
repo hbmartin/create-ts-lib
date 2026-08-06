@@ -256,15 +256,15 @@ The generator asks for:
 | Project name                                               | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm; `--name` skips the prompt                |
 | Description                                                | empty string                                     | Written to `package.json`; `--description` skips the prompt                                                                |
 | Author                                                     | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available; `--author` skips the prompt                                                     |
+| Scaffold as a workspace package?                           | `yes` when a workspace is detected               | Only asked when a parent workspace is found; omits root-owned files and never offers to create a GitHub repo. Automation can pass `--workspace` or `--no-workspace` |
 | License                                                    | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`; `--license` skips the prompt                                                     |
 | Lint and format tooling                                    | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                     |
 | Build tool                                                 | `tsc`                                            | `tsc` or `tsdown`; automation can pass `--bundler tsc` or `--bundler tsdown`                                               |
 | Minimum Node version                                       | `24`                                             | `24` or `26`; sets `engines.node`, the `@types/node` major, and the CI matrix; `--node-target` skips the prompt            |
-| GitHub repo URL                                            | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH remotes; `--repo-url` skips the flow       |
+| GitHub repo URL                                            | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH remotes; `--repo-url` skips the flow. In workspace mode the default is the detected workspace remote and creation is not offered |
 | Include Codecov?                                           | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI; automation can pass `--no-codecov` to omit it                             |
 | Include CodeQL and Scorecard workflows?                    | `no`                                             | Adds SHA-pinned `codeql.yml` and `scorecard.yml` for pnpm + GitHub projects; automation can pass `--security-workflows`    |
 | Include CONTRIBUTING, CODE_OF_CONDUCT, and SECURITY files? | `no`                                             | Adds the three community-health files OpenSSF Scorecard grades; automation can pass `--community-files`                    |
-| Scaffold as a workspace package?                           | `yes` when a workspace is detected               | Only asked when a parent workspace is found; omits root-owned files. Automation can pass `--workspace` or `--no-workspace` |
 | Include CLI entry point?                                   | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage; automation can pass `--cli` or `--no-cli`                           |
 | Include Zod?                                               | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`                  |
 | Also publish to JSR?                                       | `no`                                             | Adds `jsr.json`, pinned `jsr` tooling, a `jsr:publish` script, and a JSR release step; automation can pass `--jsr`         |
@@ -274,7 +274,7 @@ Defaults come from your [personal defaults file](#personal-defaults) when one
 exists, then from git detection and the built-in values. Any prompt whose value
 was provided as a CLI flag is skipped.
 
-After the final project name is accepted, interactive mode starts a `gh` lookup for a matching personal GitHub repository while it continues asking local project prompts. Existing repos are offered as the repo URL default. When no matching repo exists, the CLI lets you create a public or private repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. When `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default. Passing `--repo-url` skips the lookup and prompts entirely.
+After the final project name is accepted, interactive mode starts a `gh` lookup for a matching personal GitHub repository while it continues asking local project prompts. Existing repos are offered as the repo URL default. When no matching repo exists, the CLI lets you create a public or private repo with `gh repo create` after the scaffold summary and before files are written; `--dry-run` shows the predicted URL and skips creation. When `gh` is unavailable, unauthenticated, or returns an unexpected error, the CLI warns and asks for a repo URL with no default. Passing `--repo-url` skips the lookup and prompts entirely. Repo creation is never offered for a workspace package: the workspace repository already owns the remote, and a second repo would be left empty and wired to nothing.
 
 If the project name already exists on npm, interactive mode warns and lets you rename it or continue anyway. `--yes` uses defaults directly, still uses `git remote origin` as the GitHub repo URL default for generated metadata such as `package.json` repository fields, warns on an existing npm name, and continues without `gh` lookup, repo creation, or remote setup (unless `--repo-url` is passed explicitly, which also configures the `origin` remote). If `@inquirer/prompts` cannot load, the CLI prints a warning and falls back to a basic readline prompt implementation.
 
@@ -417,6 +417,10 @@ and the `lefthook` devDependency, since the root pins all three. Git setup is
 skipped entirely — the workspace repository owns it, so the printed next steps
 leave out the `git push` instructions even when a repository URL is configured.
 That URL still lands in `package.json`: it is the parent repository's.
+
+No GitHub repository is created either. The repo URL prompt defaults to the
+detected workspace remote rather than to a personal repo named after the
+package, since that is not where `packages/<name>` lives.
 
 **Workspace mode never writes outside the target directory.** Registering the
 package in the parent workspace globs is left to you, and the printed next steps

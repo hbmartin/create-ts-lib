@@ -65,22 +65,29 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
       default: defaults.author,
       message: "Author",
     }));
-  const license = await resolveLicense(provided, promptModule, defaults);
-  const lintFormatTooling = await resolveLintFormatTooling(provided, promptModule, defaults);
-  const bundler = await resolveBundler(provided, promptModule, defaults);
-  const nodeTarget = await resolveNodeTarget(provided, promptModule, defaults);
-  const githubRepositoryAnswer = await resolveGitHubRepository(
-    provided,
-    githubRepositoryLookup,
-    promptModule,
-    warn,
-  );
-  const featureAnswers = await promptForFeatures(provided, promptModule, defaults);
+  // Asked here, not after the feature confirms: this decides which repository
+  // owns the package, and the GitHub answer below is read in light of it. It
+  // cannot move above the description prompt -- awaiting anything before that
+  // lets the in-flight `gh` lookup settle first, and the interleaving is
+  // asserted in test/cli.test.ts.
   const workspaceMode = await resolveWorkspaceMode(
     provided,
     promptModule,
     options.detectedWorkspace,
   );
+  const license = await resolveLicense(provided, promptModule, defaults);
+  const lintFormatTooling = await resolveLintFormatTooling(provided, promptModule, defaults);
+  const bundler = await resolveBundler(provided, promptModule, defaults);
+  const nodeTarget = await resolveNodeTarget(provided, promptModule, defaults);
+  const githubRepositoryAnswer = await resolveGitHubRepository({
+    defaults,
+    githubRepositoryLookup,
+    promptModule,
+    provided,
+    warn,
+    workspaceMode,
+  });
+  const featureAnswers = await promptForFeatures(provided, promptModule, defaults);
   const packageManager =
     provided.packageManager ??
     (await promptModule.select<PackageManager>({
@@ -295,14 +302,41 @@ interface GitHubRepoUrlAnswer {
   url: string;
 }
 
+interface ResolveGitHubRepositoryOptions {
+  defaults: ScaffoldConfig;
+  githubRepositoryLookup: Promise<GitHubRepositoryLookupResult> | undefined;
+  promptModule: PromptModule;
+  provided: ScaffoldConfigOverrides;
+  warn: WarningSink;
+  workspaceMode: boolean;
+}
+
 const resolveGitHubRepository = async (
-  provided: ScaffoldConfigOverrides,
-  githubRepositoryLookup: Promise<GitHubRepositoryLookupResult> | undefined,
-  promptModule: PromptModule,
-  warn: WarningSink,
+  options: ResolveGitHubRepositoryOptions,
 ): Promise<GitHubRepoUrlAnswer> => {
+  const { defaults, githubRepositoryLookup, promptModule, provided, warn, workspaceMode } = options;
+
   if (provided.githubRepoUrl !== undefined || githubRepositoryLookup === undefined) {
     return { url: provided.githubRepoUrl ?? "" };
+  }
+
+  // A workspace package lives in the workspace's repository. Creating a second
+  // GitHub repo for it leaves an empty repo nothing is wired to, because
+  // `scaffoldProject` skips every git step in workspace mode -- no remote, no
+  // push instructions. The lookup result is unused here for the same reason a
+  // hit would be wrong: a personal repo named after the package is not where
+  // `packages/<name>` lives. The workspace's own remote is, which is what
+  // `detectDefaults` already put in `defaults.githubRepoUrl`.
+  //
+  // Dropping the in-flight lookup promise is safe: it resolves with
+  // `unavailable` on every error path rather than rejecting.
+  if (workspaceMode) {
+    return promptForGitHubRepoUrl(
+      defaults.githubRepoUrl.length > 0
+        ? { defaultUrl: defaults.githubRepoUrl, kind: "found" }
+        : { kind: "manual" },
+      promptModule,
+    );
   }
 
   const githubRepositoryPrompt = await promptForGitHubRepository(

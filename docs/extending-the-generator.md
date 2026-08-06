@@ -121,6 +121,14 @@ taken `<file>.orig` steps to `.orig.1`, and the path actually used comes back on
 setup is left to the parent, and nothing outside the target directory is ever
 written.
 
+A third thing is suppressed, outside the file list: `resolveGitHubRepository` in
+`source/cli-prompts.ts` never offers to create a GitHub repository in workspace
+mode, and defaults the URL prompt to the detected workspace remote. This is why
+`resolveWorkspaceMode` runs before the GitHub prompt rather than after the
+feature confirms — it cannot move above the description prompt, though, because
+awaiting anything earlier lets the in-flight `gh` lookup settle and breaks the
+interleaving `test/cli.test.ts` pins down.
+
 Files the parent repository owns are skipped by **two** separate mechanisms — if
 you add a root-owned file, use the one that matches:
 

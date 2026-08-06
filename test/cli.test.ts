@@ -376,6 +376,104 @@ describe("cli entrypoint", () => {
     );
   });
 
+  it("never offers GitHub repo creation for a workspace package", async () => {
+    const createGitHubRepository = vi.fn();
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        predictedUrl: "https://github.com/hbmartin/nested-lib",
+        repositoryName: "nested-lib",
+        status: "missing",
+      }),
+    );
+    const promptModule = buildGitHubPromptModule({
+      description: "Nested library",
+      // The workspace's own remote, not hbmartin/nested-lib: a personal repo
+      // named after the package is not where packages/nested-lib lives.
+      expectedGithubRepoUrlDefault: "https://github.com/hbmartin/create-ts-lib",
+      githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+      projectName: "nested-lib",
+      workspaceAnswer: true,
+    });
+
+    const result = await runCli(["nested-lib", "--dry-run"], {
+      createGitHubRepository,
+      detectWorkspaceRoot: async () => ({
+        directory: "/repo",
+        manifest: "pnpm-workspace.yaml",
+      }),
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Workspace package: yes");
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/create-ts-lib");
+    // The workspace repository owns the remote; a second repo would be empty
+    // and wired to nothing, since scaffoldProject skips all git setup here.
+    expect(result.stdout).not.toContain("GitHub repo creation skipped by --dry-run");
+    expect(promptModule.select).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: "No matching GitHub repo was found" }),
+    );
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
+  it("asks about workspace mode before the GitHub repo prompt", async () => {
+    // Without this the reorder is unguarded: the prompt mocks dispatch on
+    // message, so nothing else notices if it moves back.
+    const askedMessages: string[] = [];
+    const record = <T>(message: string, answer: T): T => {
+      askedMessages.push(message);
+      return answer;
+    };
+    const promptModule: PromptModule = {
+      confirm: vi.fn(async ({ message }: { message: string }) => record(message, false)),
+      input: vi.fn(async ({ message }: PromptInputOptions) =>
+        record(message, message === "Project name" ? "nested-lib" : "value"),
+      ),
+      select: vi.fn(async ({ message }: PromptSelectOptions) =>
+        record(message, selectAnswerFor(message)),
+      ),
+    };
+
+    await runCli(["nested-lib", "--dry-run"], {
+      detectWorkspaceRoot: async () => ({
+        directory: "/repo",
+        manifest: "pnpm-workspace.yaml",
+      }),
+      promptModule,
+    });
+
+    const workspaceIndex = askedMessages.findIndex((message) =>
+      message.startsWith("Detected a workspace at "),
+    );
+    expect(workspaceIndex).toBeGreaterThan(askedMessages.indexOf("Author"));
+    expect(workspaceIndex).toBeLessThan(askedMessages.indexOf("GitHub repo URL"));
+  });
+
+  it("skips the GitHub lookup entirely for --workspace with an explicit repo URL", async () => {
+    const inspectPersonalGitHubRepository = vi.fn();
+    const createGitHubRepository = vi.fn();
+
+    const result = await runCli(
+      [
+        "nested-lib",
+        "--yes",
+        "--dry-run",
+        "--workspace",
+        "--repo-url",
+        "https://github.com/hbmartin/monorepo",
+      ],
+      { createGitHubRepository, inspectPersonalGitHubRepository },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Workspace package: yes");
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/monorepo");
+    expect(inspectPersonalGitHubRepository).not.toHaveBeenCalled();
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
   it("lists the community-health files in the dry-run plan", async () => {
     const result = await runCli(["demo-lib", "--yes", "--dry-run", "--community-files"]);
 
@@ -1706,6 +1804,7 @@ interface BuildGitHubPromptModuleOptions {
   missingRepositoryChoice?: "create-private" | "create-public" | "manual";
   packageManager?: "npm" | "pnpm" | "yarn";
   projectName: string;
+  workspaceAnswer?: boolean;
 }
 
 const buildGitHubPromptModule = ({
@@ -1717,11 +1816,16 @@ const buildGitHubPromptModule = ({
   missingRepositoryChoice,
   packageManager = "pnpm",
   projectName,
+  workspaceAnswer = false,
 }: BuildGitHubPromptModuleOptions): PromptModule => ({
-  confirm: vi.fn(
-    async ({ message }: { default?: boolean; message: string }) =>
-      message === "Include Codecov?" && includeCodecov,
-  ),
+  confirm: vi.fn(async ({ message }: { default?: boolean; message: string }) => {
+    // The workspace prompt interpolates the detected directory and manifest.
+    if (message.startsWith("Detected a workspace at ")) {
+      return workspaceAnswer;
+    }
+
+    return message === "Include Codecov?" && includeCodecov;
+  }),
   input: vi.fn(async ({ default: defaultValue, message }: PromptInputOptions) => {
     if (message === "Project name") {
       return projectName;
@@ -1988,6 +2092,19 @@ const restoreEnvironmentVariable = (name: string, value: string | undefined): vo
   }
 
   process.env[name] = value;
+};
+
+/** Valid answers for every `select` prompt, keyed by message. */
+const selectAnswerFor = (message: string): string => {
+  const answers: Record<string, string> = {
+    "Build tool": "tsc",
+    License: "MIT",
+    "Lint and format tooling": "oxlint-oxfmt",
+    "Minimum Node version": "24",
+    "Package manager": "pnpm",
+  };
+
+  return answers[message] ?? "pnpm";
 };
 
 const buildDetectedDefaults = (directoryArgument: string | undefined): DetectedDefaults => ({
