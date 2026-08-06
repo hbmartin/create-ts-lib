@@ -20,6 +20,7 @@ import type {
   ScaffoldConfig,
   ScaffoldConfigOverrides,
 } from "./templates/scaffold-config.js";
+import type { DetectedWorkspace } from "./workspace-detection.js";
 
 export interface PendingGitHubRepositoryCreation {
   owner: string;
@@ -36,6 +37,8 @@ export interface PromptedConfig {
 export interface PromptForConfigOptions {
   /** Fully resolved prompt defaults (built-ins + user config + detection). */
   defaults: ScaffoldConfig;
+  /** Parent workspace found near the target, when there is one. */
+  detectedWorkspace?: DetectedWorkspace | undefined;
   promptModule: PromptModule;
   /** CLI-provided values; a provided value skips its prompt entirely. */
   provided: ScaffoldConfigOverrides;
@@ -71,6 +74,11 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
     warn,
   );
   const featureAnswers = await promptForFeatures(provided, promptModule, defaults);
+  const workspaceMode = await resolveWorkspaceMode(
+    provided,
+    promptModule,
+    options.detectedWorkspace,
+  );
   const packageManager =
     provided.packageManager ??
     (await promptModule.select<PackageManager>({
@@ -87,6 +95,9 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
     config: {
       author,
       bundler,
+      // Never prompted for: the scaffold year is stamped once, from the
+      // resolved defaults, so `update` can replay it in later years.
+      copyrightYear: defaults.copyrightYear,
       description,
       githubRepoUrl: githubRepositoryAnswer.url,
       ...featureAnswers,
@@ -94,6 +105,7 @@ export const promptForConfig = async (options: PromptForConfigOptions): Promise<
       lintFormatTooling,
       packageManager,
       projectName,
+      workspaceMode,
     },
     ...(githubRepositoryAnswer.creation
       ? { githubRepositoryCreation: githubRepositoryAnswer.creation }
@@ -160,10 +172,34 @@ const resolveBundler = async (
 interface FeatureAnswers {
   includeCli: boolean;
   includeCodecov: boolean;
+  includeCommunityFiles: boolean;
   includeJsr: boolean;
   includeSecurityWorkflows: boolean;
   includeZod: boolean;
 }
+
+/**
+ * Only asked when a workspace was actually found nearby; with no workspace
+ * around there is nothing to opt into, so the prompt stays out of the way.
+ */
+const resolveWorkspaceMode = async (
+  provided: ScaffoldConfigOverrides,
+  promptModule: PromptModule,
+  detectedWorkspace: DetectedWorkspace | undefined,
+): Promise<boolean> => {
+  if (provided.workspaceMode !== undefined) {
+    return provided.workspaceMode;
+  }
+
+  if (detectedWorkspace === undefined) {
+    return false;
+  }
+
+  return promptModule.confirm({
+    default: true,
+    message: `Detected a workspace at ${detectedWorkspace.directory} (${detectedWorkspace.manifest}). Scaffold as a workspace package?`,
+  });
+};
 
 const promptForFeatures = async (
   provided: ScaffoldConfigOverrides,
@@ -181,6 +217,12 @@ const promptForFeatures = async (
     (await promptModule.confirm({
       default: defaults.includeSecurityWorkflows,
       message: "Include CodeQL and Scorecard workflows?",
+    }));
+  const includeCommunityFiles =
+    provided.includeCommunityFiles ??
+    (await promptModule.confirm({
+      default: defaults.includeCommunityFiles,
+      message: "Include CONTRIBUTING, CODE_OF_CONDUCT, and SECURITY files?",
     }));
   const includeCli =
     provided.includeCli ??
@@ -201,7 +243,14 @@ const promptForFeatures = async (
       message: "Also publish to JSR?",
     }));
 
-  return { includeCli, includeCodecov, includeJsr, includeSecurityWorkflows, includeZod };
+  return {
+    includeCli,
+    includeCodecov,
+    includeCommunityFiles,
+    includeJsr,
+    includeSecurityWorkflows,
+    includeZod,
+  };
 };
 
 type ExistingPackageNameDecision = "rename" | "use-anyway";

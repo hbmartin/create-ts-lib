@@ -1,0 +1,41 @@
+{
+  "config": {
+    "author": "",
+    "bundler": "tsc",
+    "description": "",
+    "githubRepoUrl": "",
+    "includeCli": false,
+    "includeCodecov": false,
+    "includeJsr": false,
+    "includeSecurityWorkflows": false,
+    "includeZod": false,
+    "license": "UNLICENSED",
+    "lintFormatTooling": "oxlint-oxfmt",
+    "packageManager": "npm",
+    "projectName": "minimal-lib"
+  },
+  "files": {
+    ".gitignore": "77a1ed509268e78182b81dd081433a17c0a01bddf16967b1104955834db72264",
+    ".oxfmtrc.json": "ca32fc6792d239fa365f65524b2fb52f67aaf72713339e2e5a208cdc5b0f4cc0",
+    ".oxlintrc.json": "073e8e8bd576c1f99825edb90518f125a973c751c569e8d1e3c9f1b1ff5ba517",
+    ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
+    ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
+    "AGENTS.md": "26c15158aa82921801660370057760bf5b6a41914c478aaeb00206ca853599c5",
+    ".fallowrc.jsonc": "e407bb4cc65566751e569cffc84488fe110615bac15bf964de3522176bc49d7d",
+    "lefthook.yml": "83d5774a9434f63d0870112d321754cb668ef0abde42491b5b717b440168c8af",
+    "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
+    "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
+    "package.json": "154c7bd0042c0c74e1e16e22fed21f58a58ccbe71bd3ac12137c8f28633f8c95",
+    "README.md": "2933f640c68256438534644e912d9aa49b67060ccd6e3774e08e08d596c377e8",
+    "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
+    "tsconfig.build.json": "c7b9f8cb01eea45afe7c6a5562e00b19cc1db1b26242555c03cc270d1a780a21",
+    "vitest.config.ts": "5671b4ab301ed4947fe7d588d87e5f4222f83339bb4b6d54b79c9d709093d4f7",
+    "LICENSE": "a8c546ba4629db7673e8b867675ce6439a0b558d198565e14518ebf3432d7c6c",
+    "source/index.ts": "b9fc0171e56e781e6847062178d9fa26ce46ac65f2a2ccafa7dc643b5cca4d7a",
+    "source/types/index.ts": "58728d9a8282e8a9bdfd78efbb33ff5e5795594bf699c303f0edb56cbba45617",
+    "source/utils/formatting.ts": "d21aef6bf37d6e8ce22ed57a3ac54be5e7469ebb5b985486813f2ca6b441bf9f",
+    "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54"
+  },
+  "generator": "@hbmartin/create-ts-lib",
+  "version": "2.0.0"
+}

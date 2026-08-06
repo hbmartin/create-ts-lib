@@ -127,10 +127,12 @@ try {
       {
         author: "Smoke Test <smoke@example.com>",
         bundler,
+        copyrightYear: "2026",
         description: "Generated project smoke test",
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
         includeCli,
         includeCodecov: false,
+        includeCommunityFiles: false,
         includeJsr: false,
         includeSecurityWorkflows: false,
         includeZod: false,

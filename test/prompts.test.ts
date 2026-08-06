@@ -122,3 +122,47 @@ describe("createFallbackPrompts", () => {
     );
   });
 });
+
+describe("createFallbackPrompts checkbox", () => {
+  const choices = [
+    { checked: true, name: "first", value: "a" },
+    { checked: true, name: "second", value: "b" },
+    { checked: false, name: "third", value: "c" },
+  ];
+
+  it("returns the pre-checked choices for an empty answer", async () => {
+    await expect(createPrompts("").checkbox({ choices, message: "Pick" })).resolves.toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it.each([
+    ["1 3", ["a", "c"]],
+    ["1,3", ["a", "c"]],
+    ["2", ["b"]],
+    ["3 3 1", ["c", "a"]],
+  ])("parses the selection %j", async (answer, expected) => {
+    await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).resolves.toEqual(
+      expected,
+    );
+  });
+
+  it.each(["a", "all", "A"])("selects everything for %j", async (answer) => {
+    await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).resolves.toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it.each(["n", "none"])("selects nothing for %j", async (answer) => {
+    await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).resolves.toEqual([]);
+  });
+
+  it.each(["0", "4", "two"])("rejects the out-of-range selection %j", async (answer) => {
+    await expect(createPrompts(answer).checkbox({ choices, message: "Pick" })).rejects.toThrow(
+      "Invalid selection",
+    );
+  });
+});

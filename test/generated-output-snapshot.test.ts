@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import generatorPackageJson from "../package.json" with { type: "json" };
 import {
@@ -13,10 +13,12 @@ import { stateFileName } from "../source/templates/state.js";
 const baseSnapshotConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
   bundler: "tsc",
+  copyrightYear: "2026",
   description: "A generated TypeScript library",
   githubRepoUrl: "https://github.com/hbmartin/generated-lib",
   includeCli: false,
   includeCodecov: true,
+  includeCommunityFiles: false,
   includeJsr: false,
   includeSecurityWorkflows: false,
   includeZod: false,
@@ -24,6 +26,7 @@ const baseSnapshotConfig: ScaffoldConfig = {
   lintFormatTooling: "oxlint-oxfmt",
   packageManager: "pnpm",
   projectName: "generated-lib",
+  workspaceMode: false,
 };
 
 const generatedProjectSnapshotCases = [
@@ -75,6 +78,7 @@ const generatedProjectSnapshotCases = [
       ...baseSnapshotConfig,
       bundler: "tsdown",
       includeCli: true,
+      includeCommunityFiles: true,
       includeJsr: true,
       includeSecurityWorkflows: true,
       projectName: "@hbmartin/full-featured-lib",
@@ -96,16 +100,10 @@ describe("generated project file snapshots", () => {
 const snapshotPath = (snapshotName: string): string =>
   fileURLToPath(new URL(`./__snapshots__/generated-output/${snapshotName}.snap`, import.meta.url));
 
-const renderGeneratedProjectSnapshot = (config: ScaffoldConfig): string => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-
-  try {
-    return serializeGeneratedFiles(buildProjectFiles(config));
-  } finally {
-    vi.useRealTimers();
-  }
-};
+// `buildProjectFiles` is a pure function of its config -- the LICENSE year comes
+// from `config.copyrightYear` -- so this needs no clock control.
+const renderGeneratedProjectSnapshot = (config: ScaffoldConfig): string =>
+  serializeGeneratedFiles(buildProjectFiles(config));
 
 const serializeGeneratedFiles = (files: GeneratedFile[]): string =>
   files

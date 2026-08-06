@@ -1,10 +1,22 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { getUserConfigPath, loadUserConfig } from "../source/user-config.js";
+import {
+  getUserConfigPath,
+  loadUserConfig,
+  saveUserConfig,
+  setUserConfigValue,
+  type UserConfig,
+  unsetUserConfigValue,
+  userConfigKeys,
+} from "../source/user-config.js";
+
+const neverWarn = (): void => {
+  throw new Error("Did not expect a warning");
+};
 
 const writeUserConfig = async (content: string): Promise<string> => {
   const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-user-config-"));
@@ -115,5 +127,85 @@ describe("loadUserConfig", () => {
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toContain("license");
     expect(warnings[1]).toContain("projectName");
+  });
+});
+
+describe("saveUserConfig", () => {
+  const configPathIn = async (): Promise<string> => {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-save-config-"));
+
+    // Nested directory that does not exist yet, so the write has to create it.
+    return join(tempDirectory, "create-ts-lib", "config.json");
+  };
+
+  it("creates the config directory and round-trips through loadUserConfig", async () => {
+    const configPath = await configPathIn();
+
+    await saveUserConfig({ includeZod: true, license: "MIT" }, configPath);
+
+    await expect(loadUserConfig(neverWarn, configPath)).resolves.toEqual({
+      includeZod: true,
+      license: "MIT",
+    });
+    await expect(readFile(configPath, "utf8")).resolves.toMatch(/\n$/u);
+  });
+
+  it("refuses to write an invalid config", async () => {
+    const configPath = await configPathIn();
+
+    await expect(
+      saveUserConfig({ license: "GPL-3.0" } as unknown as UserConfig, configPath),
+    ).rejects.toThrow("Refusing to write invalid config");
+  });
+
+  it("leaves no temp file behind", async () => {
+    const configPath = await configPathIn();
+
+    await saveUserConfig({ license: "ISC" }, configPath);
+
+    const entries = await readdir(dirname(configPath));
+    expect(entries).toEqual(["config.json"]);
+  });
+});
+
+describe("setUserConfigValue", () => {
+  it("coerces boolean keys from their string form", () => {
+    expect(setUserConfigValue({}, "includeZod", "true")).toEqual({ includeZod: true });
+    expect(setUserConfigValue({}, "includeCli", "false")).toEqual({ includeCli: false });
+  });
+
+  it("keeps other keys intact", () => {
+    expect(setUserConfigValue({ author: "Ada" }, "license", "MIT")).toEqual({
+      author: "Ada",
+      license: "MIT",
+    });
+  });
+
+  it("rejects unknown keys and invalid values", () => {
+    expect(() => setUserConfigValue({}, "nope", "x")).toThrow("Unknown config key: nope");
+    expect(() => setUserConfigValue({}, "includeZod", "yes")).toThrow(
+      "Invalid value for includeZod",
+    );
+    expect(() => setUserConfigValue({}, "license", "GPL-3.0")).toThrow("Invalid value for license");
+  });
+});
+
+describe("unsetUserConfigValue", () => {
+  it("removes only the requested key", () => {
+    expect(unsetUserConfigValue({ author: "Ada", license: "MIT" }, "license")).toEqual({
+      author: "Ada",
+    });
+  });
+
+  it("rejects unknown keys", () => {
+    expect(() => unsetUserConfigValue({}, "nope")).toThrow("Unknown config key: nope");
+  });
+});
+
+describe("userConfigKeys", () => {
+  it("lists every schema key in sorted order", () => {
+    expect(userConfigKeys).toEqual([...userConfigKeys].sort());
+    expect(userConfigKeys).toContain("includeCommunityFiles");
+    expect(userConfigKeys).not.toContain("projectName");
   });
 });

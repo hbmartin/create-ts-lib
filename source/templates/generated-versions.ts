@@ -46,9 +46,13 @@ const templateOnlyGeneratedPackageDevDependencies = {
   // devDependencies.
   jsr: "^0.14.3",
   tsdown: "^0.22.14",
-  // Generated projects declare `engines.node: ">=22"` and run CI on Node 22 and
-  // 24, so their type definitions stay on the 24.x line instead of tracking
-  // whichever @types/node major the generator itself builds against.
+  // Must stay on the same major as the `engines.node` floor in package-json.ts,
+  // which `scaffold.test.ts` asserts. @types/node majors track Node majors and
+  // type the whole surface of their line, so a floor of ">=22" paired with
+  // 24.x types would let a generated project typecheck against APIs its own
+  // engines field promises to run without (URLPattern, for instance, only
+  // became a Node global in 24). The typecheck runs once, so the CI matrix
+  // cannot catch that -- only matching the majors can.
   "@types/node": "^24.13.3",
 } as const satisfies DependencySection;
 

@@ -1,0 +1,45 @@
+# Contributing
+
+Thanks for your interest in improving `{{PROJECT_NAME}}`.
+
+## Setup
+
+Use Node 24 or newer.
+
+```bash
+{{PACKAGE_MANAGER}} install
+```
+
+The install step also installs Lefthook. The local pre-commit hook runs the same
+lint command CI runs.
+
+## Development
+
+```bash
+{{RUN_PREFIX}} dev            # rebuild on change
+{{RUN_PREFIX}} test           # run tests
+{{RUN_PREFIX}} lint           # lint and format check
+{{RUN_PREFIX}} typecheck      # tsc --noEmit
+{{RUN_PREFIX}} deps:lint      # architecture rules
+{{RUN_PREFIX}} security:lint  # Semgrep policy checks
+```
+
+`{{RUN_PREFIX}} check` runs lint, typecheck, dependency and security checks, and
+coverage in the same order CI does. Run it before opening a pull request.
+
+## Pull requests
+
+- Keep changes focused; open an issue first for anything large or breaking.
+- Add or update tests for every behavior change — coverage is enforced at 80%.
+- Make sure `{{RUN_PREFIX}} check` passes locally.
+- Write commit messages in the imperative mood ("Add X", not "Added X").
+
+## Releasing
+
+Maintainers cut releases by bumping the version, pushing the tag, and publishing
+a GitHub release. See the README for the full flow.
+
+## Code of conduct
+
+Participation in this project is governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md).

@@ -6,6 +6,10 @@ import type { WarningSink } from "./cli-helpers.js";
 type InputValidator = (value: string) => boolean | string | Promise<boolean | string>;
 
 export interface PromptModule {
+  checkbox<T>(options: {
+    choices: Array<{ checked?: boolean; name: string; value: T }>;
+    message: string;
+  }): Promise<T[]>;
   confirm(options: { default?: boolean; message: string }): Promise<boolean>;
   input(options: { default?: string; message: string; validate?: InputValidator }): Promise<string>;
   select<T extends string>(options: {
@@ -59,6 +63,42 @@ export const createFallbackPrompts = (
   };
 
   return {
+    checkbox: async ({ choices, message }) => {
+      const checkedIndexes = choices
+        .map((choice, index) => (choice.checked === false ? undefined : index + 1))
+        .filter((index) => index !== undefined);
+      const choiceSummary = choices
+        .map(
+          (choice, index) =>
+            `${index + 1}. ${choice.name}${choice.checked === false ? "" : " [selected]"}`,
+        )
+        .join("\n");
+      const answer = await ask(
+        `${message}\n${choiceSummary}\nEnter numbers separated by spaces or commas, "a" for all, "n" for none (default: selected)\n> `,
+      );
+
+      if (answer.length === 0) {
+        return checkedIndexes.map((index) => choices[index - 1]?.value).filter(isDefined);
+      }
+
+      const normalizedAnswer = answer.toLowerCase();
+      if (normalizedAnswer === "a" || normalizedAnswer === "all") {
+        return choices.map((choice) => choice.value);
+      }
+
+      if (normalizedAnswer === "n" || normalizedAnswer === "none") {
+        return [];
+      }
+
+      return parseSelectionIndexes(answer, choices.length).map((index) => {
+        const choice = choices[index - 1];
+        if (choice === undefined) {
+          throw new Error(`Invalid selection: ${index}`);
+        }
+
+        return choice.value;
+      });
+    },
     confirm: async ({ default: defaultValue = false, message }) => {
       const suffix = defaultValue ? "Y/n" : "y/N";
       const answer = await ask(`${message} (${suffix}) `);
@@ -116,6 +156,26 @@ export const createFallbackPrompts = (
       throw new Error(`Invalid selection: ${answer}`);
     },
   };
+};
+
+const isDefined = <T>(value: T | undefined): value is T => value !== undefined;
+
+const selectionSeparatorPattern = /[\s,]+/u;
+
+const parseSelectionIndexes = (answer: string, choiceCount: number): number[] => {
+  const indexes = answer
+    .split(selectionSeparatorPattern)
+    .filter((token) => token.length > 0)
+    .map((token) => {
+      const index = Number(token);
+      if (!Number.isInteger(index) || index < 1 || index > choiceCount) {
+        throw new Error(`Invalid selection: ${token}`);
+      }
+
+      return index;
+    });
+
+  return [...new Set(indexes)];
 };
 
 const getValidationMessage = async (

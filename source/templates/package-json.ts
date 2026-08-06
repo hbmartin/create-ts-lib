@@ -80,7 +80,10 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       : {}),
     files: ["dist"],
     type: "module",
-    ...(config.packageManager === "pnpm" ? { packageManager: `pnpm@${pnpmVersion}` } : {}),
+    // In workspace mode the root pins the package manager for every package.
+    ...(config.packageManager === "pnpm" && !config.workspaceMode
+      ? { packageManager: `pnpm@${pnpmVersion}` }
+      : {}),
     exports: {
       ".": {
         types: "./dist/index.d.ts",
@@ -96,7 +99,8 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       lint: lintFormatScripts.lint,
       attw: "attw --pack . --profile esm-only",
       ...(config.includeJsr ? { "jsr:publish": "jsr publish" } : {}),
-      prepare: "lefthook install",
+      // Lefthook is installed once from the workspace root.
+      ...(config.workspaceMode ? {} : { prepare: "lefthook install" }),
       prepublishOnly: `${pmConfig.runPrefix} check && ${pmConfig.runPrefix} build && ${pmConfig.runPrefix} verify:artifacts && ${pmConfig.runPrefix} publint && ${pmConfig.runPrefix} types:lint`,
       publint: `publint --pack ${config.packageManager}`,
       "release:check": `${pmConfig.runPrefix} prepublishOnly && ${pmConfig.runPrefix} verify:package`,
@@ -120,7 +124,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
       "@vitest/coverage-v8": generatedPackageDevDependencies["@vitest/coverage-v8"],
       fallow: generatedPackageDevDependencies.fallow,
       ...(config.includeJsr ? { jsr: generatedPackageDevDependencies.jsr } : {}),
-      lefthook: generatedPackageDevDependencies.lefthook,
+      ...(config.workspaceMode ? {} : { lefthook: generatedPackageDevDependencies.lefthook }),
       ...buildLintFormatDevDependencies(config.lintFormatTooling),
       publint: generatedPackageDevDependencies.publint,
       ...(config.bundler === "tsdown" ? { tsdown: generatedPackageDevDependencies.tsdown } : {}),
@@ -129,7 +133,7 @@ export const buildPackageJson = (config: ScaffoldConfig): string => {
     },
     ...buildPackageManagerOverrideFields(config.packageManager),
     engines: {
-      node: ">=22",
+      node: ">=24",
     },
   };
 

@@ -23,6 +23,7 @@ An opinionated initializer that turns a single command into a building, testing,
 - [Prompt Flow](#prompt-flow)
 - [Generated Project Layout](#generated-project-layout)
 - [Generated Defaults](#generated-defaults)
+- [Workspace Mode](#workspace-mode)
 - [Post-Scaffold Behavior](#post-scaffold-behavior)
 - [Updating a Generated Project](#updating-a-generated-project)
 - [Next Steps After Scaffolding](#next-steps-after-scaffolding)
@@ -38,7 +39,7 @@ For a guided walkthrough of everything a scaffolded project contains, see the
 
 Setting up a publishable TypeScript library means making the same dozen decisions every time: module format, build output, lint and format tooling, test runner and coverage, git hooks, and packaging validation. `create-ts-lib` makes those decisions for you with a single, modern, opinionated stack:
 
-- **ESM-only, Node 22+** — no dual-format build complexity.
+- **ESM-only, Node 24+** — no dual-format build complexity.
 - **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
 - **fallow + Semgrep** for lightweight architecture and security policy checks.
@@ -53,7 +54,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 
 | Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
 | ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
-| Output format                 | ESM-only (Node 22+)                     | CJS + ESM            | You decide           |
+| Output format                 | ESM-only (Node 24+)                     | CJS + ESM            | You decide           |
 | Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
 | Architecture + security gates | fallow + Semgrep                        | —                    | —                    |
@@ -66,7 +67,9 @@ The trade-off is deliberate: `create-ts-lib` is **opinionated and ESM-only** wit
 
 ## Requirements
 
-- **Node.js 22 or newer** (the generator and the generated project both target Node 22+).
+- **Node.js 22 or newer** to run the generator. Generated projects declare
+  `engines.node: ">=24"` and are CI-tested on Node 24, so scaffolding from Node 22
+  works but emits an unsupported-engine warning on install.
 - A package manager: **pnpm** (recommended), npm, or yarn.
 
 ## Usage
@@ -154,31 +157,37 @@ npx @hbmartin/create-ts-lib my-lib --force
 ```text
 create-ts-lib [directory] [options]
 create-ts-lib update [directory] [--dry-run] [--force] [--yes]
+create-ts-lib config path
+create-ts-lib config get [key]
+create-ts-lib config set <key> <value>
+create-ts-lib config unset <key>
 ```
 
-| Option                      | Description                                        |
-| --------------------------- | -------------------------------------------------- |
-| `[directory]`               | Target directory / default project name            |
-| `--yes`, `-y`               | Use detected/default answers without prompting     |
-| `--dry-run`                 | Print the scaffold plan without writing files      |
-| `--force`                   | Allow writing into a non-empty target directory    |
-| `--name <name>`             | Package name (defaults to the directory name)      |
-| `--description <text>`      | Package description                                |
-| `--author <author>`         | Package author, e.g. `"Ada <ada@example.com>"`     |
-| `--license <license>`       | Choose `Apache-2.0`, `MIT`, `ISC`, or `UNLICENSED` |
-| `--repo-url <url>`          | GitHub repository URL for generated metadata       |
-| `--package-manager <pm>`    | Choose `pnpm`, `npm`, or `yarn`                    |
-| `--lint-format <tooling>`   | Choose `oxlint-oxfmt` or `biome`                   |
-| `--bundler <bundler>`       | Choose `tsc` or `tsdown`                           |
-| `--[no-]cli`                | Include or omit the CLI entry point                |
-| `--[no-]codecov`            | Include or omit Codecov upload in generated CI     |
-| `--[no-]zod`                | Include or omit Zod in the generated project       |
-| `--[no-]jsr`                | Include or omit JSR publishing support             |
-| `--[no-]security-workflows` | Include or omit CodeQL and Scorecard workflows     |
-| `--skip-git`                | Skip git init and git remote setup                 |
-| `--skip-install`            | Skip dependency install, build, and test           |
-| `--help`, `-h`              | Print usage and exit                               |
-| `--version`, `-v`           | Print the CLI version and exit                     |
+| Option                      | Description                                           |
+| --------------------------- | ----------------------------------------------------- |
+| `[directory]`               | Target directory / default project name               |
+| `--yes`, `-y`               | Use detected/default answers without prompting        |
+| `--dry-run`                 | Print the scaffold plan without writing files         |
+| `--force`                   | Allow writing into a non-empty target directory       |
+| `--name <name>`             | Package name (defaults to the directory name)         |
+| `--description <text>`      | Package description                                   |
+| `--author <author>`         | Package author, e.g. `"Ada <ada@example.com>"`        |
+| `--license <license>`       | Choose `Apache-2.0`, `MIT`, `ISC`, or `UNLICENSED`    |
+| `--repo-url <url>`          | GitHub repository URL for generated metadata          |
+| `--package-manager <pm>`    | Choose `pnpm`, `npm`, or `yarn`                       |
+| `--lint-format <tooling>`   | Choose `oxlint-oxfmt` or `biome`                      |
+| `--bundler <bundler>`       | Choose `tsc` or `tsdown`                              |
+| `--[no-]cli`                | Include or omit the CLI entry point                   |
+| `--[no-]codecov`            | Include or omit Codecov upload in generated CI        |
+| `--[no-]zod`                | Include or omit Zod in the generated project          |
+| `--[no-]jsr`                | Include or omit JSR publishing support                |
+| `--[no-]security-workflows` | Include or omit CodeQL and Scorecard workflows        |
+| `--[no-]community-files`    | Include or omit CONTRIBUTING/CODE_OF_CONDUCT/SECURITY |
+| `--[no-]workspace`          | Scaffold as a package inside an existing workspace    |
+| `--skip-git`                | Skip git init and git remote setup                    |
+| `--skip-install`            | Skip dependency install, build, and test              |
+| `--help`, `-h`              | Print usage and exit                                  |
+| `--version`, `-v`           | Print the CLI version and exit                        |
 
 ## Personal Defaults
 
@@ -199,30 +208,60 @@ defaults and the `--yes` answers; CLI flags always win over the config file.
 ```
 
 Supported keys: `author`, `license`, `lintFormatTooling`, `bundler`,
-`packageManager`, `includeCli`, `includeCodecov`, `includeJsr`,
-`includeSecurityWorkflows`, and `includeZod`. Per-project answers (name,
-description, repo URL) are deliberately not configurable here. Invalid config
-files are reported and ignored.
+`packageManager`, `includeCli`, `includeCodecov`, `includeCommunityFiles`,
+`includeJsr`, `includeSecurityWorkflows`, and `includeZod`. Per-project answers (name,
+description, repo URL, workspace mode) are deliberately not configurable here.
+Invalid config files are reported and ignored.
+
+### Managing defaults from the CLI
+
+You do not have to hand-write that file:
+
+```bash
+create-ts-lib config path                 # print the resolved config path
+create-ts-lib config get                  # print every set key
+create-ts-lib config get license          # print one key
+create-ts-lib config set license MIT      # set a key (validated before writing)
+create-ts-lib config unset license        # remove a key
+```
+
+Boolean keys take `true` or `false`. Unknown keys and invalid values are
+rejected without touching the file, and writes are atomic.
+
+You can also save the answers from a scaffold run:
+
+```bash
+npx @hbmartin/create-ts-lib my-lib --save-defaults
+```
+
+That persists only the reusable answers — never the project name, description,
+repo URL, copyright year, or workspace mode.
+
+Pass `--config <path>` to any of these (and to a scaffold run) to read and write
+somewhere other than the default location, which is useful in CI and for
+project-local presets.
 
 ## Prompt Flow
 
 The generator asks for:
 
-| Prompt                                  | Default                                          | Notes                                                                                                                   |
-| --------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Project name                            | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm; `--name` skips the prompt             |
-| Description                             | empty string                                     | Written to `package.json`; `--description` skips the prompt                                                             |
-| Author                                  | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available; `--author` skips the prompt                                                  |
-| License                                 | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`; `--license` skips the prompt                                                  |
-| Lint and format tooling                 | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                  |
-| Build tool                              | `tsc`                                            | `tsc` or `tsdown`; automation can pass `--bundler tsc` or `--bundler tsdown`                                            |
-| GitHub repo URL                         | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH remotes; `--repo-url` skips the flow    |
-| Include Codecov?                        | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI; automation can pass `--no-codecov` to omit it                          |
-| Include CodeQL and Scorecard workflows? | `no`                                             | Adds SHA-pinned `codeql.yml` and `scorecard.yml` for pnpm + GitHub projects; automation can pass `--security-workflows` |
-| Include CLI entry point?                | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage; automation can pass `--cli` or `--no-cli`                        |
-| Include Zod?                            | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`               |
-| Also publish to JSR?                    | `no`                                             | Adds `jsr.json`, pinned `jsr` tooling, a `jsr:publish` script, and a JSR release step; automation can pass `--jsr`      |
-| Package manager                         | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                                                     |
+| Prompt                                                     | Default                                          | Notes                                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Project name                                               | directory arg or `my-lib`                        | Used as the package name; must be npm-name compatible and is checked against npm; `--name` skips the prompt                |
+| Description                                                | empty string                                     | Written to `package.json`; `--description` skips the prompt                                                                |
+| Author                                                     | `git config user.name` + `git config user.email` | Combined as `Name <email>` when available; `--author` skips the prompt                                                     |
+| License                                                    | `Apache-2.0`                                     | `Apache-2.0`, `MIT`, `ISC`, `UNLICENSED`; `--license` skips the prompt                                                     |
+| Lint and format tooling                                    | `Oxlint + Oxfmt`                                 | `Oxlint + Oxfmt` or `Biome`; automation can pass `--lint-format oxlint-oxfmt` or `--lint-format biome`                     |
+| Build tool                                                 | `tsc`                                            | `tsc` or `tsdown`; automation can pass `--bundler tsc` or `--bundler tsdown`                                               |
+| GitHub repo URL                                            | existing personal GitHub repo found by `gh`      | Missing repos can be created public/private or entered manually; normalizes SSH remotes; `--repo-url` skips the flow       |
+| Include Codecov?                                           | `yes`                                            | Adds a Codecov upload step to pnpm-generated CI; automation can pass `--no-codecov` to omit it                             |
+| Include CodeQL and Scorecard workflows?                    | `no`                                             | Adds SHA-pinned `codeql.yml` and `scorecard.yml` for pnpm + GitHub projects; automation can pass `--security-workflows`    |
+| Include CONTRIBUTING, CODE_OF_CONDUCT, and SECURITY files? | `no`                                             | Adds the three community-health files OpenSSF Scorecard grades; automation can pass `--community-files`                    |
+| Scaffold as a workspace package?                           | `yes` when a workspace is detected               | Only asked when a parent workspace is found; omits root-owned files. Automation can pass `--workspace` or `--no-workspace` |
+| Include CLI entry point?                                   | `no`                                             | Adds `bin`, `meow`, `source/cli.ts`, and CLI coverage; automation can pass `--cli` or `--no-cli`                           |
+| Include Zod?                                               | `no`                                             | Adds `zod` as a runtime dependency and Zod guidance to generated `AGENTS.md`; automation can pass `--zod`                  |
+| Also publish to JSR?                                       | `no`                                             | Adds `jsr.json`, pinned `jsr` tooling, a `jsr:publish` script, and a JSR release step; automation can pass `--jsr`         |
+| Package manager                                            | `pnpm`                                           | `pnpm`, `npm`, or `yarn`; generated CI is pnpm-only                                                                        |
 
 Defaults come from your [personal defaults file](#personal-defaults) when one
 exists, then from git detection and the built-in values. Any prompt whose value
@@ -261,6 +300,9 @@ my-lib/
 │   ├── extensions.json
 │   └── settings.json
 ├── AGENTS.md
+├── CODE_OF_CONDUCT.md          # optional (--community-files)
+├── CONTRIBUTING.md             # optional (--community-files)
+├── SECURITY.md                 # optional (--community-files)
 ├── .create-ts-lib.json         # scaffold state used by the update command
 ├── .fallowrc.jsonc
 ├── .gitignore
@@ -296,7 +338,7 @@ Generated packages include:
 - a package-manager-specific `@types/node` pin via `overrides`,
   `pnpm.overrides`, or `resolutions`
 - `exports` pointing at `dist/index.js` and `dist/index.d.ts`
-- `engines.node: ">=22"`
+- `engines.node: ">=24"`
 - `@sindresorhus/tsconfig`
 - a `tsc` build by default, or a `tsdown` bundler build when selected
 - `oxlint` and `oxfmt` by default, or `@biomejs/biome` when selected
@@ -309,6 +351,9 @@ Generated packages include:
 - SHA-pinned GitHub Actions CI and release workflows for pnpm projects, with
   npm publishing via OIDC trusted publishing and provenance
 - optional SHA-pinned CodeQL and Scorecard workflows when selected
+- optional `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),
+  and `SECURITY.md` when selected — the three files OpenSSF Scorecard grades, so
+  they pair naturally with the security workflows
 - a Renovate config whenever a GitHub repo URL is provided
 - Lefthook with a lint-only `pre-commit` hook
 - optional `zod` runtime dependency when selected
@@ -323,11 +368,43 @@ Generated packages include:
 - `AGENTS.md` with opinionated guidance for Codex and other coding agents
 - a `.create-ts-lib.json` state file so `create-ts-lib update` can re-sync
   tooling files later
-- `Apache-2.0` license by default
+- `Apache-2.0` license by default, stamped with the scaffold year and recorded in
+  `.create-ts-lib.json` so `update` never rewrites your copyright year later
 
 **Versioning:** generated packages start at `0.1.0`, signaling a pre-1.0 library where minor bumps may carry breaking changes until you cut `1.0.0`. You own the version with `pnpm version` — nothing bumps it for you.
 
 **Release automation:** rather than bundling release-please or changesets, pnpm projects with a GitHub repo URL include a lightweight release workflow that publishes to npm when you publish a GitHub release. This keeps versioning fully in your hands while still automating the npm publish. The workflow authenticates with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) and publishes with provenance — no long-lived `NPM_TOKEN` secret required. The generated README documents the one-time trusted-publisher setup.
+
+## Workspace Mode
+
+When the generator finds a workspace manifest above the target directory, it
+offers to scaffold the new package as a **workspace package**. Detection looks
+for a `pnpm-workspace.yaml` or a `package.json` with a `workspaces` field,
+searching upward but never past the enclosing Git repository. A manifest whose
+only package pattern is `"."` — the single-package pnpm idiom this generator
+itself emits — is deliberately ignored, so a standalone generated project is
+never mistaken for a monorepo root.
+
+In workspace mode the generator omits the files a repository root already owns:
+
+| Omitted (root-owned)  | Still generated                            |
+| --------------------- | ------------------------------------------ |
+| `.gitignore`          | `package.json`, `tsconfig.json`            |
+| `.github/workflows/*` | `vitest.config.ts`, `.fallowrc.jsonc`      |
+| `renovate.json`       | `semgrep.yml`, `scripts/security-lint.mjs` |
+| `.vscode/*`           | lint/format config, `source/`, `test/`     |
+| `lefthook.yml`        | `README.md`, `LICENSE`, `AGENTS.md`        |
+| `pnpm-workspace.yaml` | `.create-ts-lib.json`                      |
+
+The generated `package.json` also drops `packageManager`, the `prepare` hook,
+and the `lefthook` devDependency, since the root pins all three. Git setup is
+skipped entirely — the workspace repository owns it.
+
+**Workspace mode never writes outside the target directory.** Registering the
+package in the parent workspace globs is left to you, and the printed next steps
+say so. Pass `--workspace` or `--no-workspace` to skip the prompt; under `--yes`
+a detected workspace enables the mode automatically and the scaffold summary
+reports it.
 
 ## Post-Scaffold Behavior
 
@@ -349,9 +426,11 @@ scaffold configuration and a hash of every generated file. When a new
 project (or pass its path):
 
 ```bash
-npx @hbmartin/create-ts-lib update            # plan + confirm + apply
-npx @hbmartin/create-ts-lib update --dry-run  # preview only
-npx @hbmartin/create-ts-lib update --force    # also overwrite files you changed
+npx @hbmartin/create-ts-lib update              # plan + choose + apply
+npx @hbmartin/create-ts-lib update --dry-run    # preview only
+npx @hbmartin/create-ts-lib update --force      # also overwrite files you changed
+npx @hbmartin/create-ts-lib update --yes        # apply every safe update, no prompt
+npx @hbmartin/create-ts-lib update --no-backup  # skip .orig backups
 ```
 
 For every generated file, the update command reports one of:
@@ -366,6 +445,24 @@ For every generated file, the update command reports one of:
 Files you have edited (usually `package.json`, `source/`, and `test/`) are
 detected via the recorded hashes and never overwritten by default. After an
 update that touches `package.json`, re-run your package manager's install.
+
+### Choosing what to apply
+
+Interactively, `update` prints the plan and then offers three choices:
+
+- **Apply all** — write every pending file
+- **Choose files…** — pick individual files from a checklist
+- **Cancel** — write nothing
+
+`--yes` applies every pending file without prompting.
+
+### Backups
+
+When `--force` overwrites a file you modified, your previous contents are kept
+alongside it as `<file>.orig` before the new template is written, and the paths
+are printed. Generated `.gitignore` files ignore `*.orig`. Files that were never
+modified are not backed up — there is nothing to lose. Pass `--no-backup` to opt
+out.
 
 ## Next Steps After Scaffolding
 
@@ -408,18 +505,26 @@ commands are missing locally.
 The package exports:
 
 - `defaultScaffoldConfig(overrides?)`
+- `buildProjectFiles(config)`
 - `scaffoldProject(config, options)`
 - `readScaffoldState(targetDirectory)`
 - `planUpdate(targetDirectory, state)`
 - `applyUpdatePlan(targetDirectory, plan, options?)`
 - `Bundler`, `LicenseName`, `PackageManager`
+- `GeneratedFile`
 - `ScaffoldConfig`
 - `ScaffoldConfigOverrides`
 - `ScaffoldOptions`
 - `ScaffoldProgress`
 - `ScaffoldState`, `UpdateFileStatus`, `UpdatePlan`, `UpdatePlanEntry`
 
-`ScaffoldConfig` is a complete required config shape. Use `defaultScaffoldConfig()` to start from the documented defaults and override only the project-specific values. `undefined` override values are ignored, preserving the documented defaults.
+`ScaffoldConfig` is a complete required config shape. Use `defaultScaffoldConfig()` to start from the documented defaults and override only the project-specific values. `undefined` override values are ignored, preserving the documented defaults. `defaultScaffoldConfig()` also fills `copyrightYear` with the current UTC year; pass it explicitly to render a project deterministically.
+
+`buildProjectFiles(config)` renders the whole project to an in-memory
+`GeneratedFile[]` (`{ path, content, executable? }`) without touching the
+filesystem. It is a pure function of its config, so it is the entry point to use
+for previewing a scaffold, diffing template changes, or writing to a virtual
+filesystem.
 
 `scaffoldProject` writes the generated project, rejects invalid package names, refuses non-empty target directories unless `force: true` is set, can optionally receive progress callbacks for post-scaffold steps, and can add a best-effort `origin` remote with `gitRemoteOriginUrl`. `skipGit: true` and `skipInstall: true` skip the corresponding post-scaffold steps.
 
@@ -480,8 +585,8 @@ without CLI support, installs them from a frozen lockfile, and runs their genera
 release checks. Set `SMOKE_INCLUDE_CLI=true` or `false` to run one variant,
 `SMOKE_LINT_FORMAT=biome` to exercise the Biome stack, `SMOKE_BUNDLER=tsdown`
 to exercise the tsdown build, and `SMOKE_DIR` to choose the generated project
-directory. CI runs the oxlint-oxfmt/tsc matrix on Node 22 and 24 plus Biome and
-tsdown variants on Node 24.
+directory. CI runs the oxlint-oxfmt/tsc matrix plus Biome and tsdown variants on
+Node 24, matching the `engines.node` floor of the projects it generates.
 
 Template assets live under `source/templates/assets` and are copied into `dist/templates/assets` during `pnpm build`.
 

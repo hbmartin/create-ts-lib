@@ -1,5 +1,6 @@
 import type { LintFormatTooling } from "../lint-format-tooling.js";
 import { renderBiomeJsonc } from "./biome.js";
+import { buildCommunityFiles } from "./community.js";
 import { semgrepVersion } from "./generated-versions.js";
 import { buildJsrJson } from "./jsr.js";
 import { buildPackageJson } from "./package-json.js";
@@ -9,7 +10,6 @@ import {
   extractAuthorName,
   type GeneratedFile,
   getBinName,
-  type LicenseName,
   packageManagerConfig,
   type ScaffoldConfig,
 } from "./scaffold-config.js";
@@ -34,26 +34,35 @@ export {
   type ScaffoldConfigOverrides,
 } from "./scaffold-config.js";
 
-const buildLicense = (license: LicenseName, author: string): string => {
-  const year = new Date().getUTCFullYear().toString();
-  const authorName = extractAuthorName(author);
-  const licenseTemplatePath = `licenses/${license.toLowerCase()}.txt.tmpl`;
+const buildLicense = (config: ScaffoldConfig): string => {
+  const authorName = extractAuthorName(config.author);
+  const licenseTemplatePath = `licenses/${config.license.toLowerCase()}.txt.tmpl`;
 
   return renderTemplate(licenseTemplatePath, {
     AUTHOR_NAME: authorName,
-    YEAR: year,
+    YEAR: config.copyrightYear,
   });
 };
+
+/**
+ * Files a workspace root already owns. In workspace mode the parent repository
+ * provides them, so emitting copies here would fight with it.
+ */
+const rootOwnedFiles = (config: ScaffoldConfig, build: () => GeneratedFile[]): GeneratedFile[] =>
+  config.workspaceMode ? [] : build();
 
 export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   const pmConfig = packageManagerConfig[config.packageManager];
   const files: GeneratedFile[] = [
-    {
-      content: renderTemplate("gitignore.tmpl"),
-      path: ".gitignore",
-    },
+    ...rootOwnedFiles(config, () => [
+      {
+        content: renderTemplate("gitignore.tmpl"),
+        path: ".gitignore",
+      },
+    ]),
     ...buildLintFormatFiles(config),
-    ...buildVsCodeFiles(config),
+    ...rootOwnedFiles(config, () => buildVsCodeFiles(config)),
+    ...buildCommunityFiles(config),
     {
       content: renderTemplate("agents.md.tmpl", {
         LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
@@ -70,12 +79,14 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       }),
       path: ".fallowrc.jsonc",
     },
-    {
-      content: renderTemplate("lefthook.yml.tmpl", {
-        RUN_PREFIX: pmConfig.runPrefix,
-      }),
-      path: "lefthook.yml",
-    },
+    ...rootOwnedFiles(config, () => [
+      {
+        content: renderTemplate("lefthook.yml.tmpl", {
+          RUN_PREFIX: pmConfig.runPrefix,
+        }),
+        path: "lefthook.yml",
+      },
+    ]),
     {
       content: renderTemplate("semgrep.yml.tmpl"),
       path: "semgrep.yml",
@@ -94,14 +105,16 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       content: buildReadme(config),
       path: "README.md",
     },
-    ...(config.packageManager === "pnpm"
-      ? [
-          {
-            content: renderTemplate("pnpm-workspace.yaml.tmpl"),
-            path: "pnpm-workspace.yaml",
-          },
-        ]
-      : []),
+    ...rootOwnedFiles(config, () =>
+      config.packageManager === "pnpm"
+        ? [
+            {
+              content: renderTemplate("pnpm-workspace.yaml.tmpl"),
+              path: "pnpm-workspace.yaml",
+            },
+          ]
+        : [],
+    ),
     {
       content: renderTemplate("tsconfig.json.tmpl"),
       path: "tsconfig.json",
@@ -112,7 +125,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       path: "vitest.config.ts",
     },
     {
-      content: buildLicense(config.license, config.author),
+      content: buildLicense(config),
       path: "LICENSE",
     },
     {
@@ -157,10 +170,14 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   }
 
   if (config.githubRepoUrl.length > 0) {
-    files.push({
-      content: renderTemplate("renovate.json.tmpl"),
-      path: "renovate.json",
-    });
+    files.push(
+      ...rootOwnedFiles(config, () => [
+        {
+          content: renderTemplate("renovate.json.tmpl"),
+          path: "renovate.json",
+        },
+      ]),
+    );
   }
 
   if (hasGitHubWorkflows(config)) {

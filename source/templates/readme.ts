@@ -8,8 +8,11 @@ import {
   type ScaffoldConfig,
 } from "./scaffold-config.js";
 
+// Workspace packages inherit CI and release workflows from the repository root,
+// so they get neither the workflow files nor the badges and release docs that
+// describe them.
 export const hasGitHubWorkflows = (config: ScaffoldConfig): boolean =>
-  config.githubRepoUrl.length > 0 && config.packageManager === "pnpm";
+  !config.workspaceMode && config.githubRepoUrl.length > 0 && config.packageManager === "pnpm";
 
 export const buildReadme = (config: ScaffoldConfig): string => {
   const pmConfig = packageManagerConfig[config.packageManager];

@@ -23,12 +23,13 @@ afterEach(() => {
 });
 
 const baseParsedArguments = {
+  command: "scaffold",
   dryRun: false,
   force: false,
   help: false,
+  saveDefaults: false,
   skipGit: false,
   skipInstall: false,
-  update: false,
   version: false,
   yes: false,
 };
@@ -138,14 +139,78 @@ describe("parseCliArguments", () => {
   it("parses the update command with an optional directory", () => {
     expect(parseCliArguments(["update"])).toEqual({
       ...baseParsedArguments,
-      update: true,
+      command: "update",
     });
     expect(parseCliArguments(["update", "my-lib", "--dry-run"])).toEqual({
       ...baseParsedArguments,
+      command: "update",
       directoryArgument: "my-lib",
       dryRun: true,
-      update: true,
     });
+  });
+
+  it("parses the config command actions", () => {
+    expect(parseCliArguments(["config", "path"])).toEqual({
+      ...baseParsedArguments,
+      command: "config",
+      configAction: "path",
+    });
+    expect(parseCliArguments(["config", "get"])).toEqual({
+      ...baseParsedArguments,
+      command: "config",
+      configAction: "get",
+    });
+    expect(parseCliArguments(["config", "get", "license"])).toEqual({
+      ...baseParsedArguments,
+      command: "config",
+      configAction: "get",
+      configKey: "license",
+    });
+    expect(parseCliArguments(["config", "set", "license", "MIT"])).toEqual({
+      ...baseParsedArguments,
+      command: "config",
+      configAction: "set",
+      configKey: "license",
+      configValue: "MIT",
+    });
+    expect(parseCliArguments(["config", "unset", "license"])).toEqual({
+      ...baseParsedArguments,
+      command: "config",
+      configAction: "unset",
+      configKey: "license",
+    });
+  });
+
+  it("accepts --config for both scaffold and config commands", () => {
+    expect(parseCliArguments(["my-lib", "--config", "/tmp/c.json"])).toMatchObject({
+      command: "scaffold",
+      configPath: "/tmp/c.json",
+    });
+    expect(parseCliArguments(["config", "path", "--config", "/tmp/c.json"])).toMatchObject({
+      command: "config",
+      configPath: "/tmp/c.json",
+    });
+  });
+
+  it.each([
+    [["config"], "Missing config action"],
+    [["config", "list"], "Unknown config action: list"],
+    [["config", "set"], "config set requires a key"],
+    [["config", "set", "license"], "config set requires a value"],
+    [["config", "unset"], "config unset requires a key"],
+    [["config", "path", "license"], "Unexpected extra argument: license"],
+    [["config", "set", "license", "MIT", "extra"], "Unexpected extra argument: extra"],
+  ])("rejects malformed config arguments %j", (args, expectedError) => {
+    expect(() => parseCliArguments(args)).toThrow(expectedError);
+  });
+
+  it("rejects scaffold-only options for the config command", () => {
+    expect(() => parseCliArguments(["config", "path", "--zod"])).toThrow(
+      "Option --zod cannot be used with config",
+    );
+    expect(() => parseCliArguments(["update", "--config", "/tmp/c.json"])).toThrow(
+      "Option --config cannot be used with update",
+    );
   });
 
   it.each([
