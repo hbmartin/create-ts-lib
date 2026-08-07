@@ -117,16 +117,16 @@ export const nodeTypesVersion = (nodeTarget: NodeTarget): string => {
 };
 
 export const githubActionRefs = {
-  checkout: "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3",
+  checkout: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
   codecov: "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0",
-  codeqlAnalyze: "github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2",
-  codeqlInit: "github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2",
+  codeqlAnalyze: "github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6",
+  codeqlInit: "github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6",
   codeqlUploadSarif:
-    "github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2",
-  pnpmSetup: "pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8",
-  scorecard: "ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3",
-  setupNode: "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0",
-  setupUv: "astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
+    "github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6",
+  pnpmSetup: "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10",
+  scorecard: "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4",
+  setupNode: "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0",
+  setupUv: "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
 } as const satisfies Record<string, string>;
 
 export const semgrepVersion = "1.172.0";
