@@ -38,22 +38,36 @@ describe("public API", () => {
     );
   });
 
-  it("applies schema defaults instead of rendering them as undefined", () => {
-    // The fields carrying a `.default()` for state-file compatibility make a
-    // partial object validate while still being partial. Rendering the caller's
-    // own object put `Copyright (c) undefined` into LICENSE.
+  it("applies static schema defaults instead of rendering them as undefined", () => {
+    // The fields carrying a static `.default()` for state-file compatibility
+    // make a partial object validate while still being partial. Rendering the
+    // caller's own object recorded `undefined` values as gospel.
+    const { includeCommunityFiles: _omitted, ...withoutCommunityFiles } = defaultScaffoldConfig({
+      projectName: "example-lib",
+    });
+
+    const stateFile = buildProjectFiles(withoutCommunityFiles as ScaffoldConfig).find(
+      (file) => file.path === ".create-ts-lib.json",
+    );
+
+    expect(stateFile?.content).toContain('"includeCommunityFiles": false');
+  });
+
+  it("rejects a config missing copyrightYear instead of reading the clock", () => {
+    // `copyrightYear`'s schema default reads the clock. That is right at the
+    // state-file boundary, where it stands in for the year an old release
+    // scaffolded, but rendering must stay a pure function of its config: a
+    // partial input silently completed with today's year would produce a
+    // different LICENSE for the same input after a calendar change.
     const { copyrightYear: _omitted, ...withoutCopyrightYear } = defaultScaffoldConfig({
       author: "Ada Lovelace",
       license: "MIT",
       projectName: "example-lib",
     });
 
-    const license = buildProjectFiles(withoutCopyrightYear as ScaffoldConfig).find(
-      (file) => file.path === "LICENSE",
+    expect(() => buildProjectFiles(withoutCopyrightYear as ScaffoldConfig)).toThrow(
+      "Invalid scaffold config: copyrightYear",
     );
-
-    expect(license?.content).not.toContain("undefined");
-    expect(license?.content).toMatch(/Copyright \(c\) \d{4} Ada Lovelace/u);
   });
 
   it("rejects an invalid config from scaffoldProject", async () => {
