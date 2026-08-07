@@ -128,7 +128,10 @@ by a filter that reads as already correct; and the union is exported from
 user-editable string becomes a path something may delete. `resolve` restarts at
 an absolute segment, so joining a recorded key onto the target proves nothing
 about where it lands — `isInsideDirectory` checks the result, at plan time and
-again immediately before the delete.
+again immediately before the delete. That check is lexical, so both places also
+resolve the path through `realpath` and re-check: a recorded key such as
+`linked-directory/file` would otherwise pass containment while a symlinked
+directory component sends the read and the delete outside the project.
 
 Three rules keep the classifier honest across runs:
 

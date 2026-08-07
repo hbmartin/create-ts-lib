@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { isErrorWithCode, isFileNotFoundError } from "./filesystem-errors.js";
@@ -170,6 +170,30 @@ const buildOrphans = async (
   return orphans;
 };
 
+/**
+ * Where the file `fullPath` names really lies once symlinks are followed.
+ *
+ * `resolve` and `isInsideDirectory` are lexical: a recorded key such as
+ * `linked-directory/file` passes containment while `linked-directory` is a
+ * symlink pointing outside the project, so the read and the delete would land
+ * on the external target. `realpath` on both sides puts the comparison in the
+ * same namespace (on macOS the target itself usually sits behind `/var` ->
+ * `/private/var`).
+ */
+const locateOrphanOnDisk = async (
+  resolvedTarget: string,
+  fullPath: string,
+): Promise<"external" | "inside" | "missing" | "unreadable"> => {
+  let realFullPath: string;
+  try {
+    realFullPath = await realpath(fullPath);
+  } catch (error) {
+    return isFileNotFoundError(error) ? "missing" : "unreadable";
+  }
+
+  return isInsideDirectory(await realpath(resolvedTarget), realFullPath) ? "inside" : "external";
+};
+
 const classifyOrphan = async (
   resolvedTarget: string,
   path: string,
@@ -181,6 +205,19 @@ const classifyOrphan = async (
   // where it lands is checked rather than assumed.
   if (!isInsideDirectory(resolvedTarget, fullPath)) {
     return "orphan-external";
+  }
+
+  const location = await locateOrphanOnDisk(resolvedTarget, fullPath);
+  if (location === "external") {
+    return "orphan-external";
+  }
+  if (location === "missing") {
+    return "orphan-gone";
+  }
+  if (location === "unreadable") {
+    // Same fail-safe as the unreadable-content branch below: never removed, and
+    // not allowed to block every future update.
+    return "orphan-modified";
   }
 
   let diskContent: string;
@@ -404,6 +441,18 @@ const removeUnmodifiedOrphan = async (
   // any plan at all, and defence in depth on a delete is close to free.
   if (!isInsideDirectory(resolvedTarget, fullPath)) {
     return "skipped-external";
+  }
+
+  const location = await locateOrphanOnDisk(resolvedTarget, fullPath);
+  if (location === "external") {
+    return "skipped-external";
+  }
+  if (location === "missing") {
+    return "skipped-missing";
+  }
+  if (location === "unreadable") {
+    // Could not establish where the path really leads, so it is not removed.
+    return "skipped-changed";
   }
 
   let diskContent: string;
