@@ -93,6 +93,18 @@ describe("detectWorkspaceRoot", () => {
     await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
   });
 
+  // `packages` is a sequence of strings or it declares nothing. A scalar or a
+  // mapping has to read as "no patterns" rather than as one nested pattern.
+  it.each([
+    ["scalar", "packages: packages/*\n"],
+    ["empty flow sequence", "packages: []\n"],
+    ["mapping", "packages:\n  first: packages/*\n"],
+  ])("ignores a %s packages declaration", async (_name, pnpmWorkspace) => {
+    const { packagesDirectory } = await createFixture({ pnpmWorkspace });
+
+    await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
+  });
+
   it("stops at the next top-level key", async () => {
     // `onlyBuiltDependencies` is a sequence too; absorbing it would turn a
     // single-package project into a false workspace.

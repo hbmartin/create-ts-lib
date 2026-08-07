@@ -39,7 +39,7 @@ For a guided walkthrough of everything a scaffolded project contains, see the
 
 Setting up a publishable TypeScript library means making the same dozen decisions every time: module format, build output, lint and format tooling, test runner and coverage, git hooks, and packaging validation. `create-ts-lib` makes those decisions for you with a single, modern, opinionated stack:
 
-- **ESM-only, Node 24+ (or 26)** — no dual-format build complexity.
+- **ESM-only, Node `>=24` or `>=26`** — no dual-format build complexity.
 - **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
 - **fallow + Semgrep** for lightweight architecture and security policy checks.
@@ -54,7 +54,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 
 | Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
 | ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
-| Output format                 | ESM-only (Node 24+ or 26+)              | CJS + ESM            | You decide           |
+| Output format                 | ESM-only (Node `>=24` or `>=26`)        | CJS + ESM            | You decide           |
 | Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
 | Architecture + security gates | fallow + Semgrep                        | —                    | —                    |
