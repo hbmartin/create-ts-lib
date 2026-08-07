@@ -265,6 +265,17 @@ describe("parseCliArguments", () => {
       `Option ${optionName} cannot be used with update.`,
     );
   });
+
+  it.each<[string[], string]>([
+    [["--no-backup"], "--no-backup"],
+    [["my-lib", "--force", "--remove-orphans"], "--remove-orphans"],
+  ])("rejects update-only option %s for scaffold", (args, optionName) => {
+    // Scaffold cannot honour these; silently ignoring them would make the
+    // command look like it did what it was asked to do.
+    expect(() => parseCliArguments(args)).toThrow(
+      `Option ${optionName} can only be used with update.`,
+    );
+  });
 });
 
 describe("shared name helpers", () => {
