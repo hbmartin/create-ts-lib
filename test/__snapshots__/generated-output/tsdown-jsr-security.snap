@@ -213,7 +213,7 @@ Thanks for your interest in improving `@hbmartin/full-featured-lib`.
 
 ## Setup
 
-Use Node 24 or newer.
+Use Node 26 or newer.
 
 ```bash
 pnpm install
@@ -284,7 +284,7 @@ Guidance for Codex and other coding agents working in this TypeScript library.
 
 - Use pnpm for all package management and scripts.
 - Keep implementation code in `source/` and Vitest coverage in `test/`.
-- Treat this package as Node 24+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
+- Treat this package as Node 26+ and ESM-only. Do not add CommonJS compatibility unless explicitly requested.
 - Do not add Prettier. Linting is handled by Oxlint, and formatting is handled by Oxfmt.
 
 ## Code Changes
@@ -696,7 +696,7 @@ executable: false
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@sindresorhus/tsconfig": "^8.1.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.1.2",
     "@vitest/coverage-v8": "^4.1.10",
     "fallow": "^3.14.0",
     "jsr": "^0.14.3",
@@ -710,11 +710,11 @@ executable: false
   },
   "pnpm": {
     "overrides": {
-      "@types/node": "^24.13.3"
+      "@types/node": "^26.1.2"
     }
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   }
 }
 
@@ -1035,7 +1035,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["24", "26"]
+        node-version: ["26"]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -1059,7 +1059,7 @@ jobs:
       - run: pnpm run publint
 
       - name: Upload coverage to Codecov
-        if: matrix.node-version == '24'
+        if: matrix.node-version == '26'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -1100,7 +1100,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '24.x'
+          node-version: '26.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
@@ -1227,7 +1227,7 @@ executable: false
     "includeZod": false,
     "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
-    "nodeTarget": "24",
+    "nodeTarget": "26",
     "packageManager": "pnpm",
     "projectName": "@hbmartin/full-featured-lib",
     "workspaceMode": false
@@ -1239,14 +1239,14 @@ executable: false
     ".vscode/extensions.json": "64adf17da20621ee37e9a5d484b9733b5707e364ff007b3bbdb4b4a131a46bf6",
     ".vscode/settings.json": "3085362e70c4f8913b5eae2b6f03b5e59fcdb732308af2d0c8cb2e0ec7011fa9",
     "CODE_OF_CONDUCT.md": "053c9c452c6372dce2cd0e6baa82a969de7e8f45dcf131b84b775f2d428583ee",
-    "CONTRIBUTING.md": "7c8b115a3b83a2528d9c660139fc5618db2c41015305165fa562e93d87faa8ec",
+    "CONTRIBUTING.md": "1f3149e106fcef0ae965f178ebc61ad368ff98cc86c4195fad600b16a0729e92",
     "SECURITY.md": "e1d31b30e962dfad01e4cb3b36e3b77f869b00ba02af9ba11c45d7d606853ef1",
-    "AGENTS.md": "59e923fba85c1a66a9c8bd32b67e0147352edffbaa01d3099ff534e1eae84dce",
+    "AGENTS.md": "716c6d43b34e1634d99b1bf1f12c3c44d220e12562459ae8d766742f7af4ef84",
     ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
-    "package.json": "51c79e35e903a16ebfb6a26c6e4ff5a8ab6affa190e6ec73999690ed3ac7414d",
+    "package.json": "c13aa4c9abfa17f482b9d1d32465c83c290d30f20ac9ae1443e4e5efa37ba563",
     "README.md": "5221c24795e34e61068c89fa3c7956cca57d401067ccd812db4f3f2c5c881b23",
     "pnpm-workspace.yaml": "d15d9cfa7e20813fad6f5b200c5f0fa01e2dbafe45a07fbe3c057067ad95fceb",
     "tsconfig.json": "42ad0ea716a4470def8eeb617459c89889e67c3de983abbe0fd116f8177b25d9",
@@ -1261,8 +1261,8 @@ executable: false
     "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
     "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "85e46689238f8527c2852629fac7fbbb3bcefadf092bf1a9bb0ff045cb167217",
-    ".github/workflows/release.yml": "f48ce64b55a54f87a49b741d8c6ec0749f34ec88c6b836d77ab066217cef7d2d",
+    ".github/workflows/ci.yml": "6a688e2434539e1743327319a4a99380fbabdf826630024726a3168c5f8d5533",
+    ".github/workflows/release.yml": "f981008c6006913d5db4a06221195823579882fbf6340982e47a8342e0cb5853",
     ".github/workflows/codeql.yml": "9fd59ceff3c4e087d3d0a015a2bbcb00a6850654513e538337f63211628daa4b",
     ".github/workflows/scorecard.yml": "983c1a281e70bc209fe28f94209f1a70dc0d66c06ea87e37a6ac5672fcdedbd7"
   },
