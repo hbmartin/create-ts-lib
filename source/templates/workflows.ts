@@ -1,12 +1,20 @@
+import { ciNodeVersions, type NodeTarget } from "../node-target.js";
 import { githubActionRefs, pnpmVersion } from "./generated-versions.js";
 import { renderTemplate } from "./render.js";
 import type { ScaffoldConfig } from "./scaffold-config.js";
+
+// YAML flow-sequence formatting is a workflow concern, so it lives here rather
+// than beside the matrix derivation in node-target.ts.
+const formatNodeVersionMatrix = (nodeTarget: NodeTarget): string =>
+  `[${ciNodeVersions(nodeTarget)
+    .map((nodeVersion) => `"${nodeVersion}"`)
+    .join(", ")}]`;
 
 export const buildCiWorkflow = (config: ScaffoldConfig): string => {
   const codecovStep = config.includeCodecov
     ? `
       - name: Upload coverage to Codecov
-        if: matrix.node-version == '24'
+        if: matrix.node-version == '${config.nodeTarget}'
         uses: ${githubActionRefs.codecov}
         with:
           token: \${{ secrets.CODECOV_TOKEN }}
@@ -22,6 +30,7 @@ export const buildCiWorkflow = (config: ScaffoldConfig): string => {
     CACHE: "pnpm",
     CODECOV_STEP: codecovStep,
     INSTALL_CI_COMMAND: "pnpm install --frozen-lockfile",
+    NODE_VERSION_MATRIX: formatNodeVersionMatrix(config.nodeTarget),
     PACKAGE_MANAGER_SETUP: `      - uses: ${githubActionRefs.pnpmSetup}
         with:
           version: ${pnpmVersion}`,
@@ -43,6 +52,7 @@ export const buildReleaseWorkflow = (config: ScaffoldConfig): string => {
     ACTION_SETUP_NODE: githubActionRefs.setupNode,
     ACTION_SETUP_UV: githubActionRefs.setupUv,
     JSR_PUBLISH_STEP: jsrPublishStep,
+    NODE_TARGET: config.nodeTarget,
     PNPM_VERSION: pnpmVersion,
   });
 };

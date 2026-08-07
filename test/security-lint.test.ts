@@ -1,13 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { buildProjectFiles, type ScaffoldConfig } from "../source/templates/files.js";
 import { semgrepVersion } from "../source/templates/generated-versions.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const securityLintScript = join(repositoryRoot, "scripts/security-lint.mjs");
@@ -26,7 +26,23 @@ const semgrepScanArguments = [
   "source",
   "test",
 ];
-const semgrepScanTestTimeout = 20_000;
+// Semgrep is a Python front end: interpreter start-up and rule loading dominate,
+// and the cost swings enormously with what else the machine is doing. Measured
+// for this one scan: ~4s through the `semgrep` binary on an idle machine, ~19s
+// through `uvx` with an already-warm cache, and ~63s on a loaded machine under
+// coverage. The old 20s budget sat inside that spread, so the verdict depended
+// on the runner and the load rather than on the rules.
+//
+// `spawnSync` cannot be preempted, so vitest's timeout is a verdict rather than
+// a budget: the scan runs to completion either way and a healthy run never
+// spends the headroom. Sized above the worst honest run seen, not the typical
+// one.
+const semgrepScanTestTimeout = 120_000;
+// `uvx semgrep@<pinned>` resolves, downloads, and installs on first use, which
+// is tens of seconds cold. Paid in `beforeAll` so it is not charged to the scan
+// test, and so a broken or offline uv reports itself as a warm-up failure
+// instead of masquerading as a rules regression.
+const semgrepWarmupTimeout = 180_000;
 
 interface SemgrepScanOutput {
   results: Array<{
@@ -48,6 +64,7 @@ const baseConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "example-lib",
   workspaceMode: false,
@@ -69,9 +86,6 @@ exit 0
   await chmod(executablePath, 0o755);
 };
 
-const isMissingCommandError = (error: Error | undefined): boolean =>
-  (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
-
 const hasRunnableCommand = (command: string): boolean => {
   const result = spawnSync(command, ["--version"], {
     stdio: "ignore",
@@ -80,7 +94,30 @@ const hasRunnableCommand = (command: string): boolean => {
   return result.error === undefined && result.status === 0;
 };
 
-const hasSemgrepRunner = hasRunnableCommand("semgrep") || hasRunnableCommand("uvx");
+interface SemgrepRunner {
+  command: string;
+  leadingArguments: string[];
+}
+
+/**
+ * Resolved once, at module load, because `it.skipIf` is a collection-time
+ * decision that no hook can feed. Picking the runner up front also removes the
+ * old ENOENT-probe-then-fall-back-to-uvx path, which charged a failed spawn and
+ * a possible cold install to whichever test happened to run first.
+ */
+const resolveSemgrepRunner = (): SemgrepRunner | undefined => {
+  if (hasRunnableCommand("semgrep")) {
+    return { command: "semgrep", leadingArguments: [] };
+  }
+
+  if (hasRunnableCommand("uvx")) {
+    return { command: "uvx", leadingArguments: [`semgrep@${semgrepVersion}`] };
+  }
+
+  return undefined;
+};
+
+const semgrepRunner = resolveSemgrepRunner();
 
 const runSecurityLint = async (
   commands: string[],
@@ -91,77 +128,67 @@ const runSecurityLint = async (
   status: number | null;
   stdout: string;
 }> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-security-lint-"));
-  try {
-    const binDirectory = join(tempDirectory, "bin");
-    const commandLogPath = join(tempDirectory, "command-log.txt");
-    await mkdir(binDirectory);
+  const tempDirectory = await createTempDirectory("create-ts-lib-security-lint-");
+  const binDirectory = join(tempDirectory, "bin");
+  const commandLogPath = join(tempDirectory, "command-log.txt");
+  await mkdir(binDirectory);
 
-    for (const command of commands) {
-      await createFakeCommand(binDirectory, command);
-    }
-
-    const result = spawnSync(process.execPath, [securityLintScript], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        COMMAND_LOG: commandLogPath,
-        PATH: binDirectory,
-        SECURITY_LINT_FORCE_UVX: "",
-        ...env,
-      },
-    });
-    const commandLogContent = await readFile(commandLogPath, "utf8").catch(() => "");
-
-    return {
-      commandLog: commandLogContent.split(/\r?\n/u).filter((line) => line.length > 0),
-      stderr: result.stderr,
-      status: result.status,
-      stdout: result.stdout,
-    };
-  } finally {
-    await rm(tempDirectory, { recursive: true, force: true });
+  for (const command of commands) {
+    await createFakeCommand(binDirectory, command);
   }
+
+  const result = spawnSync(process.execPath, [securityLintScript], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      COMMAND_LOG: commandLogPath,
+      PATH: binDirectory,
+      SECURITY_LINT_FORCE_UVX: "",
+      ...env,
+    },
+  });
+  const commandLogContent = await readFile(commandLogPath, "utf8").catch(() => "");
+
+  return {
+    commandLog: commandLogContent.split(/\r?\n/u).filter((line) => line.length > 0),
+    stderr: result.stderr,
+    status: result.status,
+    stdout: result.stdout,
+  };
 };
 
 const runSemgrepScan = async (
   configContent: string,
   fixtures: Record<string, string>,
 ): Promise<SemgrepScanOutput> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-semgrep-"));
-  try {
-    const sourceDirectory = join(tempDirectory, "source");
-    const testDirectory = join(tempDirectory, "test");
-    await mkdir(sourceDirectory);
-    await mkdir(testDirectory);
-    await writeFile(join(tempDirectory, "semgrep.yml"), configContent, "utf8");
+  const tempDirectory = await createTempDirectory("create-ts-lib-semgrep-");
+  const sourceDirectory = join(tempDirectory, "source");
+  const testDirectory = join(tempDirectory, "test");
+  await mkdir(sourceDirectory);
+  await mkdir(testDirectory);
+  await writeFile(join(tempDirectory, "semgrep.yml"), configContent, "utf8");
 
-    for (const [fileName, content] of Object.entries(fixtures)) {
-      await writeFile(join(sourceDirectory, fileName), content.trimStart(), "utf8");
-    }
-
-    let result = spawnSync("semgrep", semgrepScanArguments, {
-      cwd: tempDirectory,
-      encoding: "utf8",
-    });
-
-    if (isMissingCommandError(result.error)) {
-      result = spawnSync("uvx", [`semgrep@${semgrepVersion}`, ...semgrepScanArguments], {
-        cwd: tempDirectory,
-        encoding: "utf8",
-      });
-    }
-
-    if (result.error) {
-      throw result.error;
-    }
-
-    expect(result.status, result.stderr).toBe(0);
-    return JSON.parse(result.stdout) as SemgrepScanOutput;
-  } finally {
-    await rm(tempDirectory, { recursive: true, force: true });
+  for (const [fileName, content] of Object.entries(fixtures)) {
+    await writeFile(join(sourceDirectory, fileName), content.trimStart(), "utf8");
   }
+
+  if (semgrepRunner === undefined) {
+    throw new Error("No Semgrep runner available; this test should have been skipped.");
+  }
+
+  const result = spawnSync(
+    semgrepRunner.command,
+    [...semgrepRunner.leadingArguments, ...semgrepScanArguments],
+    { cwd: tempDirectory, encoding: "utf8" },
+  );
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  expect(result.status, result.stderr).toBe(0);
+  return JSON.parse(result.stdout) as SemgrepScanOutput;
 };
 
 describe("security-lint wrapper", () => {
@@ -214,6 +241,26 @@ describe("security-lint wrapper", () => {
 });
 
 describe("Semgrep security rules", () => {
+  // Guarded rather than skipped wholesale: the config-sync test below does not
+  // need a runner, so this hook still fires when the scan test is skipped.
+  beforeAll(() => {
+    if (semgrepRunner === undefined) {
+      return;
+    }
+
+    const warmup = spawnSync(
+      semgrepRunner.command,
+      [...semgrepRunner.leadingArguments, "--version"],
+      { encoding: "utf8", stdio: "ignore" },
+    );
+
+    if (warmup.error) {
+      throw warmup.error;
+    }
+
+    expect(warmup.status, "Semgrep warm-up failed").toBe(0);
+  }, semgrepWarmupTimeout);
+
   it("keeps generated Semgrep config in sync with the root config", async () => {
     const rootConfig = await readFile(semgrepConfigPath, "utf8");
     const generatedConfig = buildProjectFiles(baseConfig).find(
@@ -223,7 +270,7 @@ describe("Semgrep security rules", () => {
     expect(generatedConfig?.content).toBe(rootConfig);
   });
 
-  it.skipIf(!hasSemgrepRunner)(
+  it.skipIf(semgrepRunner === undefined)(
     "flags child_process exec and execSync aliases",
     async () => {
       const scan = await runSemgrepScan(await readFile(semgrepConfigPath, "utf8"), {

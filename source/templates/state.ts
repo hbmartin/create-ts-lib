@@ -5,6 +5,7 @@ import { z } from "zod";
 import packageJson from "../../package.json" with { type: "json" };
 
 import { lintFormatToolingSchema } from "../lint-format-tooling.js";
+import { defaultNodeTarget, nodeTargetSchema } from "../node-target.js";
 import {
   currentCopyrightYear,
   type GeneratedFile,
@@ -39,6 +40,10 @@ export const scaffoldConfigSchema = z.object({
   includeZod: z.boolean(),
   license: licenseNameSchema,
   lintFormatTooling: lintFormatToolingSchema,
+  // Every project scaffolded before this field existed was emitted with a >=24
+  // floor, so this default is behavioural continuity: `update` re-renders those
+  // projects byte-identically rather than migrating them to a newer Node.
+  nodeTarget: nodeTargetSchema.default(defaultNodeTarget),
   packageManager: packageManagerSchema,
   projectName: z.string(),
   workspaceMode: z.boolean().default(false),
@@ -55,16 +60,20 @@ export type ScaffoldState = z.infer<typeof scaffoldStateSchema>;
 
 /**
  * Guards the public entry points, which JavaScript callers can reach with any
- * object at all. Without this a bad `packageManager` surfaces as a TypeError
- * from a lookup table several frames later instead of a message naming the
- * field. Deliberately asserts rather than returning `result.data`: substituting
- * the parsed object would reorder the caller's keys in the state file and
- * silently repair configs instead of reporting them.
+ * object at all. Without it a bad `packageManager` surfaces as a TypeError from
+ * a lookup table several frames later instead of a message naming the field.
+ *
+ * Returns the parsed config rather than merely asserting, because the fields
+ * carrying a `.default()` -- present for state-file compatibility -- make a
+ * partial object *validate* while still being partial. Rendering the caller's
+ * object then wrote `Copyright (c) undefined` into LICENSE and recorded its hash
+ * as gospel, since `renderTemplate` substitutes through a replacer function and
+ * so never sees an unresolved placeholder to complain about.
  */
-export const assertValidScaffoldConfig = (config: ScaffoldConfig): void => {
+export const parseScaffoldConfig = (config: ScaffoldConfig): ScaffoldConfig => {
   const result = scaffoldConfigSchema.safeParse(config);
   if (result.success) {
-    return;
+    return result.data;
   }
 
   throw new Error(

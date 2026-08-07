@@ -48,6 +48,7 @@ const helpText = `create-ts-lib
 Usage:
   create-ts-lib [directory] [options]
   create-ts-lib update [directory] [--dry-run] [--force] [--yes] [--no-backup]
+                            [--remove-orphans]
   create-ts-lib config path
   create-ts-lib config get [key]
   create-ts-lib config set <key> <value>
@@ -65,6 +66,7 @@ Options:
   --package-manager <pm>    Choose pnpm, npm, or yarn
   --lint-format <tooling>   Choose oxlint-oxfmt or biome
   --bundler <bundler>       Choose tsc or tsdown
+  --node-target <major>     Choose Node 24 or 26 as the generated engines floor
   --[no-]cli                Include or omit the CLI entry point
   --[no-]codecov            Include or omit Codecov upload in generated CI
   --[no-]community-files    Include or omit CONTRIBUTING, CODE_OF_CONDUCT, SECURITY
@@ -73,6 +75,7 @@ Options:
   --[no-]security-workflows Include or omit CodeQL and Scorecard workflows
   --[no-]workspace          Scaffold as a package inside an existing workspace
   --no-backup               Skip <file>.orig backups when update overwrites edits
+  --remove-orphans          With --force, delete unmodified files the templates no longer generate
   --save-defaults           Save this run's reusable answers as personal defaults
   --config <path>           Read and write personal defaults at this path
   --skip-git                Skip git init and git remote setup
@@ -154,6 +157,7 @@ const buildProvidedOverrides = (cliArguments: CliArguments): Partial<ScaffoldCon
     includeZod: cliArguments.zod,
     license: cliArguments.license,
     lintFormatTooling: cliArguments.lintFormatTooling,
+    nodeTarget: cliArguments.nodeTarget,
     packageManager: cliArguments.packageManager,
     projectName: cliArguments.projectName,
     workspaceMode: cliArguments.workspace,
@@ -182,6 +186,7 @@ const saveDefaultsFromConfig = async (
       includeZod: config.includeZod,
       license: config.license,
       lintFormatTooling: config.lintFormatTooling,
+      nodeTarget: config.nodeTarget,
       packageManager: config.packageManager,
     },
     configPath,

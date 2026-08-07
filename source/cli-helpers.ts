@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { gitReadCommandOptions } from "./git-repository.js";
 import { type LintFormatTooling, lintFormatToolingSchema } from "./lint-format-tooling.js";
 import { normalizeGitHubUrl, stripPackageScope } from "./name-helpers.js";
+import { type NodeTarget, nodeTargetSchema } from "./node-target.js";
 import type { Bundler, LicenseName, PackageManager } from "./templates/scaffold-config.js";
 import { bundlerSchema, licenseNameSchema, packageManagerSchema } from "./templates/state.js";
 
@@ -27,8 +28,10 @@ export interface CliArguments {
   jsr?: boolean;
   license?: LicenseName;
   lintFormatTooling?: LintFormatTooling;
+  nodeTarget?: NodeTarget;
   packageManager?: PackageManager;
   projectName?: string;
+  removeOrphans?: boolean;
   repoUrl?: string;
   securityWorkflows?: boolean;
   command: CliCommand;
@@ -61,7 +64,7 @@ export type ConfigAction = "get" | "path" | "set" | "unset";
  */
 const configActions: readonly ConfigAction[] = ["get", "path", "set", "unset"];
 const configActionSet = new Set<ConfigAction>(configActions);
-const configActionList = configActions.join(", ");
+export const configActionList = configActions.join(", ");
 
 export type WarningSink = (message: string) => void;
 type CliBooleanFlag =
@@ -79,6 +82,7 @@ type CliToggleFlag =
   | "codecov"
   | "communityFiles"
   | "jsr"
+  | "removeOrphans"
   | "securityWorkflows"
   | "workspace"
   | "zod";
@@ -115,6 +119,7 @@ const cliToggleFlags = new Map<string, { key: CliToggleFlag; value: boolean }>([
   ["--no-security-workflows", { key: "securityWorkflows", value: false }],
   ["--no-zod", { key: "zod", value: false }],
   ["--no-workspace", { key: "workspace", value: false }],
+  ["--remove-orphans", { key: "removeOrphans", value: true }],
   ["--security-workflows", { key: "securityWorkflows", value: true }],
   ["--workspace", { key: "workspace", value: true }],
   ["--zod", { key: "zod", value: true }],
@@ -140,7 +145,7 @@ const updateCompatibleFlags = new Set<CliBooleanFlag>([
  */
 const commandCompatibleOptions = {
   config: new Set(["--config"]),
-  update: new Set(["--no-backup"]),
+  update: new Set(["--no-backup", "--remove-orphans"]),
 } satisfies Record<Exclude<CliCommand, "scaffold">, ReadonlySet<string>>;
 
 interface CliValueOptionConfig {
@@ -163,6 +168,7 @@ const createEnumValueParser =
 const parseBundlerValue = createEnumValueParser(bundlerSchema.options);
 const parseLicenseValue = createEnumValueParser(licenseNameSchema.options);
 const parseLintFormatValue = createEnumValueParser(lintFormatToolingSchema.options);
+const parseNodeTargetValue = createEnumValueParser(nodeTargetSchema.options);
 const parsePackageManagerValue = createEnumValueParser(packageManagerSchema.options);
 
 const cliValueOptions = new Map<string, CliValueOptionConfig>([
@@ -219,6 +225,14 @@ const cliValueOptions = new Map<string, CliValueOptionConfig>([
     {
       apply: (parsed, value) => {
         parsed.projectName = value;
+      },
+    },
+  ],
+  [
+    "--node-target",
+    {
+      apply: (parsed, value, optionName) => {
+        parsed.nodeTarget = parseNodeTargetValue(value, optionName);
       },
     },
   ],
@@ -302,8 +316,19 @@ export const parseCliArguments = (args: string[]): CliArguments => {
 
   applyPositionals(parsed, positionals);
   validateUpdateArguments(parsed, scaffoldOnlyOptions);
+  validateFlagCombinations(parsed);
 
   return parsed;
+};
+
+const validateFlagCombinations = (parsed: CliArguments): void => {
+  // Two independent opt-ins for a destructive action. `--force` authorises
+  // overwriting your edits, which is not the same as authorising deletion of
+  // files a config toggle turned off. Rejected rather than ignored, so a command
+  // that cannot do what it says does not look like it worked.
+  if (parsed.removeOrphans === true && !parsed.force) {
+    throw new Error("Option --remove-orphans requires --force.");
+  }
 };
 
 const validateUpdateArguments = (parsed: CliArguments, scaffoldOnlyOptions: string[]): void => {

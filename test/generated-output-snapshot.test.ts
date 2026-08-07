@@ -24,6 +24,7 @@ const baseSnapshotConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "generated-lib",
   workspaceMode: false,

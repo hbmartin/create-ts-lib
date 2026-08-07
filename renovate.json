@@ -9,8 +9,22 @@
       "pinDigests": true
     },
     {
-      "description": "Generated projects target Node 22/24, so the @types/node they receive stays on the 24.x line. This scopes only the template pin; the generator's own @types/node in package.json still tracks latest.",
+      "description": "The generated Node 24 target's @types/node stays on the 24.x line; the pin has to equal the engines.node floor it ships beside. A cross-major bump here is caught at import time by the assertion in generated-versions.ts.",
       "matchFileNames": ["source/templates/generated-versions.ts"],
+      "matchPackageNames": ["@types/node"],
+      "matchCurrentValue": "/^24\\./",
+      "allowedVersions": "<25"
+    },
+    {
+      "description": "The generated Node 26 target's @types/node stays on the 26.x line, for the same reason.",
+      "matchFileNames": ["source/templates/generated-versions.ts"],
+      "matchPackageNames": ["@types/node"],
+      "matchCurrentValue": "/^26\\./",
+      "allowedVersions": ">=26 <27"
+    },
+    {
+      "description": "The generator's own @types/node matches its own engines.node floor of >=24. Node 25 is never a valid target: it is an odd line that never becomes LTS.",
+      "matchFileNames": ["package.json"],
       "matchPackageNames": ["@types/node"],
       "allowedVersions": "<25"
     }
@@ -24,8 +38,17 @@
         "/^source/templates/generated-versions\\.ts$/"
       ],
       "matchStrings": [
-        "\"(?<depName>(?:@[^/]+/)?[^\"\\s]+)\":\\s*\"\\^(?<currentValue>[^\"]+)\""
+        "\"(?<depName>(?:@[^/]+/)?[a-z][^\"\\s]*)\":\\s*\"\\^(?<currentValue>[^\"]+)\""
       ],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the per-Node-target @types/node pins. The generic manager above cannot read them: that object is keyed by Node major rather than by package name, which is also why its depName pattern requires a leading letter.",
+      "managerFilePatterns": ["/^source/templates/generated-versions\\.ts$/"],
+      "matchStrings": ["\"(?:24|26)\":\\s*\"\\^(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "@types/node",
       "datasourceTemplate": "npm",
       "versioningTemplate": "npm"
     },

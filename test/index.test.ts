@@ -38,6 +38,24 @@ describe("public API", () => {
     );
   });
 
+  it("applies schema defaults instead of rendering them as undefined", () => {
+    // The fields carrying a `.default()` for state-file compatibility make a
+    // partial object validate while still being partial. Rendering the caller's
+    // own object put `Copyright (c) undefined` into LICENSE.
+    const { copyrightYear: _omitted, ...withoutCopyrightYear } = defaultScaffoldConfig({
+      author: "Ada Lovelace",
+      license: "MIT",
+      projectName: "example-lib",
+    });
+
+    const license = buildProjectFiles(withoutCopyrightYear as ScaffoldConfig).find(
+      (file) => file.path === "LICENSE",
+    );
+
+    expect(license?.content).not.toContain("undefined");
+    expect(license?.content).toMatch(/Copyright \(c\) \d{4} Ada Lovelace/u);
+  });
+
   it("rejects an invalid config from scaffoldProject", async () => {
     await expect(
       scaffoldProject(invalidConfig, {

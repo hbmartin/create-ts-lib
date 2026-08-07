@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +14,7 @@ import type { NpmPackageNameAvailability } from "../source/npm-registry.js";
 import { PostScaffoldSetupError, type ScaffoldProgress } from "../source/scaffold.js";
 import type { UserConfig } from "../source/user-config.js";
 import type { DetectedWorkspace } from "../source/workspace-detection.js";
+import { createTempDirectory, createTempPath } from "./helpers/temp-directory.js";
 
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -104,7 +104,7 @@ describe("cli entrypoint", () => {
   });
 
   it("prints the resolved personal-defaults path", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const result = await runCli(["config", "path", "--config", configPath]);
 
@@ -113,7 +113,7 @@ describe("cli entrypoint", () => {
   });
 
   it("round-trips config set, get, and unset", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const empty = await runCli(["config", "get", "--config", configPath]);
     expect(empty.stdout).toContain("No personal defaults are set.");
@@ -136,7 +136,7 @@ describe("cli entrypoint", () => {
   });
 
   it("applies a saved default to a later scaffold", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
     await runCli(["config", "set", "license", "MIT", "--config", configPath]);
 
     const result = await runCli(["demo-lib", "--yes", "--dry-run", "--config", configPath]);
@@ -145,7 +145,7 @@ describe("cli entrypoint", () => {
   });
 
   it("reports invalid config keys and values without writing", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const badKey = await runCli(["config", "set", "nope", "x", "--config", configPath]);
     expect(badKey.exitCode).toBe(1);
@@ -167,7 +167,7 @@ describe("cli entrypoint", () => {
   });
 
   it("does not save defaults during a dry run", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
 
     const result = await runCli([
       "demo-lib",
@@ -187,7 +187,7 @@ describe("cli entrypoint", () => {
   });
 
   it("persists reusable answers with --save-defaults", async () => {
-    const configPath = join(await mkdtemp(join(tmpdir(), "create-ts-lib-cfg-")), "config.json");
+    const configPath = await createTempPath("create-ts-lib-cfg-", "config.json");
     const scaffoldProject = vi.fn(async () => undefined);
 
     const result = await runCli(
@@ -376,6 +376,104 @@ describe("cli entrypoint", () => {
     );
   });
 
+  it("never offers GitHub repo creation for a workspace package", async () => {
+    const createGitHubRepository = vi.fn();
+    const inspectPersonalGitHubRepository = vi.fn(
+      async (): Promise<GitHubRepositoryLookupResult> => ({
+        owner: "hbmartin",
+        predictedUrl: "https://github.com/hbmartin/nested-lib",
+        repositoryName: "nested-lib",
+        status: "missing",
+      }),
+    );
+    const promptModule = buildGitHubPromptModule({
+      description: "Nested library",
+      // The workspace's own remote, not hbmartin/nested-lib: a personal repo
+      // named after the package is not where packages/nested-lib lives.
+      expectedGithubRepoUrlDefault: "https://github.com/hbmartin/create-ts-lib",
+      githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
+      projectName: "nested-lib",
+      workspaceAnswer: true,
+    });
+
+    const result = await runCli(["nested-lib", "--dry-run"], {
+      createGitHubRepository,
+      detectWorkspaceRoot: async () => ({
+        directory: "/repo",
+        manifest: "pnpm-workspace.yaml",
+      }),
+      inspectPersonalGitHubRepository,
+      promptModule,
+    });
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Workspace package: yes");
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/create-ts-lib");
+    // The workspace repository owns the remote; a second repo would be empty
+    // and wired to nothing, since scaffoldProject skips all git setup here.
+    expect(result.stdout).not.toContain("GitHub repo creation skipped by --dry-run");
+    expect(promptModule.select).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: "No matching GitHub repo was found" }),
+    );
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
+  it("asks about workspace mode before the GitHub repo prompt", async () => {
+    // Without this the reorder is unguarded: the prompt mocks dispatch on
+    // message, so nothing else notices if it moves back.
+    const askedMessages: string[] = [];
+    const record = <T>(message: string, answer: T): T => {
+      askedMessages.push(message);
+      return answer;
+    };
+    const promptModule: PromptModule = {
+      confirm: vi.fn(async ({ message }: { message: string }) => record(message, false)),
+      input: vi.fn(async ({ message }: PromptInputOptions) =>
+        record(message, message === "Project name" ? "nested-lib" : "value"),
+      ),
+      select: vi.fn(async ({ message }: PromptSelectOptions) =>
+        record(message, selectAnswerFor(message)),
+      ),
+    };
+
+    await runCli(["nested-lib", "--dry-run"], {
+      detectWorkspaceRoot: async () => ({
+        directory: "/repo",
+        manifest: "pnpm-workspace.yaml",
+      }),
+      promptModule,
+    });
+
+    const workspaceIndex = askedMessages.findIndex((message) =>
+      message.startsWith("Detected a workspace at "),
+    );
+    expect(workspaceIndex).toBeGreaterThan(askedMessages.indexOf("Author"));
+    expect(workspaceIndex).toBeLessThan(askedMessages.indexOf("GitHub repo URL"));
+  });
+
+  it("skips the GitHub lookup entirely for --workspace with an explicit repo URL", async () => {
+    const inspectPersonalGitHubRepository = vi.fn();
+    const createGitHubRepository = vi.fn();
+
+    const result = await runCli(
+      [
+        "nested-lib",
+        "--yes",
+        "--dry-run",
+        "--workspace",
+        "--repo-url",
+        "https://github.com/hbmartin/monorepo",
+      ],
+      { createGitHubRepository, inspectPersonalGitHubRepository },
+    );
+
+    expect(result.exitCode).toBeUndefined();
+    expect(result.stdout).toContain("Workspace package: yes");
+    expect(result.stdout).toContain("GitHub repo: https://github.com/hbmartin/monorepo");
+    expect(inspectPersonalGitHubRepository).not.toHaveBeenCalled();
+    expect(createGitHubRepository).not.toHaveBeenCalled();
+  });
+
   it("lists the community-health files in the dry-run plan", async () => {
     const result = await runCli(["demo-lib", "--yes", "--dry-run", "--community-files"]);
 
@@ -452,6 +550,10 @@ describe("cli entrypoint", () => {
           return "tsdown";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -470,7 +572,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("JSR: no");
     expect(promptModule.input).toHaveBeenCalledTimes(4);
     expect(promptModule.confirm).toHaveBeenCalledTimes(6);
-    expect(promptModule.select).toHaveBeenCalledTimes(4);
+    expect(promptModule.select).toHaveBeenCalledTimes(5);
   });
 
   it("uses an existing personal GitHub repository as the URL prompt default", async () => {
@@ -548,6 +650,10 @@ describe("cli entrypoint", () => {
 
         if (message === "Build tool") {
           return "tsc";
+        }
+
+        if (message === "Minimum Node version") {
+          return "24";
         }
 
         return "pnpm";
@@ -725,7 +831,7 @@ describe("cli entrypoint", () => {
   });
 
   it("does not create a GitHub repo when the target directory preflight fails", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-non-empty-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-non-empty-");
     const targetDirectory = join(tempDirectory, "new-lib");
     await mkdir(targetDirectory);
     await writeFile(join(targetDirectory, "existing.txt"), "existing\n", "utf8");
@@ -804,6 +910,7 @@ describe("cli entrypoint", () => {
       expect.objectContaining({
         githubRepoUrl: "https://github.com/hbmartin/create-ts-lib",
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         projectName: "demo-lib",
       }),
       expect.not.objectContaining({
@@ -865,6 +972,10 @@ describe("cli entrypoint", () => {
           return "tsc";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -882,7 +993,7 @@ describe("cli entrypoint", () => {
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(1, "react");
     expect(checkNpmPackageNameAvailability).toHaveBeenNthCalledWith(2, "renamed-lib");
     expect(promptModule.input).toHaveBeenCalledTimes(5);
-    expect(promptModule.select).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(6);
   });
 
   it("lets interactive users keep an existing npm package name", async () => {
@@ -936,6 +1047,10 @@ describe("cli entrypoint", () => {
           return "tsc";
         }
 
+        if (message === "Minimum Node version") {
+          return "24";
+        }
+
         return "pnpm";
       }),
     };
@@ -950,7 +1065,7 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("Project: react");
     expect(checkNpmPackageNameAvailability).toHaveBeenCalledOnce();
     expect(promptModule.input).toHaveBeenCalledTimes(4);
-    expect(promptModule.select).toHaveBeenCalledTimes(5);
+    expect(promptModule.select).toHaveBeenCalledTimes(6);
   });
 
   it("warns and continues when interactive npm availability cannot be checked", async () => {
@@ -999,6 +1114,10 @@ describe("cli entrypoint", () => {
 
         if (message === "Build tool") {
           return "tsc";
+        }
+
+        if (message === "Minimum Node version") {
+          return "24";
         }
 
         return "pnpm";
@@ -1084,6 +1203,7 @@ describe("cli entrypoint", () => {
     expect(scaffoldProject).toHaveBeenCalledWith(
       expect.objectContaining({
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         packageManager: "pnpm",
         projectName: "demo-lib",
       }),
@@ -1366,6 +1486,8 @@ describe("cli entrypoint", () => {
         "biome",
         "--bundler",
         "tsc",
+        "--node-target",
+        "26",
         "--package-manager",
         "pnpm",
         "--repo-url",
@@ -1387,6 +1509,7 @@ describe("cli entrypoint", () => {
         githubRepoUrl: "https://github.com/hbmartin/flag-lib",
         license: "ISC",
         lintFormatTooling: "biome",
+        nodeTarget: "26",
         projectName: "flag-lib",
       }),
       expect.objectContaining({
@@ -1430,7 +1553,7 @@ describe("cli entrypoint", () => {
 
   it("prints a full escaped cd target and omits publish steps when git is skipped", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-spaced-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-spaced-");
     const targetDirectory = join(tempDirectory, "nested path", "demo lib");
 
     const result = await runCli(
@@ -1468,7 +1591,7 @@ describe("cli entrypoint", () => {
 
   it("uses personal defaults from the user config file in --yes mode", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    const configDirectory = await createTempDirectory("create-ts-lib-config-");
     await mkdir(join(configDirectory, "create-ts-lib"));
     await writeFile(
       join(configDirectory, "create-ts-lib", "config.json"),
@@ -1501,7 +1624,7 @@ describe("cli entrypoint", () => {
 
   it("warns and ignores an invalid user config file", async () => {
     const scaffoldProject = vi.fn(async () => undefined);
-    const configDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-config-"));
+    const configDirectory = await createTempDirectory("create-ts-lib-config-");
     await mkdir(join(configDirectory, "create-ts-lib"));
     await writeFile(join(configDirectory, "create-ts-lib", "config.json"), "not json", "utf8");
 
@@ -1519,7 +1642,7 @@ describe("cli entrypoint", () => {
   });
 
   it("runs the update command against a scaffolded project", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-update-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-update-");
     const targetDirectory = join(tempDirectory, "update-lib");
     vi.doUnmock("../source/scaffold.js");
     vi.resetModules();
@@ -1539,6 +1662,7 @@ describe("cli entrypoint", () => {
         includeZod: false,
         license: "MIT",
         lintFormatTooling: "oxlint-oxfmt",
+        nodeTarget: "24",
         packageManager: "pnpm",
         projectName: "update-lib",
         workspaceMode: false,
@@ -1662,12 +1786,84 @@ describe("cli entrypoint", () => {
   });
 
   it("reports an error when update runs outside a scaffolded project", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-cli-no-state-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-cli-no-state-");
 
     const result = await runCli(["update", tempDirectory]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("No .create-ts-lib.json found");
+  });
+
+  it("rejects --remove-orphans without --force", async () => {
+    const result = await runCli(["update", "--remove-orphans"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Option --remove-orphans requires --force.");
+  });
+
+  it("lists no-longer-generated files without removing them", async () => {
+    const targetDirectory = await retoolUpdateFixture("create-ts-lib-cli-update-orphan-list-");
+
+    const result = await runCli(["update", targetDirectory, "--yes", "--force"]);
+
+    expect(result.stdout).toContain("No longer generated by these templates:");
+    expect(result.stdout).toContain("remove  .oxfmtrc.json");
+    expect(result.stdout).toContain("pass --force --remove-orphans to delete them");
+    // The warning that keeps a config toggle from reading as a template change.
+    expect(result.stdout).toContain("flipping lintFormatTooling, bundler, or workspaceMode");
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toContain("{");
+  });
+
+  it("removes no-longer-generated files with --force --remove-orphans", async () => {
+    const targetDirectory = await retoolUpdateFixture("create-ts-lib-cli-update-orphan-remove-");
+
+    const result = await runCli([
+      "update",
+      targetDirectory,
+      "--yes",
+      "--force",
+      "--remove-orphans",
+    ]);
+
+    expect(result.stdout).toContain("Removed 2 no-longer-generated file(s)");
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(targetDirectory, ".oxlintrc.json"), "utf8")).rejects.toThrow();
+  });
+
+  it("counts removals separately in the dry-run summary", async () => {
+    const targetDirectory = await retoolUpdateFixture("create-ts-lib-cli-update-orphan-dry-");
+
+    const result = await runCli([
+      "update",
+      targetDirectory,
+      "--dry-run",
+      "--force",
+      "--remove-orphans",
+    ]);
+
+    expect(result.stdout).toContain("file(s) would be removed");
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toContain("{");
+  });
+
+  it("leaves orphan choices unchecked in the interactive picker", async () => {
+    const targetDirectory = await retoolUpdateFixture("create-ts-lib-cli-update-orphan-choose-");
+    const promptModule = {
+      checkbox: vi.fn(async (_options: PromptCheckboxOptions): Promise<string[]> => []),
+      confirm: vi.fn(async () => false),
+      input: vi.fn(async () => ""),
+      select: vi.fn(async () => "choose"),
+    };
+
+    const result = await runCli(["update", targetDirectory, "--force", "--remove-orphans"], {
+      promptModule,
+    });
+
+    expect(result.stdout).toContain("No files selected; nothing was written.");
+    const choices = promptModule.checkbox.mock.calls[0]?.[0].choices ?? [];
+    const orphanChoice = choices.find((choice) => choice.value === ".oxfmtrc.json");
+    // A delete should cost a keystroke that a rewrite does not.
+    expect(orphanChoice?.checked).toBe(false);
+    expect(choices.find((choice) => choice.value === "biome.jsonc")?.checked).toBe(true);
   });
 });
 
@@ -1680,6 +1876,7 @@ interface BuildGitHubPromptModuleOptions {
   missingRepositoryChoice?: "create-private" | "create-public" | "manual";
   packageManager?: "npm" | "pnpm" | "yarn";
   projectName: string;
+  workspaceAnswer?: boolean;
 }
 
 const buildGitHubPromptModule = ({
@@ -1691,11 +1888,16 @@ const buildGitHubPromptModule = ({
   missingRepositoryChoice,
   packageManager = "pnpm",
   projectName,
+  workspaceAnswer = false,
 }: BuildGitHubPromptModuleOptions): PromptModule => ({
-  confirm: vi.fn(
-    async ({ message }: { default?: boolean; message: string }) =>
-      message === "Include Codecov?" && includeCodecov,
-  ),
+  confirm: vi.fn(async ({ message }: { default?: boolean; message: string }) => {
+    // The workspace prompt interpolates the detected directory and manifest.
+    if (message.startsWith("Detected a workspace at ")) {
+      return workspaceAnswer;
+    }
+
+    return message === "Include Codecov?" && includeCodecov;
+  }),
   input: vi.fn(async ({ default: defaultValue, message }: PromptInputOptions) => {
     if (message === "Project name") {
       return projectName;
@@ -1734,15 +1936,36 @@ const buildGitHubPromptModule = ({
       return "tsc";
     }
 
+    if (message === "Minimum Node version") {
+      return "24";
+    }
+
     return packageManager;
   }),
 });
 
 const staleContent = "# replaced by the test\n";
 
+/**
+ * Scaffolds a fixture and then flips its recorded lint tooling, so the next
+ * render drops the two oxlint config files the state file still records — the
+ * realistic way a project grows orphans.
+ */
+const retoolUpdateFixture = async (prefix: string): Promise<string> => {
+  const targetDirectory = await scaffoldUpdateFixture(prefix);
+  const { stateFileName } = await import("../source/templates/state.js");
+  const statePath = join(targetDirectory, stateFileName);
+  const state = JSON.parse(await readFile(statePath, "utf8")) as {
+    config: { lintFormatTooling: string };
+  };
+  state.config.lintFormatTooling = "biome";
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+
+  return targetDirectory;
+};
+
 const scaffoldUpdateFixture = async (prefix: string): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), prefix));
-  const targetDirectory = join(tempDirectory, "update-lib");
+  const targetDirectory = await createTempPath(prefix, "update-lib");
   vi.doUnmock("../source/scaffold.js");
   vi.resetModules();
   const { scaffoldProject } = await import("../source/scaffold.js");
@@ -1921,7 +2144,7 @@ const runCli = async (args: string[], options: RunCliOptions = {}): Promise<CliR
   // Point user-config loading at an isolated directory so developer machines
   // with a real ~/.config/create-ts-lib/config.json do not affect tests.
   process.env[xdgConfigHomeEnvironmentVariable] =
-    options.xdgConfigHome ?? (await mkdtemp(join(tmpdir(), "create-ts-lib-xdg-")));
+    options.xdgConfigHome ?? (await createTempDirectory("create-ts-lib-xdg-"));
   if (options.stdoutIsTTY !== undefined) {
     Object.defineProperty(process.stdout, "isTTY", {
       configurable: true,
@@ -1959,6 +2182,19 @@ const restoreEnvironmentVariable = (name: string, value: string | undefined): vo
   }
 
   process.env[name] = value;
+};
+
+/** Valid answers for every `select` prompt, keyed by message. */
+const selectAnswerFor = (message: string): string => {
+  const answers: Record<string, string> = {
+    "Build tool": "tsc",
+    License: "MIT",
+    "Lint and format tooling": "oxlint-oxfmt",
+    "Minimum Node version": "24",
+    "Package manager": "pnpm",
+  };
+
+  return answers[message] ?? "pnpm";
 };
 
 const buildDetectedDefaults = (directoryArgument: string | undefined): DetectedDefaults => ({

@@ -60,7 +60,7 @@
     "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "^2.5.7",
     "@sindresorhus/tsconfig": "^8.1.0",
-    "@types/node": "^25.9.2",
+    "@types/node": "^24.13.3",
     "@vitest/coverage-v8": "^4.1.10",
     "fallow": "^3.14.0",
     "jsonc-parser": "^3.3.1",

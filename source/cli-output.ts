@@ -30,6 +30,7 @@ export const printSummary = (
     ["License", config.license],
     ["Lint/format", formatLintFormatTooling(config.lintFormatTooling)],
     ["Build tool", config.bundler],
+    ["Node target", `${config.nodeTarget}+`],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
     ["Codecov", config.includeCodecov ? "yes" : "no"],

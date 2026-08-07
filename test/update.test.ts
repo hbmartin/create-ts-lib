@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -11,10 +10,14 @@ import { hashFileContent, type ScaffoldState, stateFileName } from "../source/te
 import {
   applyUpdatePlan,
   backupFileSuffix,
+  type OrphanRemovalResult,
+  type OrphanStatus,
   planUpdate,
   readScaffoldState,
+  type UpdatePlan,
   type UpdatePlanEntry,
 } from "../source/update.js";
+import { createTempDirectory, createTempPath } from "./helpers/temp-directory.js";
 
 const baseConfig: ScaffoldConfig = {
   author: "Harold Martin <harold@example.com>",
@@ -30,14 +33,14 @@ const baseConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "example-lib",
   workspaceMode: false,
 };
 
 const scaffoldFixtureProject = async (): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-update-"));
-  const targetDirectory = join(tempDirectory, "example-lib");
+  const targetDirectory = await createTempPath("create-ts-lib-update-", "example-lib");
 
   await scaffoldProject(baseConfig, {
     postScaffold: false,
@@ -61,6 +64,25 @@ const findEntry = (entries: UpdatePlanEntry[], path: string): UpdatePlanEntry =>
   }
 
   return entry;
+};
+
+const orphanStatusFor = (plan: UpdatePlan, path: string): OrphanStatus | undefined =>
+  plan.orphans.find((orphan) => orphan.path === path)?.status;
+
+/**
+ * Flips a recorded config option so the next render drops files the state file
+ * still records — the realistic way a project grows orphans, and the reason
+ * "absent from the render" cannot be read as "the templates dropped it".
+ */
+const retoolProject = async (
+  targetDirectory: string,
+  config: Partial<ScaffoldConfig>,
+): Promise<void> => {
+  const state = await readStateFixture(targetDirectory);
+  await writeStateFixture(targetDirectory, {
+    ...state,
+    config: { ...state.config, ...config },
+  });
 };
 
 describe("readScaffoldState", () => {
@@ -90,7 +112,7 @@ describe("readScaffoldState", () => {
   });
 
   it("rejects directories without a state file", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-no-state-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-no-state-");
 
     await expect(readScaffoldState(tempDirectory)).rejects.toThrow(
       `No ${stateFileName} found in ${tempDirectory}`,
@@ -98,7 +120,7 @@ describe("readScaffoldState", () => {
   });
 
   it("reports missing state when a path component is a regular file", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-notdir-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-state-notdir-");
     const targetDirectory = join(tempDirectory, "not-a-directory");
     await writeFile(targetDirectory, "plain file\n", "utf8");
 
@@ -108,7 +130,7 @@ describe("readScaffoldState", () => {
   });
 
   it("does not report unreadable state paths as missing state files", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-directory-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-state-directory-");
     await mkdir(join(tempDirectory, stateFileName));
 
     let thrownError: unknown;
@@ -123,7 +145,7 @@ describe("readScaffoldState", () => {
   });
 
   it("rejects state files that are not valid JSON", async () => {
-    const tempDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-bad-json-"));
+    const tempDirectory = await createTempDirectory("create-ts-lib-bad-json-");
     await writeFile(join(tempDirectory, stateFileName), "not json\n", "utf8");
 
     await expect(readScaffoldState(tempDirectory)).rejects.toThrow("as JSON");
@@ -394,5 +416,233 @@ describe("applyUpdatePlan selection and backups", () => {
     await expect(
       readFile(join(targetDirectory, `semgrep.yml${backupFileSuffix}`), "utf8"),
     ).rejects.toThrow();
+  });
+});
+
+describe("orphaned files", () => {
+  // The base fixture uses oxlint-oxfmt, so flipping to Biome orphans both
+  // oxlint config files and creates biome.jsonc.
+  const orphanedByBiome = [".oxfmtrc.json", ".oxlintrc.json"];
+
+  const planAfterRetool = async (
+    targetDirectory: string,
+    config: Partial<ScaffoldConfig>,
+  ): Promise<UpdatePlan> => {
+    await retoolProject(targetDirectory, config);
+
+    return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+  };
+
+  it("reports files the render no longer produces, and never as plan entries", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    for (const path of orphanedByBiome) {
+      expect(orphanStatusFor(plan, path)).toBe("orphan-unmodified");
+      // An orphan has no rendered content, so it must never reach the entry
+      // list where every status means "pending work to write".
+      expect(plan.entries.some((entry) => entry.path === path)).toBe(false);
+    }
+    expect(findEntry(plan.entries, "biome.jsonc").status).toBe("create");
+  });
+
+  it("distinguishes edited and already-deleted orphans", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await writeFile(join(targetDirectory, ".oxfmtrc.json"), "{ /* mine */ }\n", "utf8");
+    await rm(join(targetDirectory, ".oxlintrc.json"));
+
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    expect(orphanStatusFor(plan, ".oxfmtrc.json")).toBe("orphan-modified");
+    expect(orphanStatusFor(plan, ".oxlintrc.json")).toBe("orphan-gone");
+  });
+
+  it("never treats its own state file as an orphan", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const state = await readStateFixture(targetDirectory);
+    // A future release could start recording it; `update` still must not be able
+    // to delete the record it reads on the next run.
+    state.files[stateFileName] = hashFileContent("anything");
+    await writeStateFixture(targetDirectory, state);
+
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+    expect(orphanStatusFor(plan, stateFileName)).toBeUndefined();
+  });
+
+  it.each(["../escaped.txt", "/etc/hosts"])(
+    "flags the recorded path %j as pointing outside the project",
+    async (escapingPath) => {
+      const targetDirectory = await scaffoldFixtureProject();
+      const state = await readStateFixture(targetDirectory);
+      state.files[escapingPath] = hashFileContent("anything");
+      await writeStateFixture(targetDirectory, state);
+
+      const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+      expect(orphanStatusFor(plan, escapingPath)).toBe("orphan-external");
+    },
+  );
+
+  it("keeps recording an orphan the run did not clear", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    // The first apply of any kind used to erase the record, because the state
+    // file is rebuilt from the render and an orphan is by definition not in it.
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    for (const path of orphanedByBiome) {
+      expect(orphanStatusFor(nextPlan, path)).toBe("orphan-unmodified");
+    }
+  });
+
+  it("drops the record for an orphan that is already gone", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    await rm(join(targetDirectory, ".oxfmtrc.json"));
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
+
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const state = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(state.files, ".oxfmtrc.json")).toBe(false);
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(orphanStatusFor(nextPlan, ".oxfmtrc.json")).toBeUndefined();
+  });
+
+  it("leaves everything on disk when a config toggle orphans a batch of files", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+
+    // Workspace mode is the widest blast radius a single field has.
+    const plan = await planAfterRetool(targetDirectory, { workspaceMode: true });
+    await applyUpdatePlan(targetDirectory, plan);
+
+    const state = await readStateFixture(targetDirectory);
+    for (const path of [".gitignore", "lefthook.yml", "pnpm-workspace.yaml"]) {
+      expect(orphanStatusFor(plan, path)).toBe("orphan-unmodified");
+      await expect(readFile(join(targetDirectory, path), "utf8")).resolves.toBeTypeOf("string");
+      expect(Object.hasOwn(state.files, path)).toBe(true);
+    }
+  });
+});
+
+describe("removing orphaned files", () => {
+  const retooledPlan = async (
+    targetDirectory: string,
+    config: Partial<ScaffoldConfig>,
+  ): Promise<UpdatePlan> => {
+    await retoolProject(targetDirectory, config);
+
+    return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+  };
+
+  const removeAll = { force: true, removeOrphans: true } as const;
+
+  it.each([
+    ["force alone", { force: true }],
+    ["removeOrphans alone", { removeOrphans: true }],
+    ["neither", {}],
+  ])("removes nothing with %s", async (_name, options) => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+
+    await applyUpdatePlan(targetDirectory, plan, options);
+
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toContain("{");
+    const state = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(state.files, ".oxfmtrc.json")).toBe(true);
+  });
+
+  it("removes unmodified orphans and reports each one", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const results: OrphanRemovalResult[] = [];
+
+    await applyUpdatePlan(targetDirectory, plan, {
+      ...removeAll,
+      onOrphan: (result) => results.push(result),
+    });
+
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).rejects.toThrow();
+    expect(results).toEqual([
+      { outcome: "removed", path: ".oxfmtrc.json" },
+      { outcome: "removed", path: ".oxlintrc.json" },
+    ]);
+    const state = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(state.files, ".oxfmtrc.json")).toBe(false);
+  });
+
+  it("never removes an orphan the user edited, even with both flags", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const edited = "{ /* mine */ }\n";
+    await writeFile(join(targetDirectory, ".oxfmtrc.json"), edited, "utf8");
+    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+
+    await applyUpdatePlan(targetDirectory, plan, removeAll);
+
+    // A config toggle plus the most destructive flag pair still cannot destroy
+    // work the user did.
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toBe(edited);
+    const state = await readStateFixture(targetDirectory);
+    expect(Object.hasOwn(state.files, ".oxfmtrc.json")).toBe(true);
+  });
+
+  it("never removes a recorded path that escapes the target directory", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const outsidePath = join(targetDirectory, "..", "escaped.txt");
+    const outsideContent = "not ours to delete\n";
+    await writeFile(outsidePath, outsideContent, "utf8");
+    const state = await readStateFixture(targetDirectory);
+    // The recorded hash genuinely matches, so containment is the only thing
+    // standing between this file and `rm`.
+    state.files["../escaped.txt"] = hashFileContent(outsideContent);
+    await writeStateFixture(targetDirectory, state);
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+    await applyUpdatePlan(targetDirectory, plan, removeAll);
+
+    await expect(readFile(outsidePath, "utf8")).resolves.toBe(outsideContent);
+    expect(Object.hasOwn((await readStateFixture(targetDirectory)).files, "../escaped.txt")).toBe(
+      true,
+    );
+  });
+
+  it("skips an orphan that changed between the plan and the apply", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const results: OrphanRemovalResult[] = [];
+
+    // An editor saving while the prompt is open retroactively voids the
+    // "nothing to lose" premise that justified skipping a backup.
+    await writeFile(join(targetDirectory, ".oxfmtrc.json"), "{ /* just saved */ }\n", "utf8");
+    await applyUpdatePlan(targetDirectory, plan, {
+      ...removeAll,
+      onOrphan: (result) => results.push(result),
+    });
+
+    await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toContain(
+      "just saved",
+    );
+    expect(results).toContainEqual({ outcome: "skipped-changed", path: ".oxfmtrc.json" });
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(orphanStatusFor(nextPlan, ".oxfmtrc.json")).toBe("orphan-modified");
+  });
+
+  it("removes only the orphans listed in `only`, and stays resumable", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+
+    await applyUpdatePlan(targetDirectory, plan, { ...removeAll, only: [".oxfmtrc.json"] });
+
+    await expect(readFile(join(targetDirectory, ".oxlintrc.json"), "utf8")).resolves.toContain("{");
+    const nextPlan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    expect(orphanStatusFor(nextPlan, ".oxfmtrc.json")).toBeUndefined();
+    expect(orphanStatusFor(nextPlan, ".oxlintrc.json")).toBe("orphan-unmodified");
+
+    await applyUpdatePlan(targetDirectory, nextPlan, removeAll);
+
+    await expect(readFile(join(targetDirectory, ".oxlintrc.json"), "utf8")).rejects.toThrow();
   });
 });

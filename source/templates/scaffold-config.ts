@@ -1,5 +1,6 @@
 import { defaultLintFormatTooling, type LintFormatTooling } from "../lint-format-tooling.js";
 import { stripPackageScope } from "../name-helpers.js";
+import { defaultNodeTarget, type NodeTarget } from "../node-target.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 export type LicenseName = "MIT" | "ISC" | "Apache-2.0" | "UNLICENSED";
@@ -27,6 +28,11 @@ export interface ScaffoldConfig {
   includeZod: boolean;
   license: LicenseName;
   lintFormatTooling: LintFormatTooling;
+  /**
+   * Node major the generated project targets. Drives `engines.node`, the
+   * `@types/node` pin, and the CI matrix together — see `../node-target.ts`.
+   */
+  nodeTarget: NodeTarget;
   packageManager: PackageManager;
   projectName: string;
   /**
@@ -57,6 +63,7 @@ const defaultScaffoldConfigValues = {
   includeZod: false,
   license: "Apache-2.0",
   lintFormatTooling: defaultLintFormatTooling,
+  nodeTarget: defaultNodeTarget,
   packageManager: "pnpm",
   projectName: "my-lib",
   workspaceMode: false,

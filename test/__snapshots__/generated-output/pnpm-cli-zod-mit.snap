@@ -929,6 +929,7 @@ executable: false
     "includeZod": true,
     "license": "MIT",
     "lintFormatTooling": "oxlint-oxfmt",
+    "nodeTarget": "24",
     "packageManager": "pnpm",
     "projectName": "@hbmartin/validated-cli",
     "workspaceMode": false

@@ -9,7 +9,7 @@ import { assertValidPackageName } from "./package-name.js";
 import { equalResolvedPaths } from "./path-comparison.js";
 import { assertTargetDirectoryIsSafe } from "./target-directory.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
-import { assertValidScaffoldConfig } from "./templates/state.js";
+import { parseScaffoldConfig } from "./templates/state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,10 +59,10 @@ export class PostScaffoldSetupError extends Error {
  * Write a generated TypeScript library to disk and optionally run post-scaffold setup.
  */
 export const scaffoldProject = async (
-  config: ScaffoldConfig,
+  rawConfig: ScaffoldConfig,
   options: ScaffoldOptions,
 ): Promise<void> => {
-  assertValidScaffoldConfig(config);
+  const config = parseScaffoldConfig(rawConfig);
   assertValidPackageName(config.projectName);
 
   const targetDirectory = resolve(options.targetDirectory);

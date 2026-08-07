@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
 import { detectWorkspaceRoot } from "../source/workspace-detection.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +21,7 @@ interface WorkspaceFixtureOptions {
 const createFixture = async (
   options: WorkspaceFixtureOptions = {},
 ): Promise<{ packagesDirectory: string; repositoryRoot: string }> => {
-  const repositoryRoot = await mkdtemp(join(tmpdir(), "create-ts-lib-workspace-"));
+  const repositoryRoot = await createTempDirectory("create-ts-lib-workspace-");
   const packagesDirectory = join(repositoryRoot, "packages");
   await mkdir(packagesDirectory, { recursive: true });
 
@@ -65,6 +65,7 @@ describe("detectWorkspaceRoot", () => {
     ["comment before the sequence", 'packages:\n  # our packages\n  - "packages/*"\n'],
     ["comment between entries", 'packages:\n  - "apps/*"\n  # and the rest\n  - "packages/*"\n'],
     ["trailing comment on an entry", 'packages:\n  - "packages/*" # everything\n'],
+    ["multi-line flow sequence", 'packages: [\n  "packages/*",\n  "apps/*"\n]\n'],
   ])("finds a pnpm workspace declared as a %s", async (_name, pnpmWorkspace) => {
     const { packagesDirectory } = await createFixture({ pnpmWorkspace });
 
@@ -78,6 +79,16 @@ describe("detectWorkspaceRoot", () => {
     ["comment before the sequence", 'packages:\n  # just this one\n  - "."\n'],
   ])("still ignores the single-package idiom declared as a %s", async (_name, pnpmWorkspace) => {
     const { packagesDirectory } = await createFixture({ pnpmWorkspace });
+
+    await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
+  });
+
+  it("does not read a commented-out entry as a package pattern", async () => {
+    // `cleanSequenceItem` reduces `- # nothing yet` to the empty string, which
+    // `hasNestedPackagePattern` would otherwise accept as a nested pattern.
+    const { packagesDirectory } = await createFixture({
+      pnpmWorkspace: "packages:\n  - # nothing yet\n",
+    });
 
     await expect(detectWorkspaceRoot(packagesDirectory)).resolves.toBeUndefined();
   });
@@ -143,7 +154,7 @@ describe("detectWorkspaceRoot", () => {
   it("does not search above the repository root", async () => {
     // The workspace manifest sits outside the repository, so it must not match
     // even though it is an ancestor directory.
-    const outerDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-outer-"));
+    const outerDirectory = await createTempDirectory("create-ts-lib-outer-");
     await writeFile(
       join(outerDirectory, "pnpm-workspace.yaml"),
       'packages:\n  - "packages/*"\n',

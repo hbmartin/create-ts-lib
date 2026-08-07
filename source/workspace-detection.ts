@@ -95,10 +95,41 @@ const readBlockSequence = (lines: readonly string[]): string[] => {
       break;
     }
 
-    patterns.push(cleanSequenceItem(item));
+    const pattern = cleanSequenceItem(item);
+    // A `- # note` line carries no pattern. Pushing the empty string would make
+    // `hasNestedPackagePattern` read it as a nested pattern, since "" is
+    // neither "." nor "./" -- a workspace conjured out of a comment.
+    if (pattern.length > 0) {
+      patterns.push(pattern);
+    }
   }
 
   return patterns;
+};
+
+/**
+ * Joins a flow sequence wrapped across lines, so `packages: [\n "packages/*"\n]`
+ * reads the same as the single-line form.
+ *
+ * The opening bracket has to be on the `packages:` line itself. A flow sequence
+ * starting on the *next* line is legal YAML but is not something pnpm docs or
+ * real repositories produce, and supporting it would mean guessing whether an
+ * indented line continues the key or begins another one.
+ */
+const joinFlowSequence = (inlineValue: string, followingLines: readonly string[]): string => {
+  if (inlineValue.endsWith("]")) {
+    return inlineValue;
+  }
+
+  let joined = inlineValue;
+  for (const line of followingLines) {
+    joined += ` ${cleanSequenceItem(line)}`;
+    if (joined.endsWith("]")) {
+      break;
+    }
+  }
+
+  return joined;
 };
 
 const readPnpmWorkspacePatterns = (content: string): string[] => {
@@ -110,10 +141,13 @@ const readPnpmWorkspacePatterns = (content: string): string[] => {
 
   const { inline } = pnpmPackagesKeyPattern.exec(lines[startIndex] ?? "")?.groups ?? {};
   const inlineValue = cleanSequenceItem(inline ?? "");
+  const followingLines = lines.slice(startIndex + 1);
 
-  return inlineValue.length > 0
-    ? readFlowSequence(inlineValue)
-    : readBlockSequence(lines.slice(startIndex + 1));
+  if (inlineValue.length === 0) {
+    return readBlockSequence(followingLines);
+  }
+
+  return readFlowSequence(joinFlowSequence(inlineValue, followingLines));
 };
 
 const readWorkspaceManifest = async (directory: string): Promise<WorkspaceManifest | undefined> => {

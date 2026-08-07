@@ -1,11 +1,9 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ScaffoldConfig, ScaffoldProgress } from "../source/index.js";
+import { createTempPath } from "./helpers/temp-directory.js";
 
 const { execFileMock, spawnMock } = vi.hoisted(() => {
   const hoistedExecFileMock = vi.fn();
@@ -48,6 +46,7 @@ const baseConfig: ScaffoldConfig = {
   includeZod: false,
   license: "MIT",
   lintFormatTooling: "oxlint-oxfmt",
+  nodeTarget: "24",
   packageManager: "pnpm",
   projectName: "example-lib",
   workspaceMode: false,
@@ -320,11 +319,8 @@ describe("scaffoldProject post-scaffold progress", () => {
   });
 });
 
-const createTempTarget = async (prefix: string): Promise<string> => {
-  const tempDirectory = await mkdtemp(join(tmpdir(), prefix));
-
-  return join(tempDirectory, "example-lib");
-};
+const createTempTarget = async (prefix: string): Promise<string> =>
+  createTempPath(prefix, "example-lib");
 
 const createProgress = (): ScaffoldProgress => ({
   fail: vi.fn(),

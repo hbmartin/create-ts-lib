@@ -72,10 +72,17 @@ versions in generated projects. Most specifiers are read out of this repo's own
 cannot drift apart.
 
 The exceptions are pinned inline as **template-only**, because this repo neither
-imports nor runs them: `meow` (a generated project's CLI dependency), and `jsr`,
-`tsdown`, and `@types/node` among the dev dependencies. `@types/node` must stay
-on the same major as the `engines.node` floor in `package-json.ts` — the
-comment beside it explains why the CI matrix cannot catch a mismatch.
+imports nor runs them: `meow` (a generated project's CLI dependency), and `jsr`
+and `tsdown` among the dev dependencies.
+
+`@types/node` is template-only too, but keyed by Node target rather than flat:
+`nodeTypesVersionByTarget` holds one caret range per `NodeTarget`, and
+`nodeTypesVersion(target)` resolves it. A module-load assertion rejects any
+specifier whose major disagrees with its own key, so a pin can never drift off
+the `engines.node` floor that `source/node-target.ts` derives from the same
+target — and Node 25 stays unreachable without a visible change to the union.
+The comment beside the table explains why a generated project's CI matrix cannot
+catch a mismatch on its own.
 
 The same module holds `semgrepVersion` and `githubActionRefs`, the SHA-pinned
 GitHub Action references. `test/workflow-action-refs.test.ts` fails when this
@@ -100,19 +107,64 @@ Because state files on disk were written by older releases, the schema is a
 compatibility surface — see step 2 of
 [Adding a `ScaffoldConfig` field](#adding-a-scaffoldconfig-field).
 
-Two rules keep the classifier honest across runs. `applyUpdatePlan` rewrites the
-state file to describe **what is on disk**, so a partial apply (`options.only`,
-the interactive "choose files" path) keeps the previously recorded hash for every
-entry it did not write — recording the freshly rendered hash for a skipped file
-would make the next run read it as a user edit. And backups never overwrite: a
-taken `<file>.orig` steps to `.orig.1`, and the path actually used comes back on
-`UpdatePlanEntry.backupPath` for the CLI to print.
+Paths the state file records that the render no longer produces come back
+separately as `plan.orphans`, with their own `OrphanStatus`:
+
+| Status              | Meaning                                    | Removable  |
+| ------------------- | ------------------------------------------ | ---------- |
+| `orphan-unmodified` | On disk, still matches the recorded hash    | yes, gated |
+| `orphan-modified`   | On disk, edited or unreadable               | never      |
+| `orphan-gone`       | Not on disk; the key is dropped             | n/a        |
+| `orphan-external`   | The recorded path escapes the target        | never      |
+
+They are a separate array rather than new `UpdateFileStatus` members for three
+reasons: an orphan has no rendered content to put in
+`UpdatePlanEntry.newContent`; `cli-update.ts` selects pending work with
+`status !== "up-to-date"`, so a new member would be opted into "files to write"
+by a filter that reads as already correct; and the union is exported from
+`index.ts`, so widening it breaks exhaustive consumers.
+
+`orphan-external` exists because a `state.files` key is the one place a
+user-editable string becomes a path something may delete. `resolve` restarts at
+an absolute segment, so joining a recorded key onto the target proves nothing
+about where it lands — `isInsideDirectory` checks the result, at plan time and
+again immediately before the delete.
+
+Three rules keep the classifier honest across runs:
+
+1. `applyUpdatePlan` rewrites the state file to describe **what is on disk**, so
+   a partial apply (`options.only`, the interactive "choose files" path) keeps
+   the previously recorded hash for every entry it did not write — recording the
+   freshly rendered hash for a skipped file would make the next run read it as a
+   user edit.
+2. A surviving orphan has to be *added back* to that map, not merely left alone.
+   The rendered map cannot contain an orphan — being absent from the render is
+   what makes it one — so the merge loop, which only overwrites or deletes keys
+   already present, used to erase the record on the first apply of any kind.
+   That add is what makes removal resumable across partial applies.
+3. Backups never overwrite: a taken `<file>.orig` steps to `.orig.1`, and the
+   path actually used comes back on `UpdatePlanEntry.backupPath` for the CLI to
+   print.
+
+A file also disappears from a render when a config option is *toggled*, which is
+why removal needs `--force` and `--remove-orphans` together and never touches a
+file whose contents have changed. `test/update.test.ts` pins the widest case:
+flipping `workspaceMode` orphans `.gitignore`, `lefthook.yml`, and
+`pnpm-workspace.yaml` at once, and all three must stay on disk and stay recorded.
 
 ## Workspace mode
 
 `config.workspaceMode` means "scaffold a package inside an existing repo." Git
 setup is left to the parent, and nothing outside the target directory is ever
 written.
+
+A third thing is suppressed, outside the file list: `resolveGitHubRepository` in
+`source/cli-prompts.ts` never offers to create a GitHub repository in workspace
+mode, and defaults the URL prompt to the detected workspace remote. This is why
+`resolveWorkspaceMode` runs before the GitHub prompt rather than after the
+feature confirms — it cannot move above the description prompt, though, because
+awaiting anything earlier lets the in-flight `gh` lookup settle and breaks the
+interleaving `test/cli.test.ts` pins down.
 
 Files the parent repository owns are skipped by **two** separate mechanisms — if
 you add a root-owned file, use the one that matches:

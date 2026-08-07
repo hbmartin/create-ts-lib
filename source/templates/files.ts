@@ -13,7 +13,7 @@ import {
   packageManagerConfig,
   type ScaffoldConfig,
 } from "./scaffold-config.js";
-import { assertValidScaffoldConfig, buildStateFile } from "./state.js";
+import { buildStateFile, parseScaffoldConfig } from "./state.js";
 import { buildVsCodeFiles } from "./vscode.js";
 import {
   buildCiWorkflow,
@@ -51,8 +51,8 @@ const buildLicense = (config: ScaffoldConfig): string => {
 const rootOwnedFiles = (config: ScaffoldConfig, build: () => GeneratedFile[]): GeneratedFile[] =>
   config.workspaceMode ? [] : build();
 
-export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
-  assertValidScaffoldConfig(config);
+export const buildProjectFiles = (rawConfig: ScaffoldConfig): GeneratedFile[] => {
+  const config = parseScaffoldConfig(rawConfig);
   const pmConfig = packageManagerConfig[config.packageManager];
   const files: GeneratedFile[] = [
     ...rootOwnedFiles(config, () => [
@@ -68,6 +68,7 @@ export const buildProjectFiles = (config: ScaffoldConfig): GeneratedFile[] => {
       content: renderTemplate("agents.md.tmpl", {
         CLI_GUIDANCE: buildCliAgentGuidance(config.includeCli),
         LINT_FORMAT_GUIDANCE: buildLintFormatAgentGuidance(config.lintFormatTooling),
+        NODE_TARGET: config.nodeTarget,
         PACKAGE_MANAGER: config.packageManager,
         RUN_PREFIX: pmConfig.runPrefix,
         ZOD_GUIDANCE: buildZodAgentGuidance(config.includeZod),

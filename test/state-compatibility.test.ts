@@ -1,9 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   type ScaffoldState,
@@ -11,6 +10,7 @@ import {
   stateFileName,
 } from "../source/templates/state.js";
 import { planUpdate, readScaffoldState } from "../source/update.js";
+import { createTempDirectory } from "./helpers/temp-directory.js";
 
 /**
  * State files frozen from the shape v2.0.0 ships. `create-ts-lib update` reads
@@ -23,23 +23,12 @@ const fixtureNames = ["v2.0.0-full", "v2.0.0-minimal"];
 const readFixture = async (name: string): Promise<string> =>
   readFile(fileURLToPath(new URL(`./__fixtures__/state/${name}.json`, import.meta.url)), "utf8");
 
-const fixtureDirectories: string[] = [];
-
 const projectWithState = async (stateContent: string): Promise<string> => {
-  const targetDirectory = await mkdtemp(join(tmpdir(), "create-ts-lib-state-fixture-"));
-  fixtureDirectories.push(targetDirectory);
+  const targetDirectory = await createTempDirectory("create-ts-lib-state-fixture-");
   await writeFile(join(targetDirectory, stateFileName), stateContent, "utf8");
 
   return targetDirectory;
 };
-
-afterEach(async () => {
-  await Promise.all(
-    fixtureDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { force: true, recursive: true })),
-  );
-});
 
 describe("scaffold state compatibility", () => {
   it.each(fixtureNames)("parses the %s state file", async (name) => {
@@ -86,6 +75,10 @@ describe("scaffold state compatibility", () => {
 
     const state = await readScaffoldState(targetDirectory);
 
+    // Behavioural continuity, not just schema hygiene: projects scaffolded
+    // before `nodeTarget` existed were emitted with a >=24 floor, so `update`
+    // has to re-render them unchanged rather than migrate them to a newer Node.
+    expect(state.config.nodeTarget).toBe("24");
     expect(state.config.copyrightYear).toMatch(/^\d{4}$/u);
     expect(state.config.includeCommunityFiles).toBe(false);
     expect(state.config.workspaceMode).toBe(false);
