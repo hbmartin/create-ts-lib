@@ -346,10 +346,7 @@ executable: false
       { "name": "source", "patterns": ["source/**"] },
       { "name": "test", "patterns": ["test/**"] }
     ],
-    "rules": [
-      { "from": "source", "allow": [] },
-      { "from": "test", "allow": ["source"] }
-    ]
+    "rules": [{ "from": "source", "allow": [] }, { "from": "test", "allow": ["source"] }]
   }
 }
 
@@ -984,14 +981,8 @@ executable: false
   "version": "0.1.0",
   "exports": "./source/index.ts",
   "publish": {
-    "include": [
-      "source/**/*.ts",
-      "README.md",
-      "LICENSE"
-    ],
-    "exclude": [
-      "**/*.test.ts"
-    ]
+    "include": ["source/**/*.ts", "README.md", "LICENSE"],
+    "exclude": ["**/*.test.ts"]
   }
 }
 
@@ -1242,7 +1233,7 @@ executable: false
     "CONTRIBUTING.md": "1f3149e106fcef0ae965f178ebc61ad368ff98cc86c4195fad600b16a0729e92",
     "SECURITY.md": "e1d31b30e962dfad01e4cb3b36e3b77f869b00ba02af9ba11c45d7d606853ef1",
     "AGENTS.md": "716c6d43b34e1634d99b1bf1f12c3c44d220e12562459ae8d766742f7af4ef84",
-    ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
+    ".fallowrc.jsonc": "60a03f35daf14fdcc2fda59fe618c19ab28dfc434252cd08eee1629d8fde7683",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",
@@ -1259,7 +1250,7 @@ executable: false
     "test/utils/formatting.test.ts": "91479021e888723ae2d75f5de1c657f477a39ea37ecb7aaf9de8246697639d54",
     "source/cli.ts": "5899e10edfac2ebf04dd1c24d0f09ce390335816ff5550eee8b2413cd999203c",
     "test/cli.test.ts": "8100f3f17e8861cde31cb2dbf939a2bd3838866e22bcf87a7dcd77d98b490d3e",
-    "jsr.json": "7226e3e45429ed0d762f3a66275e173fba6e1af4628e7be7754b8869165877ff",
+    "jsr.json": "d9dcc7320c14a24910d819b48ac21253758bc436226ff187bd43fe260e7c4d70",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
     ".github/workflows/ci.yml": "6d290971f596806ade742f68554dcbd79f62991e73104832136875fe9623ba08",
     ".github/workflows/release.yml": "986316f4c3d4adbb1ca5de553fb171de3ff0f2a9196d2aabed5218f2de062d09",

@@ -3,6 +3,12 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// The smoke test deliberately drives the built package rather than `source/`,
+// and `smoke:scaffold` builds before running this. `dist/` is a build artifact
+// the architecture gate ignores, so whether this resolves depends only on
+// whether a build has happened -- which made `deps:lint` pass locally and fail
+// on a clean checkout. Suppressed so the gate stays independent of build state.
+// fallow-ignore-next-line unresolved-import
 import { scaffoldProject } from "../dist/index.js";
 
 const packageManagers = new Set(["pnpm"]);
