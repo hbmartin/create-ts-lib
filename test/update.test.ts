@@ -652,6 +652,39 @@ describe("removing orphaned files", () => {
     expect(results).toContainEqual({ outcome: "skipped-external", path: "linked/known.txt" });
   });
 
+  it("never deletes through a symlink that stays inside the project", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const keptContent = "someone else's file\n";
+    await writeFile(join(targetDirectory, "kept.txt"), keptContent, "utf8");
+    // The recorded key is a link to a second file in the same project, so both
+    // the containment check and the hash check pass on the link's target.
+    // Removing what `realpath` reports would delete `kept.txt` -- a file the
+    // state file never recorded -- and leave `linked.txt` dangling.
+    await symlink(join(targetDirectory, "kept.txt"), join(targetDirectory, "linked.txt"));
+    const state = await readStateFixture(targetDirectory);
+    state.files["linked.txt"] = hashFileContent(keptContent);
+    await writeStateFixture(targetDirectory, state);
+    const results: OrphanRemovalResult[] = [];
+
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    // A symlink standing where the scaffolder writes a regular file is a user
+    // edit, and `--force --remove-orphans` never removes those.
+    expect(orphanStatusFor(plan, "linked.txt")).toBe("orphan-modified");
+    const doctored = plan.orphans.find((orphan) => orphan.path === "linked.txt");
+    if (doctored === undefined) {
+      throw new Error("Expected linked.txt in the orphan list");
+    }
+    doctored.status = "orphan-unmodified";
+    await applyUpdatePlan(targetDirectory, plan, {
+      ...removeAll,
+      onOrphan: (result) => results.push(result),
+    });
+
+    await expect(readFile(join(targetDirectory, "kept.txt"), "utf8")).resolves.toBe(keptContent);
+    await expect(readFile(join(targetDirectory, "linked.txt"), "utf8")).resolves.toBe(keptContent);
+    expect(results).toContainEqual({ outcome: "skipped-changed", path: "linked.txt" });
+  });
+
   it("skips an orphan that changed between the plan and the apply", async () => {
     const targetDirectory = await scaffoldFixtureProject();
     const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });

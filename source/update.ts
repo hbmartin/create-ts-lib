@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promise
 import { dirname, join, relative, resolve } from "node:path";
 
 import { isErrorWithCode, isFileNotFoundError } from "./filesystem-errors.js";
-import { isInsideDirectory } from "./path-comparison.js";
+import { equalResolvedPaths, isInsideDirectory } from "./path-comparison.js";
 import { buildProjectFiles } from "./templates/files.js";
 import type { GeneratedFile } from "./templates/scaffold-config.js";
 import {
@@ -153,7 +153,7 @@ const buildOrphans = async (
   state: ScaffoldState,
   renderedPaths: ReadonlySet<string>,
 ): Promise<OrphanedFile[]> => {
-  const resolvedTarget = resolve(targetDirectory);
+  const realTarget = await canonicalTarget(targetDirectory);
   const orphans: OrphanedFile[] = [];
 
   // Insertion order rather than sorted: the state file's key order is the render
@@ -164,10 +164,29 @@ const buildOrphans = async (
       continue;
     }
 
-    orphans.push({ path, status: await classifyOrphan(resolvedTarget, path, recordedHash) });
+    orphans.push({ path, status: await classifyOrphan(realTarget, path, recordedHash) });
   }
 
   return orphans;
+};
+
+/**
+ * The target directory in the same namespace every orphan is resolved into,
+ * computed once per run rather than per orphan: `realpath` walks and stats every
+ * component, and the answer cannot change between two keys of one state file.
+ *
+ * A target that will not resolve falls back to its lexical form. That value is
+ * never actually compared against anything: an orphan is only located on disk
+ * once it has passed the lexical gate below, so it lies under this directory,
+ * and if this directory does not resolve then neither does the orphan.
+ */
+const canonicalTarget = async (targetDirectory: string): Promise<string> => {
+  const resolvedTarget = resolve(targetDirectory);
+  try {
+    return await realpath(resolvedTarget);
+  } catch {
+    return resolvedTarget;
+  }
 };
 
 /**
@@ -176,47 +195,80 @@ const buildOrphans = async (
  * `resolve` and `isInsideDirectory` are lexical: a recorded key such as
  * `linked-directory/file` passes containment while `linked-directory` is a
  * symlink pointing outside the project, so the read and the delete would land
- * on the external target. `realpath` on both sides puts the comparison in the
+ * on the external target. `realpath` puts both sides of the comparison in the
  * same namespace (on macOS the target itself usually sits behind `/var` ->
  * `/private/var`).
+ *
+ * `linked` is the third answer, and the reason `inside` is worth more than
+ * "resolves under the target": the caller resolved the target first, so a key
+ * whose own components hold no symlink comes back from `realpath` unchanged.
+ * `inside` therefore means the recorded path *is* the canonical one, and the
+ * read and the `rm` can use it directly rather than following anything.
+ *
+ * That is a narrowed window, not a closed one, and it cannot be closed in this
+ * runtime: Node exposes no descriptor-relative filesystem calls -- no `openat`,
+ * and no `unlinkat` at all -- so whatever a check concludes, the operation after
+ * it re-walks a path string and a component swapped in between still redirects
+ * it. What this buys is that the string being re-walked has no symlink in it to
+ * re-point, so winning the race means replacing a real directory. The remainder
+ * is accepted: someone who can write inside the project already owns the
+ * `.create-ts-lib.json` keys this walks and the `package.json` scripts that
+ * `update` shells out to.
+ *
+ * Resolving further than the check would be worse, not better. Deleting the
+ * `realpath` of a `linked` key removes whatever it points at and leaves the link
+ * dangling -- for a link to a file elsewhere *in* the project, that destroys a
+ * file nobody recorded. Declining is the only safe answer: the scaffolder writes
+ * regular files at literal paths, so a symlink standing where one used to be is
+ * a user's edit, and edits are what `orphan-modified` already protects.
  */
+type OrphanLocation = "external" | "inside" | "linked" | "missing" | "unreadable";
+
 const locateOrphanOnDisk = async (
-  resolvedTarget: string,
+  realTarget: string,
   fullPath: string,
-): Promise<"external" | "inside" | "missing" | "unreadable"> => {
-  let realFullPath: string;
+): Promise<OrphanLocation> => {
+  let realPath: string;
   try {
-    realFullPath = await realpath(fullPath);
+    realPath = await realpath(fullPath);
   } catch (error) {
     return isFileNotFoundError(error) ? "missing" : "unreadable";
   }
 
-  return isInsideDirectory(await realpath(resolvedTarget), realFullPath) ? "inside" : "external";
+  if (!isInsideDirectory(realTarget, realPath)) {
+    return "external";
+  }
+
+  // Case-insensitively on the platforms that are: `realpath` reports the casing
+  // on disk, and a recorded key that differs from it only in case names the same
+  // file. Treating that as `linked` would leave real orphans uncollectable.
+  return equalResolvedPaths(fullPath, realPath) ? "inside" : "linked";
 };
 
 const classifyOrphan = async (
-  resolvedTarget: string,
+  realTarget: string,
   path: string,
   recordedHash: string,
 ): Promise<OrphanStatus> => {
-  const fullPath = resolve(resolvedTarget, path);
+  const fullPath = resolve(realTarget, path);
   // `.create-ts-lib.json` is user-editable and its keys are unvalidated strings.
   // This is the first place one becomes a path that something may delete, so
   // where it lands is checked rather than assumed.
-  if (!isInsideDirectory(resolvedTarget, fullPath)) {
+  if (!isInsideDirectory(realTarget, fullPath)) {
     return "orphan-external";
   }
 
-  const location = await locateOrphanOnDisk(resolvedTarget, fullPath);
+  const location = await locateOrphanOnDisk(realTarget, fullPath);
   if (location === "external") {
     return "orphan-external";
   }
   if (location === "missing") {
     return "orphan-gone";
   }
-  if (location === "unreadable") {
+  if (location === "linked" || location === "unreadable") {
     // Same fail-safe as the unreadable-content branch below: never removed, and
-    // not allowed to block every future update.
+    // not allowed to block every future update. `linked` joins it because a
+    // symlink where the scaffolder wrote a regular file is a user's edit.
     return "orphan-modified";
   }
 
@@ -408,6 +460,10 @@ const clearOrphans = async (
     return cleared;
   }
 
+  // Below the early return rather than beside `cleared`: most applies delete
+  // nothing, and this is the one branch that needs the canonical target.
+  const realTarget = await canonicalTarget(resolvedTarget);
+
   for (const orphan of plan.orphans) {
     if (orphan.status !== "orphan-unmodified" || selectedPaths?.has(orphan.path) === false) {
       continue;
@@ -418,7 +474,7 @@ const clearOrphans = async (
       continue;
     }
 
-    const outcome = await removeUnmodifiedOrphan(resolvedTarget, orphan.path, recordedHash);
+    const outcome = await removeUnmodifiedOrphan(realTarget, orphan.path, recordedHash);
     // `skipped-missing` counts as cleared: the goal state holds, and
     // re-recording the key would make the next run rediscover it as gone.
     if (outcome === "removed" || outcome === "skipped-missing") {
@@ -432,26 +488,28 @@ const clearOrphans = async (
 };
 
 const removeUnmodifiedOrphan = async (
-  resolvedTarget: string,
+  realTarget: string,
   path: string,
   recordedHash: string,
 ): Promise<OrphanRemovalResult["outcome"]> => {
-  const fullPath = resolve(resolvedTarget, path);
+  const fullPath = resolve(realTarget, path);
   // Re-checked rather than trusted from the plan: a programmatic caller can pass
   // any plan at all, and defence in depth on a delete is close to free.
-  if (!isInsideDirectory(resolvedTarget, fullPath)) {
+  if (!isInsideDirectory(realTarget, fullPath)) {
     return "skipped-external";
   }
 
-  const location = await locateOrphanOnDisk(resolvedTarget, fullPath);
+  const location = await locateOrphanOnDisk(realTarget, fullPath);
   if (location === "external") {
     return "skipped-external";
   }
   if (location === "missing") {
     return "skipped-missing";
   }
-  if (location === "unreadable") {
-    // Could not establish where the path really leads, so it is not removed.
+  if (location === "linked" || location === "unreadable") {
+    // Either the path leads somewhere other than itself or where it leads could
+    // not be established. Both mean this is not the regular file the state file
+    // claims, so it is not removed.
     return "skipped-changed";
   }
 
