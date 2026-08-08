@@ -300,10 +300,7 @@ executable: false
       { "name": "source", "patterns": ["source/**"] },
       { "name": "test", "patterns": ["test/**"] }
     ],
-    "rules": [
-      { "from": "source", "allow": [] },
-      { "from": "test", "allow": ["source"] }
-    ]
+    "rules": [{ "from": "source", "allow": [] }, { "from": "test", "allow": ["source"] }]
   }
 }
 
@@ -1081,7 +1078,7 @@ executable: false
     ".vscode/extensions.json": "40af2f96f539e1173868ac6a11bf9984c4c5b4edaefbd7d6e1484df25198d376",
     ".vscode/settings.json": "7f49c0f31b67567382a2b8cb992e3802093493bcd3a68c1c28361a7eb38f51eb",
     "AGENTS.md": "62a7fbc11455682631ac906e56dff76a2411bf55a02cedff236935551b131a37",
-    ".fallowrc.jsonc": "32b8ab06ef4a126315eb5d7b9deef176c979ad9ed01b7a0a8b545c2370960e5e",
+    ".fallowrc.jsonc": "60a03f35daf14fdcc2fda59fe618c19ab28dfc434252cd08eee1629d8fde7683",
     "lefthook.yml": "ad39670426a452a1ec6258af88a582d553acffdc34f35d2c672c2fc133ee0bc9",
     "semgrep.yml": "9d0250521fb44ae77fa2d333f5dc6c38722135f8f33ef1843368cd4e63297a0c",
     "scripts/security-lint.mjs": "65d95766514de798a8abe902078c5ef001bc15168eec69c775b1eb77f026b590",

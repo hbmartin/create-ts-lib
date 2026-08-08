@@ -1,4 +1,5 @@
 import type { LintFormatTooling } from "../lint-format-tooling.js";
+import { inlineJsonArray } from "./render.js";
 import type { GeneratedFile, ScaffoldConfig } from "./scaffold-config.js";
 
 interface VsCodeTooling {
@@ -29,11 +30,8 @@ const vsCodeTooling = {
 
 export const buildVsCodeFiles = (config: ScaffoldConfig): GeneratedFile[] => {
   const tooling = vsCodeTooling[config.lintFormatTooling];
-  const recommendations = [tooling.extensionId, "vitest.explorer"];
-  // Short arrays stay on one line so Biome-formatted projects pass their own
-  // format check without rewriting these files.
   const extensionsContent = `{
-  "recommendations": ${JSON.stringify(recommendations).replaceAll('","', '", "')}
+  "recommendations": ${inlineJsonArray([tooling.extensionId, "vitest.explorer"])}
 }
 `;
   const settings = {

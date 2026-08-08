@@ -27,6 +27,14 @@ than first discovered during a release.
 | `pnpm run types:lint`     | `attw --pack . --profile esm-only`                         |
 | `pnpm run smoke:scaffold` | Builds, scaffolds real projects into a temp dir, installs them, and runs their generated checks |
 
+`deps:lint` runs inside `check`, which runs before `build` — so it sees `dist/`
+only on a machine where a build already happened. That made it pass locally and
+fail on a clean CI checkout, on `scripts/smoke-test-scaffold.mjs` importing the
+built package. Nothing in the gate may depend on build output being present:
+that one import carries a `// fallow-ignore-next-line unresolved-import`, which
+is also why `stale-suppressions` stays off (the suppression is inert whenever
+`dist/` exists).
+
 `security:lint` prefers a `semgrep` already on `PATH` and falls back to
 `uvx semgrep@<pinned>`. When neither is available it explains how to install one
 and exits non-zero, so `check` and `release:check` cannot pass without the scan
@@ -88,6 +96,14 @@ single module:
   a clean control case. It exists because the gate has twice reported success
   while analysing nothing. Keep these tests meaningful rather than adjusting
   them to pass.
+- **`generated-formatting`** — renders a project and runs the real formatter that
+  project was given (Biome or oxfmt) over it, for both toolings and for minimal
+  and every-feature answers, plus a control case that plants a misformatted file
+  so a run that checked nothing cannot pass. Nothing in this repo formats the
+  template assets — oxfmt ignores JSON, JSONC, YAML and Markdown, Biome excludes
+  `source/templates/assets`, and `.tmpl` keeps the rest out of both — so an asset
+  the generated formatter would reprint used to reach a user before anything
+  noticed. `.fallowrc.jsonc` and `jsr.json` both shipped that way.
 - **`state-compatibility`** — parses deliberately stale fixtures in
   `test/__fixtures__/state/` so a new `scaffoldConfigSchema` field without a
   `.default()` fails here instead of in someone's `update`.
