@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -83,6 +83,16 @@ const retoolProject = async (
     ...state,
     config: { ...state.config, ...config },
   });
+};
+
+/** `retoolProject`, then the plan the re-read state produces. */
+const planAfterRetool = async (
+  targetDirectory: string,
+  config: Partial<ScaffoldConfig>,
+): Promise<UpdatePlan> => {
+  await retoolProject(targetDirectory, config);
+
+  return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
 };
 
 describe("readScaffoldState", () => {
@@ -424,15 +434,6 @@ describe("orphaned files", () => {
   // oxlint config files and creates biome.jsonc.
   const orphanedByBiome = [".oxfmtrc.json", ".oxlintrc.json"];
 
-  const planAfterRetool = async (
-    targetDirectory: string,
-    config: Partial<ScaffoldConfig>,
-  ): Promise<UpdatePlan> => {
-    await retoolProject(targetDirectory, config);
-
-    return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
-  };
-
   it("reports files the render no longer produces, and never as plan entries", async () => {
     const targetDirectory = await scaffoldFixtureProject();
 
@@ -529,15 +530,6 @@ describe("orphaned files", () => {
 });
 
 describe("removing orphaned files", () => {
-  const retooledPlan = async (
-    targetDirectory: string,
-    config: Partial<ScaffoldConfig>,
-  ): Promise<UpdatePlan> => {
-    await retoolProject(targetDirectory, config);
-
-    return planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
-  };
-
   const removeAll = { force: true, removeOrphans: true } as const;
 
   it.each([
@@ -546,7 +538,7 @@ describe("removing orphaned files", () => {
     ["neither", {}],
   ])("removes nothing with %s", async (_name, options) => {
     const targetDirectory = await scaffoldFixtureProject();
-    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
 
     await applyUpdatePlan(targetDirectory, plan, options);
 
@@ -557,7 +549,7 @@ describe("removing orphaned files", () => {
 
   it("removes unmodified orphans and reports each one", async () => {
     const targetDirectory = await scaffoldFixtureProject();
-    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
     const results: OrphanRemovalResult[] = [];
 
     await applyUpdatePlan(targetDirectory, plan, {
@@ -578,7 +570,7 @@ describe("removing orphaned files", () => {
     const targetDirectory = await scaffoldFixtureProject();
     const edited = "{ /* mine */ }\n";
     await writeFile(join(targetDirectory, ".oxfmtrc.json"), edited, "utf8");
-    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
 
     await applyUpdatePlan(targetDirectory, plan, removeAll);
 
@@ -609,9 +601,60 @@ describe("removing orphaned files", () => {
     );
   });
 
+  it("classifies a path behind a symlinked directory as orphan-external", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const outsideDirectory = await createTempDirectory("create-ts-lib-symlink-out-");
+    const outsideContent = "not ours to delete\n";
+    await writeFile(join(outsideDirectory, "known.txt"), outsideContent, "utf8");
+    await symlink(outsideDirectory, join(targetDirectory, "linked"));
+    const state = await readStateFixture(targetDirectory);
+    // `linked/known.txt` is lexically inside the project and the hash matches:
+    // only symlink resolution stands between the external file and `rm`.
+    state.files["linked/known.txt"] = hashFileContent(outsideContent);
+    await writeStateFixture(targetDirectory, state);
+
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+
+    expect(orphanStatusFor(plan, "linked/known.txt")).toBe("orphan-external");
+    await applyUpdatePlan(targetDirectory, plan, removeAll);
+    await expect(readFile(join(outsideDirectory, "known.txt"), "utf8")).resolves.toBe(
+      outsideContent,
+    );
+  });
+
+  it("never removes through a symlinked directory, even when the plan says unmodified", async () => {
+    const targetDirectory = await scaffoldFixtureProject();
+    const outsideDirectory = await createTempDirectory("create-ts-lib-symlink-lie-");
+    const outsideContent = "not ours to delete\n";
+    await writeFile(join(outsideDirectory, "known.txt"), outsideContent, "utf8");
+    await symlink(outsideDirectory, join(targetDirectory, "linked"));
+    const state = await readStateFixture(targetDirectory);
+    state.files["linked/known.txt"] = hashFileContent(outsideContent);
+    await writeStateFixture(targetDirectory, state);
+    const plan = await planUpdate(targetDirectory, await readScaffoldState(targetDirectory));
+    // A programmatic caller can hand `applyUpdatePlan` any plan at all, so the
+    // delete must re-derive the real location rather than trust the classifier.
+    const doctored = plan.orphans.find((orphan) => orphan.path === "linked/known.txt");
+    if (doctored === undefined) {
+      throw new Error("Expected linked/known.txt in the orphan list");
+    }
+    doctored.status = "orphan-unmodified";
+    const results: OrphanRemovalResult[] = [];
+
+    await applyUpdatePlan(targetDirectory, plan, {
+      ...removeAll,
+      onOrphan: (result) => results.push(result),
+    });
+
+    await expect(readFile(join(outsideDirectory, "known.txt"), "utf8")).resolves.toBe(
+      outsideContent,
+    );
+    expect(results).toContainEqual({ outcome: "skipped-external", path: "linked/known.txt" });
+  });
+
   it("skips an orphan that changed between the plan and the apply", async () => {
     const targetDirectory = await scaffoldFixtureProject();
-    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
     const results: OrphanRemovalResult[] = [];
 
     // An editor saving while the prompt is open retroactively voids the
@@ -632,7 +675,7 @@ describe("removing orphaned files", () => {
 
   it("removes only the orphans listed in `only`, and stays resumable", async () => {
     const targetDirectory = await scaffoldFixtureProject();
-    const plan = await retooledPlan(targetDirectory, { lintFormatTooling: "biome" });
+    const plan = await planAfterRetool(targetDirectory, { lintFormatTooling: "biome" });
 
     await applyUpdatePlan(targetDirectory, plan, { ...removeAll, only: [".oxfmtrc.json"] });
 

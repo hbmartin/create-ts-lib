@@ -139,13 +139,22 @@ const updateCompatibleFlags = new Set<CliBooleanFlag>([
 ]);
 
 /**
+ * Options only `update` consumes. The default command accepts every option in
+ * the parsing maps, so without this list a scaffold invocation naming one of
+ * these would parse cleanly and silently not get the behaviour it asked for.
+ * Rejected rather than ignored, so a command that cannot do what it says does
+ * not look like it worked.
+ */
+const updateOnlyOptions: ReadonlySet<string> = new Set(["--no-backup", "--remove-orphans"]);
+
+/**
  * Value and toggle options each non-scaffold command additionally accepts.
  * Everything else in the parsing maps stays scaffold-only, so a newly added
  * option is rejected for these commands until it is listed here deliberately.
  */
 const commandCompatibleOptions = {
   config: new Set(["--config"]),
-  update: new Set(["--no-backup", "--remove-orphans"]),
+  update: new Set(updateOnlyOptions),
 } satisfies Record<Exclude<CliCommand, "scaffold">, ReadonlySet<string>>;
 
 interface CliValueOptionConfig {
@@ -278,7 +287,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     yes: false,
   };
   const positionals: string[] = [];
-  const scaffoldOnlyOptions: string[] = [];
+  const commandScopedOptions: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] ?? "";
@@ -286,14 +295,14 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     const toggle = cliToggleFlags.get(argument);
     if (toggle) {
       parsed[toggle.key] = toggle.value;
-      scaffoldOnlyOptions.push(argument);
+      commandScopedOptions.push(argument);
       continue;
     }
 
     const consumed = applyValueOption(parsed, args, index, argument);
     if (consumed > 0) {
       const equalsIndex = argument.indexOf("=");
-      scaffoldOnlyOptions.push(equalsIndex >= 0 ? argument.slice(0, equalsIndex) : argument);
+      commandScopedOptions.push(equalsIndex >= 0 ? argument.slice(0, equalsIndex) : argument);
       index += consumed - 1;
       continue;
     }
@@ -302,7 +311,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
     if (flag) {
       parsed[flag] = true;
       if (!updateCompatibleFlags.has(flag)) {
-        scaffoldOnlyOptions.push(argument);
+        commandScopedOptions.push(argument);
       }
       continue;
     }
@@ -315,7 +324,7 @@ export const parseCliArguments = (args: string[]): CliArguments => {
   }
 
   applyPositionals(parsed, positionals);
-  validateUpdateArguments(parsed, scaffoldOnlyOptions);
+  validateCommandOptions(parsed, commandScopedOptions);
   validateFlagCombinations(parsed);
 
   return parsed;
@@ -331,13 +340,20 @@ const validateFlagCombinations = (parsed: CliArguments): void => {
   }
 };
 
-const validateUpdateArguments = (parsed: CliArguments, scaffoldOnlyOptions: string[]): void => {
+const validateCommandOptions = (parsed: CliArguments, commandScopedOptions: string[]): void => {
   if (parsed.command === "scaffold") {
+    const [updateOnly] = commandScopedOptions.filter((option) => updateOnlyOptions.has(option));
+    if (updateOnly !== undefined) {
+      // Phrased as a redirection because nobody types "scaffold": the fix is to
+      // run the command the option belongs to.
+      throw new Error(`Option ${updateOnly} can only be used with update.`);
+    }
+
     return;
   }
 
   const allowedOptions = commandCompatibleOptions[parsed.command];
-  const [rejectedOption] = scaffoldOnlyOptions.filter((option) => !allowedOptions.has(option));
+  const [rejectedOption] = commandScopedOptions.filter((option) => !allowedOptions.has(option));
   if (rejectedOption !== undefined) {
     throw new Error(`Option ${rejectedOption} cannot be used with ${parsed.command}.`);
   }

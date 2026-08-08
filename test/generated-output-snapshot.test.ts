@@ -75,6 +75,8 @@ const generatedProjectSnapshotCases = [
     snapshotName: "apache-license",
   },
   {
+    // Also the one variant on the "26" node target, so both CI matrices and
+    // engines floors have end-to-end golden coverage.
     config: {
       ...baseSnapshotConfig,
       bundler: "tsdown",
@@ -82,6 +84,7 @@ const generatedProjectSnapshotCases = [
       includeCommunityFiles: true,
       includeJsr: true,
       includeSecurityWorkflows: true,
+      nodeTarget: "26",
       projectName: "@hbmartin/full-featured-lib",
     },
     snapshotName: "tsdown-jsr-security",

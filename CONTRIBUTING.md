@@ -64,9 +64,16 @@ once `scripts/verify-artifacts.mjs` covers it (automatic for `.tmpl` assets, a
 hand-listed array for compiled entry points). Add a structural test in
 `test/scaffold.test.ts` too.
 
-**Adding a new `ScaffoldConfig` option.** Four steps, of which step 2 is
-load-bearing: the `scaffoldConfigSchema` entry in `source/templates/state.ts`
-needs a `.default()`. This is not optional — generated projects carry a
+**Adding a new `ScaffoldConfig` option.** Four steps, spelled out in full under
+[Adding a `ScaffoldConfig` field](docs/extending-the-generator.md#adding-a-scaffoldconfig-field):
+the field and its default in `source/templates/scaffold-config.ts`, the schema
+entry in `source/templates/state.ts`, the `userConfigSchema` and
+`userConfigValueParsers` entries in `source/user-config.ts` if it is a reusable
+preference, and the CLI flag in `source/cli-helpers.ts` plus its `helpText` line
+in `source/cli.ts`.
+
+Step 2 is the load-bearing one: the `scaffoldConfigSchema` entry in
+`source/templates/state.ts` needs a `.default()`. This is not optional — generated projects carry a
 `.create-ts-lib.json` written by whichever release scaffolded them, and
 `create-ts-lib update` has to keep parsing those older files. A field without a
 default breaks `update` for every project already on disk.

@@ -10,7 +10,7 @@ The generator is a pure function from config to file list, plus a thin writer:
 2. **Render** — `buildProjectFiles(config)` in `source/templates/files.ts` returns `GeneratedFile[]` (`{ path, content, executable? }`). This is the single place that decides which files a project gets.
 3. **Write** — `scaffoldProject` (`source/scaffold.ts`) writes the list, then runs post-scaffold steps (git init, remote, install, build, test), each wrapped in `PostScaffoldSetupError` carrying the failing step so the CLI can print targeted recovery.
 
-Three commands share this pipeline: `scaffold` (default), `update` (`source/update.ts`), and `config` (`source/cli-config.ts`). `source/index.ts` is the deliberate public API — export from it intentionally.
+Two commands share this pipeline: `scaffold` (default) and `update` (`source/update.ts`). `source/index.ts` is the deliberate public API — export from it intentionally.
 
 ## Critical invariants
 
@@ -21,6 +21,12 @@ Three commands share this pipeline: `scaffold` (default), `update` (`source/upda
 **The state schema is a compatibility surface.** Every scaffold writes `.create-ts-lib.json` (`source/templates/state.ts`) — the full config plus a SHA-256 hash of each generated file — and `update` re-renders from it. Projects on disk carry state files written by older releases, so a new `scaffoldConfigSchema` field needs `.default()` or `update` breaks for all of them. `test/state-compatibility.test.ts` enforces this against deliberately stale fixtures in `test/__fixtures__/state/`; never regenerate those fixtures to silence a failure. The file is also user-editable and its `files` keys are unvalidated strings that `update` turns into deletion paths, so anything reading them must check containment (`isInsideDirectory`) rather than trusting `resolve` — which restarts at an absolute segment.
 
 **Changing generated output means updating its whole documentation set in the same change:** `README.md` (flags, prompt flow, generated layout tree, defaults table), `docs/generated-project-tour.md` (the per-file walkthrough), the structural assertions in `test/scaffold.test.ts`, and the golden files in `test/__snapshots__/generated-output/` (`vitest -u`, then read the diff).
+
+**A feature answer reaches the project through files other answers can suppress, so fix the condition rather than the reported case.** Codecov is a step inside the generated CI workflow and the security workflows sit beside it, so `hasGitHubWorkflows` — which is false in workspace mode, *and* without a repo URL, *and* for non-pnpm projects — silently makes both answers inert. No single module shows that: the dependency is spread across `files.ts`, `workflows.ts`, and `readme.ts`.
+
+This bit twice in a row, the same way both times. `d50ac1d` stopped the next steps printing `git push` for a remote workspace mode never added, and did not check whether anything else printed instructions for skipped work — the Codecov setup URL did. `a600998` then fixed the scaffold summary for the workspace-mode condition only, leaving the npm and no-repo-URL conditions reporting `Codecov: yes` for a project with no workflow at all. **When a symptom is reported, find the predicate that produced it and enumerate its conditions, then check for other call sites reading the same predicate.** Fixing the instance in front of you is how the same bug ships twice.
+
+`source/templates/feature-activation.ts` now declares, per answer, why it cannot take effect, and `test/feature-activation.test.ts` renders every answer both ways across a context matrix and compares reality to that declaration in both directions. An answer declared live that changes nothing fails; so does an answer declared inert that changes something. Adding a fourth condition to `hasGitHubWorkflows` without declaring it fails there. Reporting reads the same declaration rather than re-deriving the conditions, so the summary and the Codecov step cannot disagree with each other.
 
 **The architecture gate has a canary.** `test/architecture-gate.test.ts` runs the real generated `.fallowrc.jsonc` against temp fixtures containing deliberate violations plus a clean control case. This exists because the gate has twice reported success while analysing nothing. If you touch `.fallowrc.jsonc` or its template, keep those tests meaningful rather than adjusting them to pass.
 

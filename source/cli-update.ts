@@ -265,7 +265,7 @@ const printOrphanNotes = (plan: UpdatePlan, removeOrphans: boolean): void => {
     // The one place the config-toggle false positive can be raised before the
     // destructive flags are typed.
     process.stdout.write(
-      `${cyan("info")} ${removableCount} file(s) are recorded but no longer generated; pass --force --remove-orphans to delete them. Check your recorded config first — flipping lintFormatTooling, bundler, or workspaceMode makes wanted files look unwanted.\n`,
+      `${cyan("info")} ${removableCount} file(s) are recorded but no longer generated; pass --force --remove-orphans to delete them. Check your recorded config first — flipping lintFormatTooling, bundler, packageManager, or workspaceMode makes wanted files look unwanted.\n`,
     );
   }
 

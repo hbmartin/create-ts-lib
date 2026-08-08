@@ -9,12 +9,14 @@ import { githubActionRefs } from "../source/templates/generated-versions.js";
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowsDirectory = join(repositoryRoot, ".github", "workflows");
 
-// Matches every `uses:` reference and whatever follows it on the line, pinned or
+// Matches every `uses:` key and whatever follows it on the line, pinned or
 // not. Collecting only SHA-pinned entries would make an unpinned
 // `uses: actions/checkout@v6` invisible to both tests below -- the exact
-// regression the pinning is meant to prevent.
+// regression the pinning is meant to prevent. Anchored to the start of a line
+// (allowing the `- ` of a sequence item) so a commented-out `# uses:` line is
+// not collected as a reference GitHub would never resolve.
 const whitespaceRunPattern = /\s+/gu;
-const actionReferencePattern = /uses:\s*(?<reference>\S+[^\n]*)/gu;
+const actionReferencePattern = /^\s*(?:-\s*)?uses:\s*(?<reference>\S+[^\n]*)/gmu;
 // `owner/repo[/path]@<40-hex> # vX.Y.Z`, the only shape allowed here.
 const pinnedActionReferencePattern = /^[^\s@]+@[0-9a-f]{40} # v\S+$/u;
 // `./.github/workflows/x.yml` is this repository's own file, not a third-party

@@ -28,8 +28,9 @@ than first discovered during a release.
 | `pnpm run smoke:scaffold` | Builds, scaffolds real projects into a temp dir, installs them, and runs their generated checks |
 
 `security:lint` prefers a `semgrep` already on `PATH` and falls back to
-`uvx semgrep@<pinned>`; it warns rather than failing hard when neither is
-available. Set `SECURITY_LINT_FORCE_UVX=1` to exercise the fallback path.
+`uvx semgrep@<pinned>`. When neither is available it explains how to install one
+and exits non-zero, so `check` and `release:check` cannot pass without the scan
+having run. Set `SECURITY_LINT_FORCE_UVX=1` to exercise the fallback path.
 
 ## Running single tests
 

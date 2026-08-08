@@ -59,19 +59,32 @@ export const scaffoldStateSchema = z.object({
 export type ScaffoldState = z.infer<typeof scaffoldStateSchema>;
 
 /**
+ * `scaffoldConfigSchema` with `copyrightYear` required. Its clock-reading
+ * default belongs only at the state-file boundary, where it stands in for the
+ * year a pre-`copyrightYear` release scaffolded. Rendering must never reach the
+ * clock: a partial input silently completed with today's year would produce a
+ * different LICENSE and file hash for the same input after a calendar change,
+ * breaking `buildProjectFiles` as a pure function of its config.
+ */
+const completeScaffoldConfigSchema = scaffoldConfigSchema.extend({
+  copyrightYear: z.string(),
+}) satisfies z.ZodType<ScaffoldConfig>;
+
+/**
  * Guards the public entry points, which JavaScript callers can reach with any
  * object at all. Without it a bad `packageManager` surfaces as a TypeError from
  * a lookup table several frames later instead of a message naming the field.
  *
  * Returns the parsed config rather than merely asserting, because the fields
- * carrying a `.default()` -- present for state-file compatibility -- make a
- * partial object *validate* while still being partial. Rendering the caller's
- * object then wrote `Copyright (c) undefined` into LICENSE and recorded its hash
- * as gospel, since `renderTemplate` substitutes through a replacer function and
- * so never sees an unresolved placeholder to complain about.
+ * carrying a static `.default()` -- present for state-file compatibility --
+ * make a partial object *validate* while still being partial. Rendering the
+ * caller's object then wrote `Copyright (c) undefined` into LICENSE and
+ * recorded its hash as gospel, since `renderTemplate` substitutes through a
+ * replacer function and so never sees an unresolved placeholder to complain
+ * about.
  */
 export const parseScaffoldConfig = (config: ScaffoldConfig): ScaffoldConfig => {
-  const result = scaffoldConfigSchema.safeParse(config);
+  const result = completeScaffoldConfigSchema.safeParse(config);
   if (result.success) {
     return result.data;
   }

@@ -807,17 +807,17 @@ jobs:
       matrix:
         node-version: ["24", "26"]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.5.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
       - run: pnpm install --frozen-lockfile
@@ -858,17 +858,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.5.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.x'
           cache: 'pnpm'
@@ -876,7 +876,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
 
@@ -959,8 +959,8 @@ executable: false
     "source/cli.ts": "9440c0c627df4329f3162643fbe6121aea8f9ccb5901f40fcbc7790364475fb3",
     "test/cli.test.ts": "fa6f11f1f26f6073c3597272ea0da8484a5f8facac1bbf7b0afa885c33b106a4",
     "renovate.json": "0ae04eb363afc6f3007bb06def9e1fc15d72d51dceaa66694d1b5479a7a23d91",
-    ".github/workflows/ci.yml": "85e46689238f8527c2852629fac7fbbb3bcefadf092bf1a9bb0ff045cb167217",
-    ".github/workflows/release.yml": "e63b094cd60567c9c63daa78f5fc1a96c7768d09730060fdcdc9ae5a5ebbe32e"
+    ".github/workflows/ci.yml": "48177a988bd8379afc37aef8396aac1ca9dd20428ceb4a3358f673dbf5f5bad6",
+    ".github/workflows/release.yml": "39d892e09d81098079d73d035ac18096b437bbd2b558a09dd05057f8d9060889"
   },
   "generator": "@hbmartin/create-ts-lib",
   "version": "<generator-version>"

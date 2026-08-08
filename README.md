@@ -39,7 +39,7 @@ For a guided walkthrough of everything a scaffolded project contains, see the
 
 Setting up a publishable TypeScript library means making the same dozen decisions every time: module format, build output, lint and format tooling, test runner and coverage, git hooks, and packaging validation. `create-ts-lib` makes those decisions for you with a single, modern, opinionated stack:
 
-- **ESM-only, Node 24+ (or 26)** — no dual-format build complexity.
+- **ESM-only, Node `>=24` or `>=26`** — no dual-format build complexity.
 - **Oxlint + Oxfmt or Biome** for fast linting and formatting instead of ESLint + Prettier.
 - **Vitest** with v8 coverage and enforced thresholds out of the box.
 - **fallow + Semgrep** for lightweight architecture and security policy checks.
@@ -54,7 +54,7 @@ How `create-ts-lib` stacks up against the common ways to start a TypeScript libr
 
 | Concern                       | `create-ts-lib`                         | tsdx                 | Hand-rolled template |
 | ----------------------------- | --------------------------------------- | -------------------- | -------------------- |
-| Output format                 | ESM-only (Node 24+ or 26+)              | CJS + ESM            | You decide           |
+| Output format                 | ESM-only (Node `>=24` or `>=26`)        | CJS + ESM            | You decide           |
 | Lint + format                 | Oxlint + Oxfmt or Biome                 | ESLint + Prettier    | You wire it up       |
 | Tests + coverage              | Vitest + v8, 80% gate                   | Jest                 | You wire it up       |
 | Architecture + security gates | fallow + Semgrep                        | —                    | —                    |
@@ -415,7 +415,12 @@ surfaces them at the repository root, so a copy inside `packages/<name>/` is a
 file nothing reads.
 
 The generated `package.json` also drops `packageManager`, the `prepare` hook,
-and the `lefthook` devDependency, since the root pins all three. Git setup is
+and the `lefthook` devDependency, since the root pins all three. That is a
+precondition, not something detection verifies: a `pnpm-workspace.yaml` or a
+`workspaces` field is enough to offer workspace mode, so on an npm or Yarn root
+that does not already own these, add them at the root — or add them back to the
+package — or the new package ends up without a pinned package manager and
+without Git hooks. Git setup is
 skipped entirely — the workspace repository owns it, so the printed next steps
 leave out the `git push` instructions even when a repository URL is configured.
 That URL still lands in `package.json`: it is the parent repository's.
@@ -423,6 +428,13 @@ That URL still lands in `package.json`: it is the parent repository's.
 No GitHub repository is created either. The repo URL prompt defaults to the
 detected workspace remote rather than to a personal repo named after the
 package, since that is not where `packages/<name>` lives.
+
+Because Codecov, the security workflows, and the community-health files all
+depend on files the root owns, answering `yes` to any of them changes nothing
+about a workspace package. The scaffold summary marks them `yes (root-owned)`
+rather than claiming they were applied, and the Codecov setup URL is not printed.
+The answers are still recorded in `.create-ts-lib.json`, so they take effect
+again if the package is ever moved out of the workspace.
 
 **Workspace mode never writes outside the target directory.** Registering the
 package in the parent workspace globs is left to you, and the printed next steps
@@ -440,7 +452,7 @@ Before creating a GitHub repo or writing files, the generator rejects non-empty 
 4. `<package-manager> run build`
 5. `<package-manager> run test`
 
-`--skip-git` skips step 1–2 and `--skip-install` skips steps 3–5; the printed next steps then include the commands you skipped. Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively or passed with `--repo-url` (and `--skip-git` is not set), the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. When Codecov is enabled for a pnpm project with a GitHub repo URL, the final next steps also include the Codecov setup URL for that repository. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
+`--skip-git` skips step 1–2 and `--skip-install` skips steps 3–5; the printed next steps then include the commands you skipped. Remote setup is best-effort: if the target is inside a parent Git repository, or if `origin` already exists, the CLI reports the issue and continues. The CLI prints a summary before writing and shows progress during post-scaffold setup. When a repo URL is configured interactively or passed with `--repo-url` (and `--skip-git` is not set), the final next steps include `git add`, `git commit`, and `git push -u origin HEAD`. When Codecov is enabled for a pnpm project with a GitHub repo URL, the final next steps also include the Codecov setup URL for that repository — except in workspace mode, where the upload step lives in a CI workflow the package does not generate. In non-TTY or CI environments it uses plain step logs instead of spinners. If a setup command fails after files are written, the CLI prints the created project path and the commands to retry the failed and remaining setup steps.
 
 ## Updating a Generated Project
 

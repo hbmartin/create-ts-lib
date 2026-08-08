@@ -447,8 +447,14 @@ describe("cli entrypoint", () => {
     const workspaceIndex = askedMessages.findIndex((message) =>
       message.startsWith("Detected a workspace at "),
     );
-    expect(workspaceIndex).toBeGreaterThan(askedMessages.indexOf("Author"));
-    expect(workspaceIndex).toBeLessThan(askedMessages.indexOf("GitHub repo URL"));
+    const authorIndex = askedMessages.indexOf("Author");
+    const repoUrlIndex = askedMessages.indexOf("GitHub repo URL");
+    // Both bounds have to be asked at all: a missing "Author" indexes to -1,
+    // which every real workspace index is trivially greater than.
+    expect(authorIndex).toBeGreaterThanOrEqual(0);
+    expect(repoUrlIndex).toBeGreaterThanOrEqual(0);
+    expect(workspaceIndex).toBeGreaterThan(authorIndex);
+    expect(workspaceIndex).toBeLessThan(repoUrlIndex);
   });
 
   it("skips the GitHub lookup entirely for --workspace with an explicit repo URL", async () => {
@@ -1810,7 +1816,9 @@ describe("cli entrypoint", () => {
     expect(result.stdout).toContain("remove  .oxfmtrc.json");
     expect(result.stdout).toContain("pass --force --remove-orphans to delete them");
     // The warning that keeps a config toggle from reading as a template change.
-    expect(result.stdout).toContain("flipping lintFormatTooling, bundler, or workspaceMode");
+    expect(result.stdout).toContain(
+      "flipping lintFormatTooling, bundler, packageManager, or workspaceMode",
+    );
     await expect(readFile(join(targetDirectory, ".oxfmtrc.json"), "utf8")).resolves.toContain("{");
   });
 

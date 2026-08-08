@@ -7,6 +7,7 @@ import type { PendingGitHubRepositoryCreation } from "./cli-prompts.js";
 import { formatLintFormatTooling } from "./lint-format-tooling.js";
 import { parseGitHubRepositoryUrl } from "./name-helpers.js";
 import type { PostScaffoldSetupError, ScaffoldProgress } from "./scaffold.js";
+import { featureInactiveReason } from "./templates/feature-activation.js";
 import { buildProjectFiles, type PackageManager, type ScaffoldConfig } from "./templates/files.js";
 import { hasGitHubWorkflows } from "./templates/readme.js";
 
@@ -15,6 +16,28 @@ export interface NextStepsOptions {
   skipGit: boolean;
   skipInstall: boolean;
 }
+
+/**
+ * Renders an answer the current config makes inert, without discarding it.
+ *
+ * Only a `yes` is qualified: that is the only case where a bare value would
+ * claim something the scaffold did not do. The answer stays visible rather than
+ * being blanked, because it is recorded in the state file and applies again as
+ * soon as whatever suppresses it changes.
+ */
+const formatFeatureAnswer = (
+  config: ScaffoldConfig,
+  resolveInactiveReason: (config: ScaffoldConfig) => string | undefined,
+  answer: boolean,
+): string => {
+  if (!answer) {
+    return "no";
+  }
+
+  const inactiveReason = resolveInactiveReason(config);
+
+  return inactiveReason === undefined ? "yes" : `yes (${inactiveReason})`;
+};
 
 export const printSummary = (
   config: ScaffoldConfig,
@@ -33,9 +56,26 @@ export const printSummary = (
     ["Node target", `${config.nodeTarget}+`],
     ["Package manager", config.packageManager],
     ["GitHub repo", config.githubRepoUrl || "(none)"],
-    ["Codecov", config.includeCodecov ? "yes" : "no"],
-    ["Security workflows", config.includeSecurityWorkflows ? "yes" : "no"],
-    ["Community files", config.includeCommunityFiles ? "yes" : "no"],
+    [
+      "Codecov",
+      formatFeatureAnswer(config, featureInactiveReason.includeCodecov, config.includeCodecov),
+    ],
+    [
+      "Security workflows",
+      formatFeatureAnswer(
+        config,
+        featureInactiveReason.includeSecurityWorkflows,
+        config.includeSecurityWorkflows,
+      ),
+    ],
+    [
+      "Community files",
+      formatFeatureAnswer(
+        config,
+        featureInactiveReason.includeCommunityFiles,
+        config.includeCommunityFiles,
+      ),
+    ],
     ["Workspace package", config.workspaceMode ? "yes" : "no"],
     ["CLI entry", config.includeCli ? "yes" : "no"],
     ["Zod", config.includeZod ? "yes" : "no"],
@@ -137,7 +177,11 @@ workspace globs match this package, then install from the workspace root:
 };
 
 const buildCodecovSetupStep = (config: ScaffoldConfig): string => {
-  if (!config.includeCodecov || config.packageManager !== "pnpm") {
+  // Gated on the same declaration the summary uses, rather than a second
+  // hand-written copy of the conditions. The upload step lives in the generated
+  // CI workflow, so wherever that is not emitted there is nothing for Codecov to
+  // receive and the URL would name a repository this scaffold does not own.
+  if (!config.includeCodecov || featureInactiveReason.includeCodecov(config) !== undefined) {
     return "";
   }
 
