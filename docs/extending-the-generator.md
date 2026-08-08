@@ -133,6 +133,25 @@ resolve the path through `realpath` and re-check: a recorded key such as
 `linked-directory/file` would otherwise pass containment while a symlinked
 directory component sends the read and the delete outside the project.
 
+Because the target is resolved first, `realpath` returning the path unchanged
+means the recorded key holds no symlink of its own — so a removable orphan is
+one whose path *is* its canonical path, and the read and the `rm` follow
+nothing. A key that resolves inside the project but not to itself is classified
+`orphan-modified` rather than removed: the scaffolder writes regular files at
+literal paths, so a symlink standing where one used to be is a user's edit.
+Deleting what such a key resolves to would destroy the link's target — possibly
+a file the state file never recorded — and leave the link dangling.
+
+That narrows the window rather than closing it, and it cannot be closed here.
+Node has no descriptor-relative filesystem calls — no `openat`, and no
+`unlinkat` at all — so a check can only hand a path *string* to the operation
+after it, and a component replaced in between still redirects that operation.
+What the rule buys is that the string being re-walked has no symlink in it to
+re-point, so winning the race means replacing a real directory. The remainder is
+accepted rather than overlooked: it needs write access inside the project, which
+already carries `.create-ts-lib.json` itself and the `package.json` scripts
+`update` shells out to. Don't take on a native `openat` binding to close it.
+
 Three rules keep the classifier honest across runs:
 
 1. `applyUpdatePlan` rewrites the state file to describe **what is on disk**, so
